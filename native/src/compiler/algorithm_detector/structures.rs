@@ -7,7 +7,11 @@ pub(crate) fn detect(name_lower: &str, features: &FuncFeatures, func_name: &str,
     let mut matches = Vec::new();
 
     // 链表操作（删除/插入等）
-    if name_lower.contains("deletenode") || name_lower.contains("delete_node") {
+    // U1#1 P0-2：旧条件把 BST 的 deleteNode（bstDelete 模板）误判链表删除。
+    // 收紧为链表语境（linked/list 命名）+ delete 形态。
+    if (name_lower.contains("deletenode") || name_lower.contains("delete_node"))
+        && (name_lower.contains("linked") || name_lower.contains("list"))
+    {
         matches.push(build_match(
             "linked_list_delete",
             "链表删除",
@@ -92,4 +96,27 @@ pub(crate) fn detect(name_lower: &str, features: &FuncFeatures, func_name: &str,
     }
 
     matches
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// U1#1 P0-2：bstDelete 模板的 deleteNode（BST 删除）曾被
+    /// `contains("deletenode")` 误判链表删除。
+    #[test]
+    fn bst_deletenode_not_misdetected_as_linked_list_delete() {
+        let f = FuncFeatures::default();
+        let m = detect("deletenode", &f, "deleteNode", 1);
+        assert!(m.is_empty(), "BST deleteNode 不应被判链表删除: {:?}",
+            m.iter().map(|x| x.name.clone()).collect::<Vec<_>>());
+    }
+
+    /// 反向锚：链表语境的 delete_node 仍识别。
+    #[test]
+    fn linked_list_delete_node_still_detected() {
+        let f = FuncFeatures::default();
+        assert!(detect("linkedlist_deletenode", &f, "f", 1)
+            .iter().any(|x| x.name == "linked_list_delete"));
+    }
 }

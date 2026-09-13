@@ -7,6 +7,110 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (教学标注)：U1#1 第三批（用户机器复核驱动）——has_word 缩写漏报 + 四算法误判 + dp 判据 + P1 判据批
+
+用户以 100 行逐行判定复核 v2 清单（62 ✅ / 25 ✗ / 13 ⛔，见
+`05-教学体验/算法标注golden审阅意见.md`），五个 P0 + P1 表全部处置：
+
+- **P0-1 has_word 驼峰缩写漏报**（用户修复引入、本轮修正）：连续大写
+  被逐字母切开（isValidBST → ["is","valid","b","s","t"]），bst 整词
+  永不命中 → binarySearchTreeValidation 4001 帧零标注（静默漏报）。
+  改标准驼峰边界（小写→大写分词；大写→大写且下个小写分词——段末大写
+  归下词；纯缩写合并）。单测 +2（isValidBST/allCapsAcronymBFS 识别、
+  subString 不识别）。
+- **P0-2 四算法误判**（huffmanTree/activitySelection/externalSort →
+  selection_sort、mergeSortedLists → merge_sort，13 行 ⛔ 之源）：
+  selection 收紧为 select/selection 整词 + sort 语境（结构分支排除
+  huffman/activity/replacement 贪心语境）；merge 收紧为 merge 整词 +
+  sort 语境。四模板实测误判清零（huffman 只剩正确的 huffman_tree 标注）。
+- **P0-3 dp 判据**：transition 要求同语句两侧都有 `dp[`（5 个 dp 模板
+  首现曾全挂 `dp[0] = 0;` 初始化行）；outer_loop 收紧为 i 形态判据
+  （`contains("n")` 曾因 amount 含 n 把内层循环误判外层）；文案
+  "遍历物品"泛化为"遍历子问题"。
+- **P0-4 gcd mod 数值全错**（行末帧 b 已被赋值，48%12=0 真值 48%18=12）：
+  本批安全降级为不展示操作数的文案；**prev_vars 快照管道（运算过程类
+  phase 用语句前操作数）登记下一批**——口径规则：展示结果值的 phase 用
+  行末帧、展示运算过程的 phase 用执行前操作数。
+- **P1 判据批 10 项**：selection 的 minIdx 别名 + j∈[0,n) 越界守卫
+  （min_idx=? / arr[5] 越界消除）；insertion insert 收紧 `arr[j+1]=key`
+  形态（不再命中 `int key=arr[i];` 读行，j 不可得时文案去位置）；
+  primMST add_vertex 收紧 `lowcost[k]=` 形态（初始化行"顶点 -1"消除）；
+  countingSort place 收紧 `index++` 形态（`int index=0` 初始化不再命中）；
+  radixSort digit_loop 位序修正（exp 是位权，"第 10 位"→"第 2 位"）；
+  hanoi 递归以 `n-1` 实参形态区分调用点（main 调用 n=3 不再报"2 个"）；
+  quick side 默认空串（"子子数组"错字根因）+ 空区间帧屏蔽 +
+  merge 顶层调用改"启动归并"；build_next 调用点改无数值启动文案；
+  bfs 首帧"起点入队"；seqList update_len 收紧 `length--/++` 形态。
+- **selection 整词回归当轮抓回**：收紧后 selectionSort 零标注（整词是
+  "selection" 非 "select"）——补两形态后恢复。
+- 验收：cargo 68 套件 / serve_smoke 51/51 / shadow C 671（664/3/4）/
+  C++ 非预期 0 / clippy 零警告。**主表重提取与 v3 清单待办**（本轮
+  修复批先记录于清单头部，用户二审复跑提取脚本对账）。
+
+### Fixed (教学标注)：U1#1 第二批（用户审阅驱动）——首帧旧值 + 结构特征误判 + dp 孤儿接线（红→绿）
+
+用户审阅否决 v1 人审清单（"数值列系统性不可信，勾选会把错误固化成 golden"），二轮修复：
+
+- **P0-1 首帧旧值**（用户实测三例：binary 首帧"计算中点 mid=0"实际 mid=2、
+  shellSort"取增量 gap=0"、dijkstra"顶点 -1"）：同一语句的多帧中首帧在
+  赋值发生前。修复双层：① run_batch 返回数组 + frame_cache 同步去重
+  （同行非末帧标注清除，含跨批衔接）；② serve step.next 一帧发布缓冲
+  （流式协议下行末判定需要未来信息——当前帧暂存、下一帧到来回改上一帧
+  后发布；首帧直接发布保证 payloads 恒非空；结束冲刷按行号决定标注
+  去留）。实测三例首帧错误值全部消失。
+- **P0-2 结构特征误判**（用户实测：linear→"BFS 遍历完成"、hashTable→
+  "队列非空继续广度优先搜索"、stringBasicOps→"递归查找插入位置"）：
+  检测器四个结构分支收紧为命名主导——BFS 删 `search+单循环+回边`、
+  DFS 删 `递归+search`、BST 插入/查找收紧 bst 语境、链表删除收紧
+  linked/list 语境（bstDelete 的 deleteNode 曾被误判链表删除）。
+- **dijkstra confirm 误匹配**：`visited[v0] = 1;` 初始化行曾被判
+  "确认顶点 -1"——收紧为 `visited[u] =` 形态。
+- **P1-a dp 孤儿接线**：`infer_dp` 已实现但检测器无 dp 分支（永不调用）——
+  features 补 `dp[` 状态表特征 + 检测分支；dpFib 实测出现
+  transition/outer_loop/finish。dp 文案"遍历物品"的泛化问题入人审清单。
+- **已知代价（人审清单待裁定）**：bstInsert/bstSearch/bstDelete 模板
+  函数名为裸 insert/search/deleteNode，收紧后漏检——建议模板函数名加
+  bst_ 前缀（对 golden 无影响）。
+- **v1 口径错误修正**（用户指出）：v1 把 target=7 探针序列误写"模板实测"
+  （模板默认 target=5 一次命中仅 4 条）——v2 清单描述均注明探针来源。
+- 红→绿锚：检测器单测 +7（linearSearch/递归 binarySearch/hashTable 插入/
+  BST deleteNode 四误判反向锚 + bfs/dfs/bst/链表 delete 正向锚）、
+  dijkstra confirm 单测 ×2。人审清单 v2 重写（38 模板 × 100 条，行末帧
+  语义；覆盖缺口分三档）。
+- 验收：cargo 68 套件 / serve_smoke 51/51（一帧缓冲协议兼容）/
+  shadow C 671（664/3/4）/ C++ 非预期 0 / clippy 零警告 / facts check 绿。
+
+### Fixed (教学标注)：U1#1 第一批——防线 6 算法标注三误标修复 + 88 模板标注人审清单（红→绿）
+
+- **三个审查实锤误标全部机器取证后修复**：
+  - **二分三分支不可达**（`cide_algorithm_steps/search.rs`）：mid_calc 旧
+    条件 `contains("mid") && contains('=')` 过宽——`if (a[mid] == target)`
+    含 `==`、`left = mid + 1` 含 `=`，compare / narrow_left / narrow_right
+    三分支全部被短路。机器取证：比较行被标"计算中点 mid=2"，学生在循环
+    体里只看得到"计算中点"（概念教反级）。收紧为声明/赋值形态
+    （行首 `int mid` / `mid =` 且含除法）。
+  - **right=mid 打印硬编码差一**：旧文案打印 `right={mid}`，标准二分是
+    `right = mid - 1`。改打印**边界变量实际值**——对闭区间与左闭右开
+    两种约定都正确。
+  - **insert 子串误判插入排序**（`algorithm_detector/sorting.rs`）：
+    `insert_node`（链表插入）曾被判插入排序。收紧为 insertion /
+    insert_sort / insertsort（驼峰折叠）形态；实测 `insert_node` 程序
+    零算法标注。
+- 修复后二分标注序列（实测）：`搜索范围 [0,4]` → `计算中点 mid=2` →
+  `arr[2] 与目标值 7 比较` → `目标值在右半区，调整左边界 left=3` →
+  `找到目标值，返回索引 3`。
+- **红→绿锚**：cide_algorithm_steps 单测 ×3（比较行不被短路 / narrow
+  实际值 / mid_calc 反向锚）+ algorithm_detector 单测 ×2（insert_node
+  零误判 / 标准命名仍识别）。
+- **人审清单交付**（U1#1① 的"人审固化"环节）：
+  `docs/current/05-教学体验/算法标注golden人审清单.md`——88 模板批量
+  提取（serve 会话逐步收集 algorithm_step），37 模板 × 58 条标注待逐行
+  勾选；45 模板零标注（检测覆盖缺口）、7 超大模板步数截断、6 个 cpp
+  模板待 C++ 提取口径；附 insert 同族子串风险 5 项待裁定
+  （merge/binary/quick/heap/select）。
+- 验收：cargo 68 套件 / shadow C 671（664/3/4）/ C++ 非预期 0 /
+  clippy 零警告。
+
 ### Fixed (parser/ast)：U1 第六批 #8——递归深度防护补全（五通道）+ 后置 AST 深度预算（红→绿）
 
 - **五通道实测栈溢出复现后修复**（修复前 release cide_cli 全部

@@ -27,10 +27,56 @@ pub(crate) struct FuncFeatures {
     pub cfg_has_back_edge: bool,
     pub cfg_num_blocks: usize,
     pub cfg_has_unreachable: bool,
+    /// U1#1 P1-a：函数体含 `dp[` 数组访问（动态规划状态表特征）。
+    pub has_dp_array: bool,
     pub compare_lines: Vec<(i32, i32, String)>, // (line, type, context)
 }
 
 const MAX_WALK_DEPTH: i32 = 512;
+
+/// 词边界 + 驼峰感知的整词匹配（大小写不敏感）。
+///
+/// 用于替代裸 `contains()` 做命名判据：`contains("bst")` 会命中
+/// `subString`（小写 `substring` 内含 "bst"）、`contains("insert")` 会命中
+/// `insert_node`——这类复合词误判已多次实锤（U1#1 P0-2 及其复审）。
+/// 本函数按 `_` / `-` / 数字切分，再对驼峰切分，最后逐词整比：
+///
+/// - `bst_insert`  → ["bst", "insert"]      → 含 "bst" ✓
+/// - `bstInsert`   → ["bst", "insert"]      → 含 "bst" ✓（驼峰不丢信息）
+/// - `subString`   → ["sub", "string"]      → 不含 "bst" ✓
+/// - `insert_node` → ["insert", "node"]     → 不含 "insertion" ✓
+pub(crate) fn has_word(name: &str, word: &str) -> bool {
+    // 整词切分（U1#1 P0-1 修复：连续大写缩写合并档）。边界规则：
+    //   小写→大写          （isValidBST 的 V）      → 分词
+    //   大写→大写且下个小写（BSTInsert 的 I）       → 分词（段末大写归下词）
+    //   大写→大写且下个大写/结尾（BST 的 S/T）      → 并入缩写
+    // 修复前连续大写被逐字母切开：isValidBST → ["is","valid","b","s","t"]
+    // → 不含 "bst" → binarySearchTreeValidation 整体静默零标注（用户审阅
+    // P0-1 实锤：4001 帧 / 0 条标注，零标注不触发任何断言）。
+    let chars: Vec<char> = name.chars().collect();
+    let mut words: Vec<String> = Vec::new();
+    let mut cur = String::new();
+    for (idx, &ch) in chars.iter().enumerate() {
+        if ch == '_' || ch == '-' || ch.is_ascii_digit() {
+            if !cur.is_empty() {
+                words.push(std::mem::take(&mut cur));
+            }
+            continue;
+        }
+        if ch.is_ascii_uppercase() {
+            let prev_is_lower = idx > 0 && chars[idx - 1].is_ascii_lowercase();
+            let next_is_lower = idx + 1 < chars.len() && chars[idx + 1].is_ascii_lowercase();
+            if !cur.is_empty() && (prev_is_lower || next_is_lower) {
+                words.push(std::mem::take(&mut cur));
+            }
+        }
+        cur.push(ch.to_ascii_lowercase());
+    }
+    if !cur.is_empty() {
+        words.push(cur);
+    }
+    words.iter().any(|w| w == word)
+}
 
 pub(crate) fn extract_features(func: &crate::compiler::ast::FuncDecl, body: &Stmt) -> FuncFeatures {
     let mut f = FuncFeatures::default();
@@ -167,6 +213,12 @@ fn walk_expr(expr: &Expr, f: &mut FuncFeatures, loop_depth: i32, func_name: &str
             }
         }
         Expr::Index { array, index, .. } => {
+            // U1#1 P1-a：dp[...] 状态表访问特征（Identifier "dp" 的下标访问）
+            if let Expr::Identifier { name, .. } = array.as_ref() {
+                if name == "dp" {
+                    f.has_dp_array = true;
+                }
+            }
             walk_expr(array, f, loop_depth, func_name, depth + 1);
             walk_expr(index, f, loop_depth, func_name, depth + 1);
         }
@@ -626,5 +678,28 @@ pub(crate) fn build_match(
                 context: ctx.clone(),
             })
             .collect(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::has_word;
+
+    /// U1#1 P0-1（用户审阅实锤）：连续大写缩写曾被逐字母切开，
+    /// isValidBST → ["is","valid","b","s","t"] → 不含 bst → 静默零标注。
+    #[test]
+    fn acronym_run_merged_as_one_word() {
+        assert!(has_word("isValidBST", "bst"), "isValidBST 应识别 bst 整词");
+        assert!(has_word("allCapsAcronymBFS", "bfs"));
+        assert!(has_word("BSTInsert", "bst"));
+        assert!(has_word("BSTInsert", "insert"), "BSTInsert 的 I 应归下词");
+    }
+
+    /// 反向锚：subString 里的 bst 子串不得命中（用户修复的原目标）。
+    #[test]
+    fn substring_still_not_matched() {
+        assert!(!has_word("subString", "bst"));
+        assert!(!has_word("bestEffort", "bst"));
+        assert!(has_word("bst_insert", "bst"));
     }
 }
