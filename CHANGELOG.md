@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (lexer/parser)：U1 第二批——#7 词法保真四点 + #10 回滚 anonymous_structs 缺口（红→绿）
+
+- **#7 词法保真（前端审查 #12 + 评估 R3，四点全实测复现后修复）**：
+  - 单位十六进制转义（反斜杠 x 加 1 位 hex）是合法 C——修复前恰好吃
+    2 位导致被 E1001 误拒；4 位超值域形态报"未闭合"错乱诊断（clang：
+    "hex escape sequence out of range"）。重构 hex 转义分支：1~2 位
+    收集 + 第 3 位报"超范围"（教学子集 2 位上限）+ 错误路径消费完整
+    残段杜绝级联错诊。
+  - `08` 拆成 "0"+"8" 两个 token 零词法诊断（后续报错全部错位）——
+    八进制循环后遇 8/9 消费残段并报"八进制常量中含非法数字"。
+  - `99999999999999999999`（超 u64）静默变 0（clang 报 error）——十进制
+    解析 Err 改报 E1006"超出可表示范围"（对齐既有 hex/bin 口径）；
+    八进制溢出的 `unwrap_or(0)` 一并同口径化。**R3 认知修正**：2^31 与
+    2^63 邻界十进制实测 wrapping 与 clang 一致（非缺陷），真实实锤形状
+    是超 u64 值。
+  - `.5`（前导点浮点，合法 C）落进 Dot 臂报"预期表达式"——主分发加
+    `'.'+数字 → number()`（其 dot_float 分支本就支持，`--.5`/`1.5e-3`
+    等形态不受影响）。
+- **#10 ParseCheckpoint 回滚缺口（评估 M3 + 前端审查 #6，两处独立复现）**：
+  回滚只恢复 pos + errors，不回滚 `anonymous_structs`——试探解析失败回滚
+  重解析把匿名 struct 二次 push，且命名 `__anon_struct_{pos}` 同位置同名
+  → "重复定义 E3002"，合法复合字面量 `(struct {int a;int b;}){7,8}.a`
+  被误拒（clang 输出 7，红留痕）。修复：新增 `Rollback` 三元快照
+  （pos/errors_len/**anon_len**）+ `save()/restore()`，机械替换全部
+  回滚点（实测 **23 处**，crate 化后已多于路线图记的 5 处；含 8 处
+  "纯位置回退"型一并纳入）；零进度保护的 `pos == checkpoint` 比较
+  改 `.pos` 字段访问。红→绿：复合字面量输出 7 与 clang 一致。
+
 ### Fixed (typeck/codegen/parser)：U1 第一批 P0 静默错值收口——#12 数组形状零诊断 + #2 初始化列表静默置 0 + #9 常量折叠 panic 家族
 
 - **#12 非法数组形状零诊断（评估 C5/T6 实锤，红→绿）**：`int a[];`（无尺寸
