@@ -1,0 +1,603 @@
+package main
+
+// 文档数字对账层 —— 用事实台账比对文档里的测试数字，并**精确替换**漂移项。
+//
+// 核心判据（本工具的世界观）：文档里的"测试数字"有三种，混着人肉同步必然漂移。
+//
+//	CURRENT   裸数字（无日期、无 as-of 词）  → 必须等于真值，否则判漂移
+//	AS-OF     带日期 / "截至" / "原记" 等     → 冻结，不参与对账
+//	DERIVED   普查派生（中位行数、步数…）     → 需重跑专项脚本，本工具不覆盖
+//
+// 判定为双层：文件级（文件名含 裁定/决议/评估报告/工作记录…）+ 行级（含日期或 as-of 词）。
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"regexp"
+	"sort"
+	"strconv"
+	"strings"
+)
+
+// ─── 对账规则 ────────────────────────────────────────────────────────────────
+
+type Rule struct {
+	Key     string
+	Label   string
+	Context *regexp.Regexp
+	Exclude *regexp.Regexp
+	Lo, Hi  int
+	Unit    string
+}
+
+func rules() []Rule {
+	mk := func(key, label, ctx, exc string, lo, hi int, unit string) Rule {
+		r := Rule{Key: key, Label: label, Context: regexp.MustCompile("(?i)" + ctx),
+			Lo: lo, Hi: hi, Unit: unit}
+		if exc != "" {
+			r.Exclude = regexp.MustCompile("(?i)" + exc)
+		}
+		return r
+	}
+	return []Rule{
+		mk("shadow_c_cases", "C 影子用例总数", `影子|shadow`,
+			`C\+\+|shadow_verify_cpp|cpp_shadow`, 400, 900, "用例"),
+		mk("shadow_cpp_cases", "C++ 影子用例总数",
+			`C\+\+.*(影子|shadow)|shadow_verify_cpp|cpp_shadow|C\+\+ 侧`,
+			``, 30, 250, "用例"),
+		mk("cpp_e2e_cases", "C++ E2E 用例数", `C\+\+\s*E2E|cases/cpp`,
+			`影子|shadow`, 30, 250, "用例"),
+		mk("replay_assertions", "回放断言数", `回放|replay|S1[-–]S5|S1/S5`,
+			``, 20, 200, "条"),
+		mk("serve_smoke_assertions", "serve 冒烟断言数",
+			`serve_smoke|serve 冒烟|协议断言|项断言`, ``, 10, 150, "项"),
+		mk("cargo_test_passed", "cargo test 用例数", `cargo test|passed|全绿|rust 单测`,
+			``, 500, 2500, "用例"),
+		mk("cargo_test_suites", "cargo test 套件数", `套件`, `断言|项断言`, 20, 200, "个"),
+	}
+}
+
+// ─── 文档分级 ────────────────────────────────────────────────────────────────
+
+var (
+	reHistFile = regexp.MustCompile(`(?i)裁定|决议|评估报告|工作记录|维护方案|追踪|审计计划|回执|登记|埋雷|事故|整备|CHANGELOG|ARCHIVE`)
+	reDate     = regexp.MustCompile(`\d{4}-\d{2}-\d{2}|\d{4}/\d{1,2}/\d{1,2}|\d{8}`)
+	reAsofWord = regexp.MustCompile(`(?i)as[- ]?of|截至|原记|彼时|当时|历史|已废弃|旧口径|陈旧口径|归档|已过时|已被.*取代|口径已`)
+	rePhase    = regexp.MustCompile(`(?i)(Phase|Stage|阶段|第)\s*\d+`)
+	reNum      = regexp.MustCompile(`\d{2,6}`)
+	// 数字绑定实测结果：直接替换会**伪造测量**（如"632 用例实测 103.6s"改成 671
+	// 就变成假记录）。此类应标 as-of，而不是改数字。
+	reMeasure = regexp.MustCompile(`实测|耗时|冷启动|加速比|吞吐|性能|基准`)
+	// 数字带分解式：只换总数会让算式不成立（如 "636 个用例（617 + cide_better 16 + 3）"）。
+	// 两个数字之间有加号即算分解式（中间允许夹少量说明词）；"C++" 因加号旁无数字不会误触发。
+	reBreakdown = regexp.MustCompile(`\d[^+＋\n]{0,24}[+＋][^+＋\n]{0,24}\d`)
+)
+
+func splitLinesKeep(p string) ([]string, error) {
+	b, err := os.ReadFile(p)
+	if err != nil {
+		return nil, err
+	}
+	return strings.Split(string(b), "\n"), nil
+}
+
+// scanFiles 扫描目标文档：docs/ 全部 + 根目录 md（归档目录跳过）。
+func scanFiles(root string) []string {
+	var out []string
+	docsDir := filepath.Join(root, "docs")
+	_ = filepath.WalkDir(docsDir, func(p string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		rel := relOf(root, p)
+		if d.IsDir() {
+			if strings.Contains(rel, "archive") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if strings.HasSuffix(p, ".md") {
+			out = append(out, rel)
+		}
+		return nil
+	})
+	for _, n := range []string{"AGENTS.md", "README.md"} {
+		if _, err := os.Stat(filepath.Join(root, n)); err == nil {
+			out = append(out, n)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+func classifyFile(rel string) string {
+	if strings.Contains(rel, "/archive/") || strings.HasPrefix(filepath.Base(rel), "ARCHIVE_") {
+		return "ARCHIVE"
+	}
+	// docs/spec/ 是对外承诺的协议文档（wire format / 验收快照）：其中的
+	// 数字是 as-of 时点记录（且可能引用已退役的旧驱动路径），改数字等于
+	// 往旧快照里塞新事实——按行级日期判冻结之外，文件级整体按 AS-OF 处理。
+	if strings.HasPrefix(rel, "docs/spec/") {
+		return "AS-OF"
+	}
+	if reHistFile.MatchString(filepath.Base(rel)) {
+		return "AS-OF"
+	}
+	return "CURRENT"
+}
+
+func classifyLine(line string) bool {
+	if rePhase.MatchString(line) {
+		return true
+	}
+	return reDate.MatchString(line) || reAsofWord.MatchString(line)
+}
+
+// blankOut 用等长空格抹掉匹配片段，**保持字节偏移不变**。
+func blankOut(s string, re *regexp.Regexp) string {
+	return re.ReplaceAllStringFunc(s, func(m string) string {
+		return strings.Repeat(" ", len(m))
+	})
+}
+
+func isWordByte(b byte) bool {
+	return b == '_' || b == '.' ||
+		(b >= '0' && b <= '9') || (b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z')
+}
+
+type numSpan struct {
+	start, end int // 字节偏移（相对整行）
+	value      int
+}
+
+// numberSpans 提取候选数字：先抹掉日期与阶段序号，再按 16 进制安全的边界检查过滤。
+func numberSpans(line string) []numSpan {
+	masked := blankOut(blankOut(line, rePhase), reDate)
+	var out []numSpan
+	for _, loc := range reNum.FindAllStringIndex(masked, -1) {
+		s, e := loc[0], loc[1]
+		if s > 0 && isWordByte(masked[s-1]) {
+			continue
+		}
+		if e < len(masked) && isWordByte(masked[e]) {
+			continue
+		}
+		v, err := strconv.Atoi(masked[s:e])
+		if err != nil {
+			continue
+		}
+		out = append(out, numSpan{s, e, v})
+	}
+	return out
+}
+
+// ─── 对账 ────────────────────────────────────────────────────────────────────
+
+type Hit struct {
+	Key     string
+	File    string
+	LineNo  int
+	Spans   []numSpan
+	Text    string
+	Cooccur []string
+	Warn    string
+}
+
+func (h Hit) Value() int { return h.Spans[0].value }
+
+type FactAudit struct {
+	Rule    Rule
+	Truth   *int
+	Matched int
+	Drift   []Hit
+	Frozen  []Hit
+	Pending []Hit
+	// Manual：数字分解式 / 绑定实测结果的行。子项落在 Lo/Hi 区间内时
+	// 与总数无法机判区分（`671 个用例（664 + 3 + 4）` 的 664 会被误判
+	// 漂移），自动替换又会改断算式/伪造测量——归入人工维护，不判 drift
+	// 不自动 sync，报告常显提醒。
+	Manual []Hit
+}
+
+type AuditResult struct {
+	Audits   []FactAudit
+	TruthOf  map[string]int
+	DriftN   int
+	FrozenN  int
+	PendingN int
+	ManualN  int
+	ScanN    int
+	// 坏引用：文档指向不存在的脚本文件（CURRENT 层才算；as-of/归档里的
+	// 旧路径是有意的历史叙述）。数字冻住不等于路径永远有效——退役驱动
+	// 留在文档里会让读者按图索骥扑空（spec 曾实测：shadow_verify.py 等
+	// 三个退役路径在冻结文档里躺了数日无人发现）。
+	Broken []BrokenRef
+}
+
+func auditDocs(root string, doc FactsDoc) AuditResult {
+	rs := rules()
+	byKey := map[string]*FactAudit{}
+	order := make([]string, 0, len(rs))
+	for i := range rs {
+		a := &FactAudit{Rule: rs[i], Truth: doc.Facts[rs[i].Key].Value}
+		byKey[rs[i].Key] = a
+		order = append(order, rs[i].Key)
+	}
+
+	files := scanFiles(root)
+	for _, rel := range files {
+		tier := classifyFile(rel)
+		if tier == "ARCHIVE" {
+			continue
+		}
+		lines, err := splitLinesKeep(filepath.Join(root, filepath.FromSlash(rel)))
+		if err != nil {
+			continue
+		}
+		for i, raw := range lines {
+			line := strings.TrimSuffix(raw, "\r")
+			if strings.TrimSpace(line) == "" {
+				continue
+			}
+			frozen := classifyLine(line) || tier == "AS-OF"
+			spans := numberSpans(line)
+
+			// 这一行对每个事实各命中哪些候选数字
+			byRule := map[string][]numSpan{}
+			for _, r := range rs {
+				if !r.Context.MatchString(line) {
+					continue
+				}
+				if r.Exclude != nil && r.Exclude.MatchString(line) {
+					continue
+				}
+				var c []numSpan
+				for _, s := range spans {
+					if s.value >= r.Lo && s.value <= r.Hi {
+						c = append(c, s)
+					}
+				}
+				if len(c) > 0 {
+					byRule[r.Key] = c
+				}
+			}
+			if len(byRule) == 0 {
+				continue
+			}
+			for key, cands := range byRule {
+				a := byKey[key]
+				h := Hit{Key: key, File: rel, LineNo: i + 1, Spans: cands,
+					Text: strings.TrimSpace(line)}
+				if a.Truth == nil {
+					a.Pending = append(a.Pending, h) // 无真值：待采集，不判漂移
+					continue
+				}
+				hit := false
+				for _, s := range cands {
+					if s.value != *a.Truth {
+						hit = true
+					}
+				}
+				if !hit {
+					a.Matched++
+					continue
+				}
+				var others []string
+				for k2 := range byRule {
+					if k2 != key {
+						others = append(others, byKey[k2].Rule.Label)
+					}
+				}
+				sort.Strings(others)
+				h.Cooccur = others
+				var warns []string
+				if reMeasure.MatchString(line) {
+					warns = append(warns,
+						"该行数字绑定了实测结果，直接替换会伪造测量——建议标 as-of 日期而非改数字")
+				}
+				if reBreakdown.MatchString(line) {
+					warns = append(warns,
+						"该行含数字分解式（a + b + c），只替换总数会让算式不成立——请一并核对子项")
+				}
+				h.Warn = strings.Join(warns, "；")
+				if frozen {
+					a.Frozen = append(a.Frozen, h)
+				} else if h.Warn != "" {
+					// 分解式/实测行：子项与总数无法机判区分、自动替换有破坏面
+					//（见 FactAudit.Manual 注释）——人工维护，不判 drift。
+					a.Manual = append(a.Manual, h)
+				} else {
+					a.Drift = append(a.Drift, h)
+				}
+			}
+		}
+	}
+
+	res := AuditResult{TruthOf: map[string]int{}, ScanN: len(files)}
+	for _, k := range order {
+		a := byKey[k]
+		res.Audits = append(res.Audits, *a)
+		res.DriftN += len(a.Drift)
+		res.ManualN += len(a.Manual)
+		res.FrozenN += len(a.Frozen)
+		res.PendingN += len(a.Pending)
+		if a.Truth != nil {
+			res.TruthOf[k] = *a.Truth
+		}
+	}
+	// 按文件 + 行号排序，便于人工顺序核对
+	sort.SliceStable(res.Audits, func(i, j int) bool { return order[i] < order[j] })
+	res.Broken = scanBrokenRefs(root, files)
+	return res
+}
+
+// ─── 坏引用扫描（文档指向不存在的脚本）────────────────────────────────────
+
+var reScriptRef = regexp.MustCompile(
+	`(?:scripts|native/tests|native/scripts)/[A-Za-z0-9_/.-]+\.(?:py|go|ps1)`)
+
+// reNarrativeRef 叙述性引用豁免：该行本身就在说明"此脚本已删除/退役/
+// 规划中"时，路径出现是历史叙述而非失效指引（实测 16 处坏引用中 12 处
+// 属此类——前端切割/D5 退役的脚本在文档里留有说明性记载）。行级豁免，
+// 与数字对账的 freeze 行级判定同一粒度。
+var reNarrativeRef = regexp.MustCompile(
+	`不存在|已迁出|已移除|已失效|未恢复|仍缺|删除|退役|取代|接替|规划中`)
+
+type BrokenRef struct {
+	File   string
+	LineNo int
+	Path   string
+	Text   string
+}
+
+// scanBrokenRefs 检查 CURRENT 文档中引用的脚本路径是否真实存在。
+// 只扫 CURRENT 层：as-of/归档文档里的退役路径是有意的历史叙述
+// （spec 勘误注记本身就会引用旧路径名），不是坏引用。
+// 存在性按三级判定：①字面路径存在；②去扩展名后是含 .go 文件的目录
+// （包路径引用——文档写 `scripts/shadow_verify.go` 而磁盘是
+// `scripts/shadow_verify/main.go`，Go 程序按目录组织的合法形态）；
+// ③其余即坏引用。
+func scanBrokenRefs(root string, files []string) []BrokenRef {
+	var out []BrokenRef
+	for _, rel := range files {
+		if classifyFile(rel) != "CURRENT" {
+			continue
+		}
+		lines, err := splitLinesKeep(filepath.Join(root, filepath.FromSlash(rel)))
+		if err != nil {
+			continue
+		}
+		for i, raw := range lines {
+			line := strings.TrimSuffix(raw, "\r")
+			if reNarrativeRef.MatchString(line) {
+				continue
+			}
+			for _, m := range reScriptRef.FindAllString(line, -1) {
+				if scriptRefAlive(root, m) {
+					continue
+				}
+				out = append(out, BrokenRef{File: rel, LineNo: i + 1, Path: m,
+					Text: strings.TrimSpace(line)})
+			}
+		}
+	}
+	sort.Slice(out, func(a, b int) bool {
+		if out[a].File != out[b].File {
+			return out[a].File < out[b].File
+		}
+		return out[a].LineNo < out[b].LineNo
+	})
+	return out
+}
+
+func scriptRefAlive(root, ref string) bool {
+	p := filepath.Join(root, filepath.FromSlash(ref))
+	if _, err := os.Stat(p); err == nil {
+		return true
+	}
+	// 包路径引用：xxx.go 不存在但 xxx/ 是含 .go 文件的目录
+	if strings.HasSuffix(ref, ".go") {
+		dir := strings.TrimSuffix(p, ".go")
+		if ents, err := os.ReadDir(dir); err == nil {
+			for _, e := range ents {
+				if !e.IsDir() && strings.HasSuffix(e.Name(), ".go") {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+// allDrift 展开为按位置排序的待改清单。
+func (r AuditResult) allDrift() []Hit {
+	var out []Hit
+	for _, a := range r.Audits {
+		out = append(out, a.Drift...)
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].File != out[j].File {
+			return out[i].File < out[j].File
+		}
+		return out[i].LineNo < out[j].LineNo
+	})
+	return out
+}
+
+func labelOf(r AuditResult, key string) string {
+	for _, a := range r.Audits {
+		if a.Rule.Key == key {
+			return a.Rule.Label
+		}
+	}
+	return key
+}
+
+func unitOf(r AuditResult, key string) string {
+	for _, a := range r.Audits {
+		if a.Rule.Key == key {
+			return a.Rule.Unit
+		}
+	}
+	return ""
+}
+
+// ─── 报告渲染 ────────────────────────────────────────────────────────────────
+
+func renderReport(root string, doc FactsDoc, res AuditResult, verbose bool) string {
+	var b strings.Builder
+	b.WriteString("# 文档测试数字漂移报告\n\n")
+	b.WriteString("> 生成时间: " + nowISO() + "\n")
+	dirty := ""
+	if doc.Git.Dirty {
+		dirty = " (dirty)"
+	}
+	b.WriteString("> 基线: `" + doc.Git.Rev + dirty + "`  真值源: `reports/facts.json`\n\n")
+	b.WriteString("判据：**CURRENT 文档中的裸数字（无日期、无 as-of 词）必须等于真值**；" +
+		"带日期或位于历史文档中的数字视为 as-of 快照，冻结不对账。\n\n")
+	b.WriteString("## 摘要\n\n")
+	b.WriteString("| 事实 | 真值 | 一致命中 | 漂移（需修） | 冻结（as-of） | 待采集 |\n")
+	b.WriteString("|------|------|----------|--------------|---------------|--------|\n")
+	for _, a := range res.Audits {
+		truth := "—"
+		if a.Truth != nil {
+			truth = strconv.Itoa(*a.Truth)
+		} else if f, ok := doc.Facts[a.Rule.Key]; ok && f.Status == "stale" {
+			// 区分"从无真值"（需 --run 采集）与"真值超龄被降级"（需先刷新产物）
+			truth = "— ⏰超龄"
+		}
+		b.WriteString(fmt.Sprintf("| %s | %s | %d | %d | %d | %d |\n",
+			a.Rule.Label, truth, a.Matched, len(a.Drift), len(a.Frozen), len(a.Pending)))
+	}
+	b.WriteString("\n")
+
+	b.WriteString("## 漂移明细（CURRENT 文档，需与真值对齐）\n\n")
+	if res.DriftN == 0 {
+		b.WriteString("无漂移。\n\n")
+	} else {
+		for _, a := range res.Audits {
+			if len(a.Drift) == 0 {
+				continue
+			}
+			b.WriteString(fmt.Sprintf("### %s — 真值 **%d** %s（%d 处）\n\n",
+				a.Rule.Label, *a.Truth, a.Rule.Unit, len(a.Drift)))
+			for _, h := range a.Drift {
+				extra := ""
+				if len(h.Cooccur) > 0 {
+					extra = " — ⚠ 同行还含 **" + strings.Join(h.Cooccur, " / ") + "**，改这行时别漏"
+				}
+				b.WriteString(fmt.Sprintf("- `%s:%d` 出现 **%d**%s\n", h.File, h.LineNo, h.Value(), extra))
+				b.WriteString("  > " + h.Text + "\n")
+				if h.Warn != "" {
+					b.WriteString("  > ⚠ " + h.Warn + "\n")
+				}
+			}
+			b.WriteString("\n")
+		}
+	}
+
+	if verbose {
+		b.WriteString("## 冻结命中（as-of 快照，不参与对账）\n\n")
+		for _, a := range res.Audits {
+			if len(a.Frozen) == 0 {
+				continue
+			}
+			b.WriteString(fmt.Sprintf("### %s（%d 处）\n\n", a.Rule.Label, len(a.Frozen)))
+			for _, h := range a.Frozen {
+				b.WriteString(fmt.Sprintf("- `%s:%d` = %d\n", h.File, h.LineNo, h.Value()))
+			}
+			b.WriteString("\n")
+		}
+	}
+
+	if len(res.Broken) > 0 {
+		b.WriteString("## 坏引用（CURRENT 文档指向不存在的脚本）\n\n")
+		b.WriteString("数字冻住不等于路径永远有效：退役驱动留在文档里，读者按图索骥会扑空。\n\n")
+		for _, r := range res.Broken {
+			b.WriteString(fmt.Sprintf("- `%s:%d` → `%s`\n", r.File, r.LineNo, r.Path))
+			b.WriteString("  > " + r.Text + "\n")
+		}
+		b.WriteString("\n")
+	}
+
+	if res.ManualN > 0 {
+		b.WriteString("## 人工维护（分解式 / 实测数字行）\n\n")
+		b.WriteString("子项落在判定区间内时与总数无法机判区分，自动替换会改断算式或伪造测量——\n")
+		b.WriteString("这些行不参与漂移判定与自动 sync，真值变化时请人工核对整行。\n\n")
+		for _, a := range res.Audits {
+			if len(a.Manual) == 0 {
+				continue
+			}
+			b.WriteString(fmt.Sprintf("### %s — 真值 **%d** %s（%d 处）\n\n",
+				a.Rule.Label, *a.Truth, a.Rule.Unit, len(a.Manual)))
+			for _, h := range a.Manual {
+				b.WriteString(fmt.Sprintf("- `%s:%d`（首数 %d）\n", h.File, h.LineNo, h.Value()))
+				b.WriteString("  > " + h.Text + "\n")
+			}
+			b.WriteString("\n")
+		}
+	}
+	return b.String()
+}
+
+// ─── 精确替换 ────────────────────────────────────────────────────────────────
+
+// ruleByKey 取回事实键对应的规则（applyHit 需要 Lo/Hi/Context/Exclude）。
+func ruleByKey(key string) (Rule, bool) {
+	for _, r := range rules() {
+		if r.Key == key {
+			return r, true
+		}
+	}
+	return Rule{}, false
+}
+
+// applyHit 只替换该行内**落在候选区间且不等于真值**的数字，其余字节原样保留。
+//
+// 关键：候选区间在**替换前基于当前文件内容重新计算**，不复用 `Hit.Spans`。
+// 后者是 audit 时刻算出的字节偏移；同一行被多条规则命中时，先替换的那条若
+// 改变了长度（如 100→97 少 1 字节），后续条目的旧偏移会整体失真 —— 实测会把
+// "78 个用例" 切成 "781个用例"（见 offsets_test.go）。重新定位即可免疫。
+func applyHit(root string, h Hit, truth int) error {
+	p := filepath.Join(root, filepath.FromSlash(h.File))
+	lines, err := splitLinesKeep(p)
+	if err != nil {
+		return err
+	}
+	idx := h.LineNo - 1
+	if idx < 0 || idx >= len(lines) {
+		return fmt.Errorf("%s:%d 越界", h.File, h.LineNo)
+	}
+	line := lines[idx]
+
+	r, ok := ruleByKey(h.Key)
+	if !ok {
+		return fmt.Errorf("未知事实键 %q", h.Key)
+	}
+	// 安全网：前序条目可能已改写该行，若它不再匹配本规则就不许动手。
+	if !r.Context.MatchString(line) ||
+		(r.Exclude != nil && r.Exclude.MatchString(line)) {
+		return fmt.Errorf("%s:%d 已不再匹配规则 %s（可能已被其他条目改动），请重跑", h.File, h.LineNo, h.Key)
+	}
+
+	var spans []numSpan
+	for _, s := range numberSpans(line) {
+		if s.value >= r.Lo && s.value <= r.Hi {
+			spans = append(spans, s)
+		}
+	}
+	// 倒序替换，避免前面的替换影响后面的偏移
+	for i := len(spans) - 1; i >= 0; i-- {
+		s := spans[i]
+		if s.value == truth {
+			continue
+		}
+		if s.start < 0 || s.end > len(line) || s.start >= s.end {
+			continue
+		}
+		line = line[:s.start] + strconv.Itoa(truth) + line[s.end:]
+	}
+	lines[idx] = line
+	return os.WriteFile(p, []byte(strings.Join(lines, "\n")), 0o644)
+}

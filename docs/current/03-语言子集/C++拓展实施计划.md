@@ -14,7 +14,7 @@
 > 3. **模板失败计数存在三套不一致口径（诚实记录，2026-09-11 核实）**：
 >    - `AGENTS.md` 防线 2 记 "82 个，78 绿，**4 已知失败**"（未列出是哪 4 个）；
 >    - `native/tests/cases_template_generated/E2E_FAILURES.md` 当前列 **3** 条 `KNOWN_DIVERGENCE`：`bTree_default` / `infixEvaluation_default` / `spfa_default`；
->    - 代码常量只列 **2** 条：`native/tests/cide_e2e.rs::KNOWN_TEMPLATE_FAILURES` 与 `native/tests/shadow_verification/shadow_verify.py::KNOWN_FAILURE_CASES` 均为 `bTree_default` / `spfa_default`——**`infixEvaluation_default` 未进入任一常量**（CI 双向对账因此存在盲点）。
+>    - 代码常量只列 **2** 条：`native/tests/cide_e2e.rs::KNOWN_TEMPLATE_FAILURES` 与 `scripts/shadow_verify/main.go::KNOWN_FAILURE_CASES`（D5 迁移后位置，原 Python 驱动已退役） 均为 `bTree_default` / `spfa_default`——**`infixEvaluation_default` 未进入任一常量**（CI 双向对账因此存在盲点）。
 >    本文件不擅自统一这三套口径，仅如实记录差异；精确对账机制见 `AGENTS.md` 防线 5。
 
 ---
@@ -1601,8 +1601,8 @@ native/runtime_libc/cide/
 ### 15.5 验证结果
 
 - **Dogfooding 测试**：28 个全部通过（`cargo test --test cpp_dogfooding_test`）
-- **C++ E2E 测试**：60 个全部通过（`cargo test --test cide_e2e cpp`）
-- **C++ Shadow Verification**：82 个用例全部一致，0 gap（原 3 个 gap 已消除）
+- **C++ E2E 测试**：81 个全部通过（`cargo test --test cide_e2e cpp`）
+- **C++ Shadow Verification**：97 个用例（95 一致 + 2 个已记录 `clang_compile_fail`），0 gap（原 3 个 gap 已消除）
 - **Parser/TypeChecker/BytecodeGen CPP 单元测试**：33 + 28 + 40 = 101 个全部通过
 - **clippy**：0 警告
 

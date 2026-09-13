@@ -450,6 +450,15 @@ v0.1 **字段集合未变**（本次为值语义增强与出口扩容），按 �
 | serve 出口一致性 | `python scripts/serve_smoke.py` | ✅ 40 项断言（新增三段式内存地图 / schema 轨道 / 词汇表 / 会话语义） |
 | 签字回放 S1–S5 | `python scripts/replay/replay_s1_s5.py`（锚点自动取） | ✅ **61/61 PASS** |
 
+> **执行路径勘误（2026-09-13 注；上表验收数字仍为 v0.1 签字时快照）**：上表
+> 引用的 `native/tests/shadow_verification/shadow_verify.py`、
+> `scripts/shadow_verify_cpp.py`、`scripts/replay/replay_s1_s5.py` 三个
+> Python 驱动已在 D5 工具链迁移（2026-09-13）中由 Go 版取代退役，文件已
+> 删除。现行复现命令：`go run ./scripts/shadow_verify`（C 侧）、
+> `go run ./scripts/shadow_verify_cpp`（C++ 侧）、
+> `go run ./scripts/replay/replay_s1_s5.go`（签字回放，带 `--selftest`
+> 自检）。`serve_smoke.py` 仍在服役（CI 活性件）。
+
 > **锚点与产物新鲜度（2026-09-12 补）**：驱动现在**前置门禁** —— `capabilities.engine_version`
 > 必须含当前 `git rev-parse --short HEAD`，否则 fail fast（exit 2）；`--anchor` 缺省从版本串
 > 自动取，默认值再也无法过期。动机是一次实测踩坑：release 产物没随提交重建时，回放会在

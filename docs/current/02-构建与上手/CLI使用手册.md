@@ -279,7 +279,7 @@ EOF
 > {"id":3,"method":"input.feed","params":{"text":"35\n"}}   // → finished，读入 a=7, b=35
 > ```
 >
-> 防线：`python scripts/serve_smoke.py` 覆盖 id 关联 / 帧同构 / 生命周期 / 配置一致性 / 三段式内存地图 / schema 轨道与词汇表的 40 项断言（CI 已纳入）。
+> 防线：`python scripts/serve_smoke.py` 覆盖 id 关联 / 帧同构 / 生命周期 / 配置一致性 / 三段式内存地图 / schema 轨道与词汇表的 51 项断言（CI 已纳入，脚本自报口径）。
 
 ## 快速测试片段
 

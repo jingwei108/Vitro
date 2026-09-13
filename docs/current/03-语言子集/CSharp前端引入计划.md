@@ -21,7 +21,7 @@
 
 **不换（行为资产，与重构计划同一张清单）**：
 - 编译管线五段结构（Lexer → Parser → TypeChecker → CodeGen → VM）
-- 字节码格式与 636 个 Shadow golden（C# 侧只允许按既有规则**追加** opcode，本计划追加 3 个）
+- 字节码格式与 671 个 Shadow golden（C# 侧只允许按既有规则**追加** opcode，本计划追加 3 个）
 - 出口协议（capi ABI / serve 协议 / StepPayload schema——只增不改语义）
 - VM 1MB 线性内存模型与教学检测语义（UAF/Double-Free/泄漏报告）
 
@@ -336,7 +336,7 @@ C# 白箱独有画面。
   不解析 trap 文本）；② 字符串插值基础形态（变量/表达式）纳入 CS1，格式化
   说明符后置 CS4 后裁。
 - **schema v0.1 签字回放完成（2026-09-12）**：S1–S5 对端材料采纳回放
-  **61/61 PASS**（驱动 `scripts/replay/replay_s1_s5.py`），暴露并修复五个引擎
+  **61/61 PASS**（驱动 `scripts/replay/replay_s1_s5.go`，D5 迁移后），暴露并修复五个引擎
   缺陷（越窗 seek 负下标无限分配/锚点裁剪/重放区间排他/断点双层暂停/入口步
   误标递归）。**v0.1 冻结的最后一道检查已过**，S4 激活契约表就位（CS3b 交付后
   以同序列回放 §5 断言）。**CS0 可以开工**。

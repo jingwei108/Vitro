@@ -68,9 +68,19 @@ REQUESTS = [
 DEFAULT_QUARANTINE_BUDGET = 256 * 1024  # 1MB 堆上限的 1/4（堆决议 §1）
 
 failures = []
+# 断言总数自计数：先前三个断言入口各打印一行却无人汇总，"40 项断言"是人肉数的，
+# 于是文档里这个数字反复漂移（40 / 39 / 60 三种写法并存）。
+# 现在脚本自报口径，供 scripts/facts/collect.py 采集为机器真值。
+assertions = 0
+
+
+def tally(ok_flag: bool) -> None:
+    global assertions
+    assertions += 1
 
 
 def check(cond, label, detail=""):
+    tally(cond)
     if cond:
         print(f"  PASS  {label}")
     else:
@@ -267,6 +277,8 @@ def main():
     failures.extend(rss_failures)
 
     print()
+    # 自报口径（供 facts 台账采集；格式稳定，勿随意改动）
+    print(f"断言数: {assertions}  (PASS {assertions - len(failures)} / FAIL {len(failures)})")
     if failures:
         print(f"FAILED: {len(failures)} 项 -> {failures}")
         return 1
@@ -372,7 +384,11 @@ def run_rss_guard_batch(exe: Path):
     peak = _peak_commit_mb_windows(proc.pid)
     # 进程已退出后句柄失效的兜底：以批内打印的采样为准；这里用退出前最后一次为准
     # （OpenProcess 对已退出进程仍可查询峰值——保持断言）
-    ok = lambda c, label, detail="": print(f"  {'PASS' if c else 'FAIL'}  {label}" + ("" if c else f"  {detail}")) or (None if c else fails.append(label))
+    def ok(c, label, detail=""):
+        tally(c)
+        print(f"  {'PASS' if c else 'FAIL'}  {label}" + ("" if c else f"  {detail}"))
+        if not c:
+            fails.append(label)
     if peak >= 0:
         ok(peak <= budget_mb, "RSS 护栏：提交峰值在预算内",
            f"peak={peak}MB budget={budget_mb}MB（U2 完成后按 J5 收紧；证红：CIDE_RSS_BUDGET_MB=5）")
@@ -426,7 +442,11 @@ def run_edge_batch(exe: Path):
         return ["edge-batch-timeout"]
 
     lines = [l for l in proc.stdout.splitlines() if l.strip()]
-    ok = lambda c, label, detail="": print(f"  {'PASS' if c else 'FAIL'}  {label}" + ("" if c else f"  {detail}")) or (None if c else fails.append(label))
+    def ok(c, label, detail=""):
+        tally(c)
+        print(f"  {'PASS' if c else 'FAIL'}  {label}" + ("" if c else f"  {detail}"))
+        if not c:
+            fails.append(label)
     ok(proc.returncode == 0, "边界批进程正常退出", f"exit={proc.returncode} stderr={proc.stderr[-300:]}")
     ok(len(lines) == len(EDGE_LINES), "边界批逐行响应（panic 死亡即缺行）",
        f"responses={len(lines)} expected={len(EDGE_LINES)}")

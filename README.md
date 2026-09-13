@@ -14,7 +14,7 @@
 cide 引擎核心（Rust workspace，禁止平台 API 耦合）
 │
 ├─ 出口 1：native cdylib / C ABI（native/src/capi/，ABI 版本化 cide_abi_version()）
-│    第一消费者：cide_cli、scripts/shadow_verify.go（capi 直调，663 个用例的生产验证）
+│    第一消费者：cide_cli、scripts/shadow_verify.go（capi 直调，671 个用例的生产验证）
 │    外部消费者：第三方教学 IDE（.NET P/Invoke 子进程等）、任意语言 FFI
 │
 ├─ 出口 2：wasm32-unknown-unknown（.wasm + 薄 JS/TS 绑定）
@@ -42,8 +42,8 @@ cide 引擎核心（Rust workspace，禁止平台 API 耦合）
 
 ## 当前状态（2026-09-11 实测）
 
-- **C 教学子集**：C Shadow Verification **636 个用例**（完全匹配 617 + cide_better 16 + known_issue 3，无非预期差异）
-- **C++ 教学子集**：C++ Shadow Verification **100 个用例**（98 一致 + 2 个已记录的 `clang_compile_fail`）；C++ E2E 回归 78 个用例
+- **C 教学子集**：C Shadow Verification **671 个用例**（完全匹配 664 + known_issue 3 + gap_extension 4，无非预期差异；cide_better 已清零）
+- **C++ 教学子集**：C++ Shadow Verification **97 个用例**（95 一致 + 2 个已记录的 `clang_compile_fail`）；C++ E2E 回归 81 个用例
 - **真实程序回归**：K&R 69 题全绿；LeetCode 138 题全部通过；Baseline 用例全部通过
 - **全量测试**：`cargo test --workspace --all-features` → **845 passed / 0 failed**（60 个测试套件）；clippy 0 warning
 - **capi 第一批**：13 个新入口全部落地（`cide_abi_version` 首批 `1.1.0`，当前 `1.2.0`），StepPayload schema v0.1 发布

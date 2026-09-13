@@ -240,6 +240,18 @@ Cide 采用**五条分层协作的测试防线**，核心哲学：*测试不是�
 - **规则、期望值等"资产"外置为 JSON**，代码只做解释器——人审数据，不审代码；
 - 自带自检的脚本（如 oracle 的事件类型清单 × 规则表 key 对账）必须 **fail loud**：自检不过直接拒绝给出判定，**禁止静默 default**。
 
+**文档测试数字对账（`scripts/facts`，2026-09-13 起用）**：文档里的测试数字（用例数/断言数/套件数）由机器真值对账，禁止长期人肉同步。判据：CURRENT 文档的裸数字必须等于真值，否则判漂移；带日期或位于历史文档（裁定/决议/工作记录等）的数字视为 as-of 快照冻结；**分解式与实测数字行归"人工维护"**（子项与总数机判不区分，自动替换会改断算式/伪造测量）；CURRENT 文档引用的脚本路径必须真实存在（叙述性"已退役/已迁出"记载豁免）。产物：`reports/facts.json`（真值台账，含溯源与 how_to_get）、`reports/doc_fact_drift.md`。用法（**flag 必须写在子命令之前**——Go flag 在第一个位置参数处停止解析，顺序错了脚本会 fatal 拦截）：
+
+```bash
+go run ./scripts/facts check            # CI 门禁：漂移/坏引用/真值超龄任一非零即 exit 1
+go run ./scripts/facts                  # 交互式逐条同步（y/n/a/d/q）
+go run ./scripts/facts --yes sync       # 自动应用无警告条目（分解式/实测行跳过，人工维护）
+go run ./scripts/facts report           # 只生成报告
+go run ./scripts/facts --run check      # 补跑 replay/serve_smoke 刷新真值后再判
+```
+
+要点：真值采集"不猜不兜底"（取不到记 unavailable 附 how_to_get）；真值超龄（`--max-age` 默认 168h）无条件红（`--allow-stale` 仅限本地调试，CI 不得使用）；新增对账规则时 Lo/Hi 区间须覆盖当前真值（越界后规则静默失配——埋雷方法学见 `07-质量与裁定/脚本埋雷验证记录.md` facts 节）。
+
 既有 Python 脚本的处置：
 
 - **不强制迁移、不冻结修改**；但触碰某脚本时若改动量已接近重写，优先用 Go 重写。**D5 进度（2026-09-13，全部完成 ✅）**：① 试点 `shadow_verify_cpp.py` 完成——`scripts/shadow_verify_cpp.go` 双轨对账一致（94 用例）后接管 CI，Clang 并发 16 路 **24.75s → 5.2s**；② 第二站 `replay_s1_s5.py` 完成——`scripts/replay/replay_s1_s5.go` 双轨对账一致（61 条断言状态与编号逐行一致），并带 `--selftest` 注入自检（J9）；③ 第三站探针集 `random_diff.py` 完成——`scripts/core_asset_verdict/random_diff.go` 以 **MT19937 逐比特复刻**（同 seed 同用例集合）双轨对账一致（1000 例 verdict+expected 逐用例一致），首次建立可复现基线；④⑤ 交互切面探针、资源域长跑探针完成；⑥ **最后一站主驱动 `shadow_verify.py` 完成（2026-09-13）**——`scripts/shadow_verify.go` 与 Python 版双轨对账 **PASS**（663 用例集合/顺序/逐用例 diff_type/expected/summary/category_frequency/clang_version 全一致），CI 已切换，`shadow_verify.py` / `cide_output.py` / `extract_shadow_cases.py` 退役删除。各站 Go 版均含启动自检 fail loud + 产物新鲜度门禁。**退役收尾（2026-09-13）**：双轨对账基准的使命随 D5 收官而终结，7 个被替代的 Python 版已退役删除（`shadow_verify_cpp.py` / `replay/replay_s1_s5.py` / `core_asset_verdict/{interaction_probe,random_diff,resource_longrun,seek_accumulation,winmem}.py`，git 历史可回取）；**仍在服役的 Python**：CI 活性四件（`ci_three_tier_check.py` / `serve_smoke.py` / `precompile_bytecode_libc.py` / `engineering_health.py`，迁移是后续批次）、一次性取证脚本（裁定 §13.7 明确不迁移）、`mutation_facet_test.py`（J3 测量工具，会再跑，迁移待办）、活性生成器（`extract_cpp_builtin_layout.py` / `sync_templates.py` / `unified_perf_baseline.py`）**⚠️ 实证发现**：DLL 并发调用 → 堆损坏（引擎非线程安全），Cide 侧调用必须互斥；
