@@ -4,85 +4,85 @@
    "exit": 0,
    "n": 50000,
    "stdout_tail": "one\n程序运行完成，返回值：0\n\n",
-   "wall_s": 4.4
+   "wall_s": 4.41
   },
   {
    "exit": 0,
    "n": 100000,
    "stdout_tail": "one\n程序运行完成，返回值：0\n\n",
-   "wall_s": 9.8
+   "wall_s": 10.43
   },
   {
    "exit": 0,
    "n": 200000,
    "stdout_tail": "one\n程序运行完成，返回值：0\n\n",
-   "wall_s": 20.23
+   "wall_s": 21.97
   },
   {
    "exit": 1,
    "n": 400000,
    "stdout_tail": "\n编译成功。\n\n=== 运行输出 ===\n\n",
-   "wall_s": 36.58
+   "wall_s": 38.91
   },
   {
    "basis": "50000-\u003e400000",
-   "exponent_estimate": 1.018
+   "exponent_estimate": 1.047
   }
  ],
  "seek": {
   "iters": 50000,
   "killed_by_watchdog": false,
-  "peak_commit_mb": 513.4,
+  "peak_commit_mb": 513.7,
   "stderr_tail": "cide_cli serve：JSON-lines 会话模式（EOF 或 shutdown 退出）\n",
   "steps_est": 500000,
   "timeline": [
    {
-    "after_mb": 56.9,
+    "after_mb": 56.6,
     "before_mb": 3.4,
     "seek": 100000,
-    "settled_mb": 56.9,
+    "settled_mb": 56.6,
     "success": true,
-    "wall_s": 1.31
+    "wall_s": 1.21
    },
    {
     "after_mb": 57.4,
-    "before_mb": 56.9,
+    "before_mb": 56.6,
     "seek": 300000,
     "settled_mb": 57.4,
     "success": true,
-    "wall_s": 2.24
+    "wall_s": 2.16
    },
    {
-    "after_mb": 58.2,
+    "after_mb": 57.5,
     "before_mb": 57.4,
     "seek": 450000,
-    "settled_mb": 58.2,
+    "settled_mb": 57.5,
     "success": true,
-    "wall_s": 1.79
+    "wall_s": 1.77
    },
    {
-    "after_mb": 57.6,
-    "before_mb": 58.2,
+    "after_mb": 57.7,
+    "before_mb": 57.5,
     "seek": 200000,
-    "settled_mb": 57.6,
+    "settled_mb": 57.7,
     "success": true,
-    "wall_s": 2.4
+    "wall_s": 2.27
    },
    {
-    "after_mb": 57.4,
-    "before_mb": 57.6,
+    "after_mb": 58.5,
+    "before_mb": 57.7,
     "seek": 100000,
-    "settled_mb": 57.4,
+    "settled_mb": 58.5,
     "success": true,
-    "wall_s": 1.25
+    "wall_s": 1.26
    },
    {
-    "after_mb": 58.4,
-    "before_mb": 57.4,
+    "after_mb": 59.6,
+    "before_mb": 58.5,
     "seek": 450000,
-    "settled_mb": 58.4,
+    "settled_mb": 59.6,
     "success": true,
-    "wall_s": 3.77
+    "wall_s": 3.7
    }
   ]
  }

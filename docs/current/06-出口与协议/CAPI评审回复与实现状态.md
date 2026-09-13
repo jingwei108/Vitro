@@ -120,7 +120,7 @@
 
 | 函数 | 状态 | 说明 |
 |---|---|---|
-| `cide_abi_version` | ✅ | 返回 `1.1.0`（**加函数 = minor，改签名/语义 = major**；1.1.0 为 E-P1-5 追加输出通道函数） |
+| `cide_abi_version` | ✅ | 返回 `1.2.0`（**加函数 = minor，改签名/语义 = major**；1.1.0 为 E-P1-5 追加输出通道函数，1.2.0 为 2026-09-13 追加 `cide_get_compile_errors_length`） |
 | `cide_engine_version` | ✅ | crate 版本（可选拼接构建期注入的 `CIDE_GIT_HASH`） |
 | `cide_free_string` | ✅ | rust-alloc 所有权唯一释放入口；null 安全；不保留 caller-buffer 双轨 |
 | `cide_last_error` | ✅ | JSON `{kind: "compile"\|"runtime"\|"none", message}` |
@@ -130,6 +130,7 @@
 | `cide_get_program_output_length` / `cide_get_program_output` | ✅ | **E-P1-5（1.1.0）**：纯程序 stdout —— 判分、与 Clang golden 比对、第三方消费的唯一合法来源；不含引擎附注与 stderr |
 | `cide_get_engine_notes_length` / `cide_get_engine_notes` | ✅ | **E-P1-5（1.1.0）**：引擎附注单独通道（运行完成提示 / 内存泄漏报告 / 教学安全警告） |
 | `cide_get_program_output_delta` | ✅ | **E-P1-5（1.1.0）**：纯 stdout 的游标增量，返回 `stream:"stdout"` |
+| `cide_get_compile_errors_length` | ✅ | **1.2.0（2026-09-13）**：编译错误 JSON 字节长度（不含 NUL；无错误 0）——驱动侧定长读取，替代变长窗口扫描（对短于窗口的分配是越界读） |
 | `cide_set_max_steps` | ✅ | 会话级保险丝（映射 `CideVM::set_max_steps`；`reset()` 不再清空会话配置） |
 | `cide_set_call_depth_limit` | ✅ | V-P1-10：VM 新增 `call_depth_limit` 字段 + `do_call_inner` 深度检查（下限 16 层兜底） |
 | `cide_set_deterministic` / `cide_get_deterministic` | ✅ | 最小形态：`time()` / `clock()` 固定返回 0 |

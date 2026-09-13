@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `CIDE_ABI_VERSION` 1.1.0 → **1.2.0**；新增 capi 集成测试
   `test_compile_errors_length_matches_string`（干净会话 0/null、失败会话 length 与
   NUL 串字节数一致）。
+- 连带修复：replay S5 A4a 的 ABI 断言由硬编码 `"1.1.0"` 改为**版本下限语义**
+  （`≥ 1.1.0`，major 变更必红）——快照冻结具体串会让每次兼容性加函数都假红，
+  下限语义保留检测牙齿；改后 S1-S5 回放 61/61 PASS。
 
 ### Changed (tools)：D5 收尾重构——scripts 建共享包 + 白名单外置（PR 评审第 2/3 项）
 

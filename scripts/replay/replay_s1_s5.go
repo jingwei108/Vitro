@@ -61,6 +61,19 @@ func marr(v any) []any {
 	return a
 }
 
+// abiVersionAtLeast 解析 "major.minor.patch" 版本串并断言下限；
+// 解析失败 / major 不同 / 低于要求 → false（A4a 必红）。
+func abiVersionAtLeast(v string, minMajor, minMinor int) bool {
+	var major, minor, patch int
+	if _, err := fmt.Sscanf(v, "%d.%d.%d", &major, &minor, &patch); err != nil {
+		return false
+	}
+	if major != minMajor {
+		return false
+	}
+	return minor >= minMinor
+}
+
 func mstr(v any) string {
 	s, _ := v.(string)
 	return s
@@ -887,7 +900,11 @@ func runS5(s *Serve, rep *Report, payloads []map[string]any, anchor string) {
 
 	rPing := s.request("ping", nil)
 	abi := mstr(mmap(rPing["result"])["abi"])
-	rep.check("S5", "A4a", abi == "1.1.0", fmt.Sprintf("abi=%s", abi))
+	// A4a：ABI 版本下限断言（签名契约 ≥ 1.1.0，即 E-P1-5 结构化输出通道起）。
+	// 不硬编码具体版本——引擎按"加函数 = minor"承诺演进（1.2.0 起追加
+	// cide_get_compile_errors_length 等），快照冻结具体串会让每次兼容性加函数
+	// 都假红；下限语义保留牙齿：major 变更（破坏性）或低于 1.1.0 的产物必红。
+	rep.check("S5", "A4a", abiVersionAtLeast(abi, 1, 1), fmt.Sprintf("abi=%s（要求 ≥ 1.1.0）", abi))
 
 	// A4b：直读 dll 的 cide_engine_version（Go 走规范指针读取 + cide_free_string）
 	if _, err := os.Stat(dllPath); err == nil {

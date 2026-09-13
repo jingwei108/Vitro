@@ -46,7 +46,7 @@ cide 引擎核心（Rust workspace，禁止平台 API 耦合）
 - **C++ 教学子集**：C++ Shadow Verification **100 个用例**（98 一致 + 2 个已记录的 `clang_compile_fail`）；C++ E2E 回归 78 个用例
 - **真实程序回归**：K&R 69 题全绿；LeetCode 138 题全部通过；Baseline 用例全部通过
 - **全量测试**：`cargo test --workspace --all-features` → **845 passed / 0 failed**（60 个测试套件）；clippy 0 warning
-- **capi 第一批**：13 个新入口全部落地（`cide_abi_version` 返回 `1.1.0`），StepPayload schema v0.1 发布
+- **capi 第一批**：13 个新入口全部落地（`cide_abi_version` 首批 `1.1.0`，当前 `1.2.0`），StepPayload schema v0.1 发布
 - **wasm32 出口**：零修改构建 3.75MB `.wasm`，Node 下 C API 全链路（compile → run → output）+ E3070 教学诊断通过
 - **时间旅行**：VM 快照 / 检查点 / Seek / 异常回退全链路可用（`cide_cli unified`、`serve` 的 `step.*`/`seek`）
 

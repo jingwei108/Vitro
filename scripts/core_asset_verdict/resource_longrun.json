@@ -1,49 +1,11 @@
 {
- "cap_mb": 1500.0,
- "seek": [
-  {
-   "wall_s": 0.51,
-   "exit": 0,
-   "commit_peak_mb": 116.7,
-   "peak_psapi_mb": 117.9,
-   "killed_by_watchdog": false,
-   "stdout_tail": ",{\"addr\":1048572,\"is_local\":true,\"name\":\"i\",\"ty_name\":\"int\",\"value\":\"2375\"}],\"pointer_snapshots\":[],\"root_cause_hint\":null,\"semantic_label\":\"函数调用\",\"step_index\":49900,\"vis_events\":[]},\"success\":true}}\n",
-   "stderr_tail": "cide_cli serve：JSON-lines 会话模式（EOF 或 shutdown 退出）\n",
-   "case": "seek_iters5000",
-   "est_steps": 50000,
-   "mb_per_1k_steps": 2.334
-  },
-  {
-   "wall_s": 1.92,
-   "exit": 0,
-   "commit_peak_mb": 300.5,
-   "peak_psapi_mb": 309.3,
-   "killed_by_watchdog": false,
-   "stdout_tail": "{\"addr\":1048572,\"is_local\":true,\"name\":\"i\",\"ty_name\":\"int\",\"value\":\"9518\"}],\"pointer_snapshots\":[],\"root_cause_hint\":null,\"semantic_label\":\"函数调用\",\"step_index\":199900,\"vis_events\":[]},\"success\":true}}\n",
-   "stderr_tail": "cide_cli serve：JSON-lines 会话模式（EOF 或 shutdown 退出）\n",
-   "case": "seek_iters20000",
-   "est_steps": 200000,
-   "mb_per_1k_steps": 1.502
-  },
-  {
-   "wall_s": 5.0,
-   "exit": 0,
-   "commit_peak_mb": 622.2,
-   "peak_psapi_mb": 622.4,
-   "killed_by_watchdog": false,
-   "stdout_tail": "\"addr\":1048572,\"is_local\":true,\"name\":\"i\",\"ty_name\":\"int\",\"value\":\"23804\"}],\"pointer_snapshots\":[],\"root_cause_hint\":null,\"semantic_label\":\"函数调用\",\"step_index\":499900,\"vis_events\":[]},\"success\":true}}\n",
-   "stderr_tail": "cide_cli serve：JSON-lines 会话模式（EOF 或 shutdown 退出）\n",
-   "case": "seek_iters50000",
-   "est_steps": 500000,
-   "mb_per_1k_steps": 1.244
-  }
- ],
+ "cap_mb": 1500,
  "malloc": [
   {
-   "wall_s": 10.01,
+   "wall_s": 10.22,
    "exit": 0,
-   "commit_peak_mb": 8.6,
-   "peak_psapi_mb": 9.7,
+   "commit_peak_mb": 8.62,
+   "peak_psapi_mb": -0.99,
    "killed_by_watchdog": false,
    "stdout_tail": "\n编译成功。\n\n=== 运行输出 ===\ndone\n程序运行完成，返回值：0\n\n",
    "stderr_tail": "",
@@ -51,10 +13,10 @@
    "n": 100000
   },
   {
-   "wall_s": 31.86,
+   "wall_s": 32.33,
    "exit": 0,
-   "commit_peak_mb": 8.6,
-   "peak_psapi_mb": 9.6,
+   "commit_peak_mb": 8.63,
+   "peak_psapi_mb": -0.99,
    "killed_by_watchdog": false,
    "stdout_tail": "\n编译成功。\n\n=== 运行输出 ===\ndone\n程序运行完成，返回值：0\n\n",
    "stderr_tail": "",
@@ -62,25 +24,63 @@
    "n": 300000
   },
   {
-   "wall_s": 39.75,
+   "wall_s": 38.68,
    "exit": 1,
-   "commit_peak_mb": 8.6,
-   "peak_psapi_mb": 9.7,
+   "commit_peak_mb": 8.63,
+   "peak_psapi_mb": -0.99,
    "killed_by_watchdog": false,
    "stdout_tail": "\n编译成功。\n\n=== 运行输出 ===\n\n",
-   "stderr_tail": "制（10000000 步），可能包含无限循环。\n\n🔍 在最近 100000 步内没有变化的变量：i = 357142，p = 274472。\n\n💡 原因：程序执行了太多步数但没有结束。常见原因：\n  • 循环条件永远为真（如 while(1)）\n  • 循环变量没有更新（如忘了写 i++）\n  • 递归函数没有正确的终止条件\n✅ 检查方法：确认循环体中有改变循环条件的语句。\n📍 发生在第 4 行\n",
+   "stderr_tail": "1)）\n  • 循环变量没有更新（如忘了写 i++）\n  • 递归函数没有正确的终止条件\n✅ 检查方法：确认循环体中有改变循环条件的语句。\n📍 发生在第 4 行\n",
    "case": "malloc_1000000",
    "n": 1000000
   }
  ],
  "putchar": {
-  "wall_s": 0.36,
+  "wall_s": 0.31,
   "exit": 1,
-  "commit_peak_mb": 46.5,
-  "peak_psapi_mb": 59.4,
+  "commit_peak_mb": 47.69,
+  "peak_psapi_mb": -0.99,
   "killed_by_watchdog": false,
   "stdout_tail": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
-  "stderr_tail": "🔄 程序执行步数超过限制（10000000 步），可能包含无限循环。\n\n🔍 在最近 100000 步内没有变化的变量：i = 714285。\n\n💡 原因：程序执行了太多步数但没有结束。常见原因：\n  • 循环条件永远为真（如 while(1)）\n  • 循环变量没有更新（如忘了写 i++）\n  • 递归函数没有正确的终止条件\n✅ 检查方法：确认循环体中有改变循环条件的语句。\n📍 发生在第 2 行\n",
+  "stderr_tail": "1)）\n  • 循环变量没有更新（如忘了写 i++）\n  • 递归函数没有正确的终止条件\n✅ 检查方法：确认循环体中有改变循环条件的语句。\n📍 发生在第 2 行\n",
   "case": "putchar_1m"
- }
+ },
+ "seek": [
+  {
+   "wall_s": 0.51,
+   "exit": 0,
+   "commit_peak_mb": 115.27,
+   "peak_psapi_mb": -0.99,
+   "killed_by_watchdog": false,
+   "stdout_tail": ":1048572,\"is_local\":true,\"name\":\"i\",\"ty_name\":\"int\",\"value\":\"2375\"}],\"pointer_snapshots\":[],\"root_cause_hint\":null,\"semantic_label\":\"函数调用\",\"step_index\":49900,\"vis_events\":[]},\"success\":true}}\n",
+   "stderr_tail": "cide_cli serve：JSON-lines 会话模式（EOF 或 shutdown 退出）\n",
+   "case": "seek_iters5000",
+   "est_steps": 50000,
+   "mb_per_1k_steps": 2.31
+  },
+  {
+   "wall_s": 1.86,
+   "exit": 0,
+   "commit_peak_mb": 300.87,
+   "peak_psapi_mb": -0.99,
+   "killed_by_watchdog": false,
+   "stdout_tail": "1048572,\"is_local\":true,\"name\":\"i\",\"ty_name\":\"int\",\"value\":\"9518\"}],\"pointer_snapshots\":[],\"root_cause_hint\":null,\"semantic_label\":\"函数调用\",\"step_index\":199900,\"vis_events\":[]},\"success\":true}}\n",
+   "stderr_tail": "cide_cli serve：JSON-lines 会话模式（EOF 或 shutdown 退出）\n",
+   "case": "seek_iters20000",
+   "est_steps": 200000,
+   "mb_per_1k_steps": 1.5
+  },
+  {
+   "wall_s": 4.67,
+   "exit": 0,
+   "commit_peak_mb": 622.25,
+   "peak_psapi_mb": -0.99,
+   "killed_by_watchdog": false,
+   "stdout_tail": "048572,\"is_local\":true,\"name\":\"i\",\"ty_name\":\"int\",\"value\":\"23804\"}],\"pointer_snapshots\":[],\"root_cause_hint\":null,\"semantic_label\":\"函数调用\",\"step_index\":499900,\"vis_events\":[]},\"success\":true}}\n",
+   "stderr_tail": "cide_cli serve：JSON-lines 会话模式（EOF 或 shutdown 退出）\n",
+   "case": "seek_iters50000",
+   "est_steps": 500000,
+   "mb_per_1k_steps": 1.24
+  }
+ ]
 }
