@@ -367,6 +367,11 @@ pub struct Session {
     /// 统一模式（时间旅行）引擎。由 `cide_step_begin` 初始化，
     /// 供 `cide_step_next_json` / `cide_get_step_payloads_json` 消费。
     pub unified: Option<crate::unified::engine::UnifiedEngine>,
+    /// U1#1 P0-1：serve step.next 的一帧发布缓冲——流式协议下"行末帧"
+    /// 判定需要未来信息（下一帧是否同行），故当前帧暂存，下一帧到来时
+    /// 回改（同行 → 清其 algorithm_step，它是语句中间帧、数值为旧值）
+    /// 后再发布。
+    pub unified_pending: Option<crate::unified::types::StepPayload>,
 }
 
 impl Session {
@@ -389,6 +394,7 @@ impl Default for Session {
             vm: Some(CideVM::default()),
             vfs: VirtualFileSystem::new(),
             unified: None,
+            unified_pending: None,
         }
     }
 }

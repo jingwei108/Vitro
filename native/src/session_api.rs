@@ -235,10 +235,47 @@ pub fn step_next(session: &mut Session) -> Result<Value, String> {
     let outcome = engine.run_batch(&mut vm, session, 1);
     session.vm = Some(vm);
     session.unified = Some(engine);
-    match outcome {
-        Ok(result) => serde_json::to_value(&result).map_err(|e| format!("JSON 序列化失败：{}", e)),
-        Err(e) => Err(e),
+    let mut result = outcome?;
+    // U1#1 P0-1：一帧发布缓冲（流式协议下行末判定需要未来信息——当前帧
+    // 暂存，下一帧到来时回改上一帧后再发布）。当前帧与上一帧同 code_line
+    // 时，上一帧是语句中间帧（赋值前数值：实测 binary 首帧"计算中点
+    // mid=0"实际 mid=2），清其标注后发布。
+    //
+    // 修复记录：先前版本把 `session.unified_pending = ...` 写在
+    // `if let Some(pending)` 块内，而该字段初始为 `None`（session.rs）——
+    // 分支永不进入 ⇒ 字段永远是 None ⇒ **整段缓冲从未执行**（死锁），
+    // 首帧旧值照样下发。赋值必须无条件执行（放在 if 之外）。
+    let flushed = result.payloads.is_empty() || result.finished;
+    if flushed {
+        // 程序结束/无新帧：冲刷缓存帧（与结束帧同行则它不是行末，清标注）
+        if let Some(mut pending) = session.unified_pending.take() {
+            if Some(pending.code_line) == result.payloads.last().map(|p| p.code_line) {
+                pending.algorithm_step = None;
+            }
+            result.payloads.insert(0, pending);
+        }
+    } else {
+        let curr = result.payloads.pop();
+        match session.unified_pending.take() {
+            Some(mut pending) => {
+                if Some(pending.code_line) == curr.as_ref().map(|c| c.code_line) {
+                    pending.algorithm_step = None;
+                }
+                result.payloads = vec![pending];
+            }
+            None => {
+                // 首帧（全局第一帧）：没有下一帧可对比，无法判定它是否为
+                // 行末帧。保守清除标注——宁可少报一条，不可把赋值前的旧
+                // 值当正确值呈现给学生。
+                if let Some(mut c) = curr.clone() {
+                    c.algorithm_step = None;
+                    result.payloads = vec![c];
+                }
+            }
+        }
+        session.unified_pending = curr;
     }
+    serde_json::to_value(&result).map_err(|e| format!("JSON 序列化失败：{}", e))
 }
 
 /// 普通 VM 单步（非统一模式；cide_cli step 子命令同款语义）。

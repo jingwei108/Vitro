@@ -203,6 +203,23 @@ impl UnifiedEngine {
             }
         }
 
+        // U1#1 P0-1：同一源码行的多帧中只有**行末帧**（语句完成帧）携带
+        // algorithm_step——首帧在赋值发生前，数值是旧值/未初始化哨兵
+        // （用户实测三例：binary 首帧"计算中点 mid=0"实际 mid=2、
+        // shellSort 首帧"取增量 gap=0"、dijkstra 首帧"顶点 -1"）。
+        // 去重必须作用于**返回数组本身**（step.next 客户端看到的是它），
+        // 并同步缓存（含与上批尾帧的衔接——批边界切在语句中间时上批
+        // 尾帧不再是行末）。
+        for i in 1..payloads.len() {
+            if payloads[i].code_line == payloads[i - 1].code_line {
+                payloads[i - 1].algorithm_step = None;
+            }
+        }
+        if let (Some(tail), Some(first)) = (self.frame_cache.last_mut(), payloads.first()) {
+            if tail.code_line == first.code_line {
+                tail.algorithm_step = None;
+            }
+        }
         self.frame_cache.extend(payloads.clone());
         self.trim_frame_cache();
 
@@ -356,6 +373,18 @@ impl UnifiedEngine {
         }
     }
 
+    /// U1#1 P0-1：对 frame_cache 的 [from, len) 段执行"行末帧标注保留"——
+    /// 与前一帧同 code_line 的帧不是行末（语句尚未完成），其 algorithm_step
+    /// 置 None；段的最后一帧（或行切换前的末帧）保留标注（数值为完成态）。
+    /// from = 0 时包含与既有缓存尾部的衔接（run_batch 跨批边界场景）。
+    fn demote_row_annotations(&mut self, from: usize) {
+        for i in from..self.frame_cache.len() {
+            if i >= 1 && self.frame_cache[i].code_line == self.frame_cache[i - 1].code_line {
+                self.frame_cache[i - 1].algorithm_step = None;
+            }
+        }
+    }
+
     /// 重放过程中将 payload 放入临时缓存。
     fn push_or_replace_in_replay(&mut self, step: i32, payload: StepPayload) {
         let Ok(idx) = usize::try_from(step - self.frame_cache_start_step) else {
@@ -364,6 +393,7 @@ impl UnifiedEngine {
         };
         if idx == self.frame_cache.len() {
             self.frame_cache.push(payload);
+            self.demote_row_annotations(self.frame_cache.len() - 1);
         } else if idx < self.frame_cache.len() {
             self.frame_cache[idx] = payload;
         } else {
@@ -387,6 +417,7 @@ impl UnifiedEngine {
                 });
             }
             self.frame_cache.push(payload);
+            self.demote_row_annotations(self.frame_cache.len() - 1);
         }
     }
 
