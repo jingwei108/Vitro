@@ -102,20 +102,49 @@ impl Lexer {
                 '\'' => '\'' as i32,
                 '0' => 0,
                 'x' => {
+                    // U1#7：\x 后 1~2 位 hex 均合法（C 标准任意位，教学子集
+                    // 上限 2 位）；第 3 位仍是 hexdigit 即"超范围"报错（对齐
+                    // clang "hex escape sequence out of range"）。修复前恰好
+                    // 吃 2 位导致 '\x1' 单位被误拒、'\x4142' 报"未闭合"错乱。
+                    // 本分支内直接消费完整转义序列（含错误路径的残段）。
                     let h1 = self.peek(2);
                     let h2 = self.peek(3);
-                    if h1.is_ascii_hexdigit() && h2.is_ascii_hexdigit() {
-                        let hex: String = self.chars[self.pos + 2..self.pos + 4].iter().collect();
-                        u8::from_str_radix(&hex, 16).unwrap_or(0) as i32
-                    } else {
+                    if !h1.is_ascii_hexdigit() {
                         self.errors.push(LexerError {
-                            message: "字符字面量十六进制转义格式错误".to_string(),
+                            message: "字符字面量十六进制转义缺少数字".to_string(),
                             line: self.line,
                             column: self.column,
                             code: ErrorCode::E1001_UnknownChar as i32,
                         });
                         valid = false;
                         0
+                    } else {
+                        let two = h2.is_ascii_hexdigit();
+                        let after = if two { 4 } else { 3 };
+                        if self.peek(after).is_ascii_hexdigit() {
+                            let mut k = after;
+                            while self.peek(k).is_ascii_hexdigit() {
+                                k += 1;
+                            }
+                            for _ in 0..k {
+                                self.advance();
+                            }
+                            self.errors.push(LexerError {
+                                message: "十六进制转义序列超出范围（教学子集最多 2 位 hex）"
+                                    .to_string(),
+                                line: self.line,
+                                column: self.column,
+                                code: ErrorCode::E1006_UnsupportedFeature as i32,
+                            });
+                            valid = false;
+                            0
+                        } else {
+                            let hex: String = self.chars[self.pos + 2..self.pos + after].iter().collect();
+                            for _ in 0..after {
+                                self.advance();
+                            }
+                            u8::from_str_radix(&hex, 16).unwrap_or(0) as i32
+                        }
                     }
                 }
                 _ => {
@@ -129,9 +158,9 @@ impl Lexer {
                     0
                 }
             };
-            self.advance();
-            self.advance();
-            if next == 'x' && valid {
+            // 消费 '\' 与转义字符；\x 的完整序列（\ x + hex 位）已在分支内
+            // 消费（U1#7），此处只推进普通单字符转义
+            if next != 'x' {
                 self.advance();
                 self.advance();
             }

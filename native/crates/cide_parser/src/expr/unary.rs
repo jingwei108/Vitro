@@ -18,7 +18,7 @@ impl Parser {
             return self.parse_delete_expr();
         }
         if self.check(TokenType::LParen) {
-            let checkpoint = self.pos;
+            let checkpoint = self.save();
             let typedef_snapshot = self.typedef_names.clone();
             self.advance(); // consume '('
             if self.is_type_token() {
@@ -39,7 +39,7 @@ impl Parser {
                     };
                 }
             }
-            self.pos = checkpoint;
+            self.restore(checkpoint);
             self.typedef_names = typedef_snapshot;
         }
         if self.match_token(TokenType::Minus) {
@@ -160,7 +160,7 @@ impl Parser {
             file_id: 0,
         };
         if self.match_token(TokenType::LParen) {
-            let checkpoint = self.pos;
+            let checkpoint = self.save();
             let mut is_type = false;
             let mut t = Type::default();
             if self.is_type_token() {
@@ -181,7 +181,7 @@ impl Parser {
                     ty: Type::int(),
                 };
             }
-            self.pos = checkpoint;
+            self.restore(checkpoint);
             let expr = self.parse_expression();
             self.consume(TokenType::RParen, "sizeof(expr) 后预期 ')'");
             return Expr::Sizeof {
@@ -208,7 +208,7 @@ impl Parser {
             file_id: 0,
         };
         if self.match_token(TokenType::LParen) {
-            let checkpoint = self.pos;
+            let checkpoint = self.save();
             let typedef_snapshot = self.typedef_names.clone();
             let mut is_type = false;
             let mut t = Type::default();
@@ -230,7 +230,7 @@ impl Parser {
                     ty: Type::int(),
                 };
             }
-            self.pos = checkpoint;
+            self.restore(checkpoint);
             self.typedef_names = typedef_snapshot;
             let expr = self.parse_expression();
             self.consume(TokenType::RParen, "alignof(expr) 后预期 ')'");

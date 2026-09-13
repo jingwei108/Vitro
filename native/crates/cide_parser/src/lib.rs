@@ -54,6 +54,18 @@ fn node_cross_count(node: &DeclaratorNode) -> i32 {
     }
 }
 
+
+/// U1#10：统一回滚点——pos + errors + **anonymous_structs**。
+/// 此前回滚只恢复前两者：试探解析失败后重解析把匿名 struct 二次 push
+/// （命名 `__anon_struct_{pos}` 同位置同名 → "重复定义 E3002"），合法
+/// 复合字面量 `(struct {int a;}){7}.a` 被误拒（clang 输出 7）。
+#[derive(Clone, Copy)]
+pub(crate) struct Rollback {
+    pos: usize,
+    errors_len: usize,
+    anon_len: usize,
+}
+
 pub struct Parser {
     tokens: Vec<Token>,
     errors: Vec<ParseError>,
@@ -77,6 +89,22 @@ pub struct Parser {
 pub(crate) const MAX_PARSE_DEPTH: i32 = 64;
 
 impl Parser {
+    /// 保存回滚点（pos / errors / anonymous_structs 三元快照，U1#10）
+    pub(crate) fn save(&self) -> Rollback {
+        Rollback {
+            pos: self.pos,
+            errors_len: self.errors.len(),
+            anon_len: self.anonymous_structs.len(),
+        }
+    }
+
+    /// 回滚到快照点（含 anonymous_structs 截断——消除重解析二次 push）
+    pub(crate) fn restore(&mut self, rb: Rollback) {
+        self.pos = rb.pos;
+        self.errors.truncate(rb.errors_len);
+        self.anonymous_structs.truncate(rb.anon_len);
+    }
+
     pub fn new(tokens: Vec<Token>) -> Self {
         Self::with_mode(tokens, false)
     }
@@ -340,28 +368,23 @@ impl Parser {
                 continue;
             }
             if self.check(TokenType::Typedef) {
-                let checkpoint = self.pos;
-                let errors_checkpoint = self.errors.len();
+                let checkpoint_rb = self.save();
                 self.advance();
                 if self.check(TokenType::Struct) {
-                    let s_checkpoint = self.pos;
-                    let s_errors_checkpoint = self.errors.len();
+                    let s_rb = self.save();
                     self.advance();
                     if self.check(TokenType::Identifier) {
                         self.advance();
                     }
                     if self.check(TokenType::LBrace) {
-                        self.pos = checkpoint;
-                        self.errors.truncate(errors_checkpoint);
+                        self.restore(checkpoint_rb);
                         self.parse_typedef_struct_decl(&mut program);
                         continue;
                     }
-                    self.pos = s_checkpoint;
-                    self.errors.truncate(s_errors_checkpoint);
+                    self.restore(s_rb);
                 }
                 if self.check(TokenType::Enum) {
-                    let e_checkpoint = self.pos;
-                    let e_errors_checkpoint = self.errors.len();
+                    let e_rb = self.save();
                     self.advance();
                     if self.check(TokenType::Identifier) {
                         self.advance();
@@ -373,20 +396,16 @@ impl Parser {
                         }
                     }
                     if self.check(TokenType::LBrace) {
-                        self.pos = checkpoint;
-                        self.errors.truncate(errors_checkpoint);
+                        self.restore(checkpoint_rb);
                         self.parse_typedef_enum_decl(&mut program);
                         continue;
                     }
-                    self.pos = e_checkpoint;
-                    self.errors.truncate(e_errors_checkpoint);
+                    self.restore(e_rb);
                 }
-                self.pos = checkpoint;
-                self.errors.truncate(errors_checkpoint);
+                self.restore(checkpoint_rb);
                 self.parse_typedef();
             } else if self.check(TokenType::Enum) {
-                let checkpoint = self.pos;
-                let errors_checkpoint = self.errors.len();
+                let checkpoint_rb = self.save();
                 self.advance();
                 if self.check(TokenType::Identifier) {
                     self.advance();
@@ -398,16 +417,14 @@ impl Parser {
                     }
                 }
                 let is_enum_decl = self.check(TokenType::LBrace);
-                self.pos = checkpoint;
-                self.errors.truncate(errors_checkpoint);
+                self.restore(checkpoint_rb);
                 if is_enum_decl {
                     self.parse_enum_decl(&mut program);
                 } else {
                     self.parse_global_var_or_func(&mut program, false, false);
                 }
             } else if self.check(TokenType::Struct) {
-                let checkpoint = self.pos;
-                let errors_checkpoint = self.errors.len();
+                let checkpoint_rb = self.save();
                 self.advance();
                 let has_name = self.check(TokenType::Identifier);
                 if has_name {
@@ -434,8 +451,7 @@ impl Parser {
                         || self.check(TokenType::Semicolon);
                     // 纯 struct { ... };（无变量名）仍视为结构体定义
                     let is_pure_decl = self.check(TokenType::Semicolon);
-                    self.pos = checkpoint;
-                    self.errors.truncate(errors_checkpoint);
+                    self.restore(checkpoint_rb);
                     if is_var_decl && !is_pure_decl {
                         self.parse_global_var_or_func(&mut program, false, false);
                     } else if self.is_cpp_mode && has_name {
@@ -449,8 +465,7 @@ impl Parser {
                         program.structs.push(struct_decl);
                     }
                 } else {
-                    self.pos = checkpoint;
-                    self.errors.truncate(errors_checkpoint);
+                    self.restore(checkpoint_rb);
                     self.parse_global_var_or_func(&mut program, false, false);
                 }
             } else if self.check(TokenType::Union) {
@@ -496,7 +511,7 @@ impl Parser {
     }
 
     fn parse_global_var_or_func(&mut self, program: &mut ProgramNode, is_static: bool, is_extern: bool) {
-        let checkpoint = self.pos;
+        let checkpoint = self.save();
         let base_type = self.parse_base_type();
         // C++ 构造函数类外定义：Counter::Counter() { ... }
         if self.try_parse_cpp_ctor_out_of_line(program, &base_type, is_static, is_extern) {
@@ -522,7 +537,7 @@ impl Parser {
             false
         };
         if is_func_decl {
-            self.pos = checkpoint;
+            self.restore(checkpoint);
             program.funcs.push(self.parse_func_decl(is_static, is_extern));
         } else if self.try_parse_cpp_qualified_static_field(program, &base_type, is_static, is_extern) {
             // 已由 cpp 模块处理

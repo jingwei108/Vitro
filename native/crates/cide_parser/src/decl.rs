@@ -235,7 +235,7 @@ impl Parser {
                 continue;
             }
 
-            let checkpoint = self.pos;
+            let checkpoint = self.save();
             let _member_base_type = self.parse_base_type();
             let lookahead = self.look_ahead_skip_stars();
 
@@ -245,7 +245,7 @@ impl Parser {
                 && self.tokens[lookahead + 1].ty == TokenType::LParen
             {
                 // 方法或构造函数
-                self.pos = checkpoint;
+                self.restore(checkpoint);
                 let ret_type = self.parse_base_type();
                 let mut ptr_depth = 0;
                 while self.match_token(TokenType::Star) {
@@ -317,7 +317,7 @@ impl Parser {
                 }
             } else {
                 // 字段声明（支持逗号分隔多字段，如 `int head, tail;`）
-                self.pos = checkpoint;
+                self.restore(checkpoint);
                 let field_type = self.parse_base_type();
                 let (ty, field_name) = self.parse_declarator(&field_type);
                 members.push(ClassMember::Field {
@@ -474,14 +474,14 @@ impl Parser {
             // 在进入类体前就把类模板名加入 template_names，
             // 使类体内出现 `unique_ptr<T>&` 自身引用参数时能正确解析为 TemplateId。
             let is_struct = self.check(TokenType::Struct);
-            let checkpoint = self.pos;
+            let checkpoint = self.save();
             self.advance(); // class / struct
             let class_name = if self.check(TokenType::Identifier) {
                 self.advance().text.clone()
             } else {
                 String::new()
             };
-            self.pos = checkpoint; // 回退到 class/struct 关键字
+            self.restore(checkpoint); // 回退到 class/struct 关键字
             if !class_name.is_empty() {
                 self.template_names.insert(class_name);
             }

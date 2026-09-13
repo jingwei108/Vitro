@@ -98,9 +98,36 @@ impl Lexer {
             while self.pos < self.chars.len() && self.peek(0) >= '0' && self.peek(0) <= '7' {
                 self.advance();
             }
+            // U1#7：`08` 的 8/9 不在 [0-7]——此前循环在此断开，token 拆成
+            // "0" + "8" 零词法诊断，后续报错全部错位（clang 报 invalid digit
+            // in octal constant）。消费残段并报错。
+            if self.peek(0) == '8' || self.peek(0) == '9' {
+                while self.pos < self.chars.len() && self.peek(0).is_ascii_digit() {
+                    self.advance();
+                }
+                self.errors.push(LexerError {
+                    message: "八进制常量中含非法数字（八进制只能用 0~7）".to_string(),
+                    line: self.line,
+                    column: self.column,
+                    code: ErrorCode::E1006_UnsupportedFeature as i32,
+                });
+                return self.make_token(TokenType::Number, "0");
+            }
             if self.pos > oct_start {
                 let oct_str: String = self.chars[oct_start..self.pos].iter().collect();
-                val = u64::from_str_radix(&oct_str, 8).unwrap_or(0);
+                // U1#7：溢出口径对齐 hex/bin（报 E1006），不再 unwrap_or(0) 静默
+                match u64::from_str_radix(&oct_str, 8) {
+                    Ok(v) => val = v,
+                    Err(_) => {
+                        self.errors.push(LexerError {
+                            message: format!("八进制数值 0{} 超出可表示范围", oct_str),
+                            line: self.line,
+                            column: self.column,
+                            code: ErrorCode::E1006_UnsupportedFeature as i32,
+                        });
+                        return self.make_token(TokenType::Number, "0");
+                    }
+                }
             }
         }
         // Decimal literal，允许 ' 数字分隔符（C23，如 1'000'000）
@@ -158,7 +185,21 @@ impl Lexer {
         // For decimal, compute value now (before suffix parsing)
         if !has_integer_prefix {
             let text: String = self.chars[start..self.pos].iter().filter(|&&c| c != '\'').collect();
-            val = text.parse::<u64>().unwrap_or(0);
+            // U1#7（评估 R3 实锤）：超 u64 的十进制常量此前 unwrap_or(0)
+            // 静默变 0（clang 报 "integer literal is too large"）；口径对齐
+            // hex/bin 报 E1006，返回 0 token 让编译继续拿到更多诊断
+            val = match text.parse::<u64>() {
+                Ok(v) => v,
+                Err(_) => {
+                    self.errors.push(LexerError {
+                        message: format!("整数常量 {} 超出可表示范围", text),
+                        line: self.line,
+                        column: self.column,
+                        code: ErrorCode::E1006_UnsupportedFeature as i32,
+                    });
+                    0
+                }
+            };
         }
 
         // Parse suffix: [Uu][Ll]? or [Ll][Uu]?

@@ -151,3 +151,111 @@ int main() {
     // i64::MIN 取负：修复前 debug panic（neg overflow）——不得 panic
     let _ = Parser::new(tokens2).parse();
 }
+
+// ─── U1#7：词法保真四点（前端审查 #12 + 评估 R3）──────────────────────────
+// 修复前实测（2026-09-13）：`'\x1'`（单位 hex）被误拒 E1001；`'\x4142'`（超
+// 值域）报"未闭合"错乱诊断（clang: "hex escape sequence out of range"）；
+// `08` 拆 token 零词法诊断（后续报错全部错位）；`99999999999999999999`
+//（超 u64）静默变 0（clang: error "too large..."）；`.5`（合法 C 前导点
+// 浮点）被拒"预期表达式"（clang 输出 1.5）。
+
+fn lex(source: &str) -> (Vec<(String, String)>, Vec<String>) {
+    let (tokens, errors) = Lexer::new(source).tokenize();
+    let toks = tokens
+        .iter()
+        .map(|t| (format!("{:?}", t.ty), t.text.clone()))
+        .collect();
+    let errs = errors.iter().map(|e| e.message.clone()).collect();
+    (toks, errs)
+}
+
+#[test]
+fn u1_07_single_hex_digit_escape_is_legal() {
+    let (toks, errs) = lex(r"'\x1'");
+    let _ = toks;
+    assert!(
+        errs.is_empty(),
+        "单位十六进制转义（反斜杠 x 加 1 位 hex）是合法 C——修复前被 E1001 误拒：{:?}",
+        errs
+    );
+}
+
+#[test]
+fn u1_07_hex_escape_out_of_range_gets_clear_diagnostic() {
+    let (_, errs) = lex("'\u{5c}x4142'");
+    assert!(
+        errs.iter().any(|m| m.contains("超") && m.contains("范围")),
+        "'\x4142' 超值域应报'转义超范围'（对齐 clang），修复前是'未闭合'错乱：{:?}",
+        errs
+    );
+}
+
+#[test]
+fn u1_07_octal_with_890_gets_diagnostic() {
+    let (_, errs) = lex("int a = 08;");
+    assert!(
+        errs.iter().any(|m| m.contains("八进制") || m.contains("octal")),
+        "'08' 应报八进制非法数字（对齐 clang），修复前拆 token 零词法诊断：{:?}",
+        errs
+    );
+}
+
+#[test]
+fn u1_07_decimal_overflow_reported_not_silent_zero() {
+    let (_, errs) = lex("int x = 99999999999999999999;");
+    assert!(
+        errs.iter().any(|m| m.contains("超出可表示范围") || m.contains("范围")),
+        "超 u64 十进制常量应报'超出可表示范围'（对齐 hex/bin 口径与 clang error），修复前静默 0：{:?}",
+        errs
+    );
+}
+
+#[test]
+fn u1_07_leading_dot_float_is_legal() {
+    let (toks, errs) = lex("double d = .5;");
+    assert!(
+        errs.is_empty(),
+        "'.5' 前导点浮点是合法 C——修复前被拒：{:?}",
+        errs
+    );
+    assert!(
+        toks.iter().any(|(ty, text)| ty.contains("Float") && text == ".5"),
+        "'.5' 应词法化为 FloatLiteral（值 .5），实际：{:?}",
+        toks
+    );
+}
+
+// ─── U1#10：ParseCheckpoint 回滚缺口（评估 M3 + 前端审查 #6，两处独立复现）──
+// 回滚只恢复 pos + errors，不回滚 anonymous_structs——试探解析失败回滚后
+// 重解析把匿名 struct 二次 push，且命名 `__anon_struct_{pos}` 同位置同名 →
+// "重复定义 E3002"。合法复合字面量 `(struct {int a; int b;}){7,8}.a` 被误拒
+//（clang 输出 7，2026-09-13 复现留痕）。
+
+#[test]
+fn u1_10_compound_literal_anon_struct_not_redeclared() {
+    use cide_native::engine::compile_pipeline::run_multi_file_pipeline;
+    use cide_native::engine::session_ops::{execute_run, reset_runtime};
+    use cide_native::session::{CompileUnit, Session};
+
+    let mut session = Session::default();
+    session.compile.compile_units.push(CompileUnit {
+        filename: "main.c".to_string(),
+        source: r#"
+#include <stdio.h>
+int main() {
+    int v = (struct { int a; int b; }){7, 8}.a;
+    printf("%d\n", v);
+    return 0;
+}
+"#
+        .to_string(),
+    });
+    reset_runtime(&mut session);
+    let units = session.compile.compile_units.clone();
+    let out = run_multi_file_pipeline(&mut session, units, false);
+    assert!(out.is_ok(), "合法复合字面量被误拒（回滚未恢复 anonymous_structs → __anon_struct_N 重复定义）：{:?}", out.err());
+    let (ret, _) = execute_run(&mut session).expect("run");
+    assert_eq!(ret, 0);
+    let stdout = session.runtime.stdout();
+    assert_eq!(stdout.trim(), "7", "复合字面量成员访问应得 7（clang 一致）");
+}

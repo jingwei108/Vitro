@@ -330,6 +330,12 @@ impl Lexer {
                         self.advance();
                         return self.make_token(TokenType::Ellipsis, "...");
                     }
+                    // U1#7：前导点浮点（.5 / .25f）是合法 C（clang 正常编译），
+                    // 此前落进 Dot 臂被解析为成员访问 → "预期表达式"误拒。
+                    // 转入 number()——其 dot_float 分支以 '.'+数字 起步收集。
+                    if self.peek(1).is_ascii_digit() {
+                        return self.number();
+                    }
                     self.advance();
                     self.make_token(TokenType::Dot, ".")
                 }

@@ -250,7 +250,7 @@ impl Parser {
         }
         if self.match_token(TokenType::LParen) {
             let lparen_loc = self.previous().clone();
-            let checkpoint = self.pos;
+            let checkpoint = self.save();
             let typedef_snapshot = self.typedef_names.clone();
             // 尝试解析复合字面量 (type-name) { initializer-list }
             if self.is_type_token() {
@@ -270,7 +270,7 @@ impl Parser {
                     };
                 }
             }
-            self.pos = checkpoint;
+            self.restore(checkpoint);
             self.typedef_names = typedef_snapshot;
             let expr = self.parse_expression();
             self.consume(TokenType::RParen, "预期 ')'");

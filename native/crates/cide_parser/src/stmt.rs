@@ -149,10 +149,10 @@ impl Parser {
                 if self.check(TokenType::Identifier) && self.peek(1).ty == TokenType::Colon {
                     return self.parse_label_stmt();
                 }
-                let checkpoint = self.pos;
+                let checkpoint = self.save();
                 let stmt = self.parse_expr_stmt();
                 // NOTE: Parser 零进度保护：若解析未前进则主动 advance，避免死循环。
-                if self.pos == checkpoint {
+                if self.pos == checkpoint.pos {
                     self.synchronize(&[
                         TokenType::Semicolon,
                         TokenType::RBrace,
@@ -435,7 +435,7 @@ impl Parser {
 
         // C++ 模式下检测 range for: for (auto x : expr) 或 for (Type x : expr)
         if self.is_cpp_mode {
-            let checkpoint = self.pos;
+            let checkpoint = self.save();
             let is_range_for = if self.is_type_token() || self.check(TokenType::Auto) {
                 let _ = self.parse_base_type();
                 while self.match_token(TokenType::Star) {}
@@ -454,7 +454,7 @@ impl Parser {
             } else {
                 false
             };
-            self.pos = checkpoint;
+            self.restore(checkpoint);
 
             if is_range_for {
                 let var_type = self.parse_base_type();
