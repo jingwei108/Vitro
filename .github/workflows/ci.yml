@@ -77,7 +77,7 @@ jobs:
           path: native/tests/shadow_verification/.clang_cache
           # key 含驱动脚本哈希：缓存 schema/口径变化时整体失效。
           # go1 缓存条目与历史 Python 条目（schema=1）同目录共存、key 空间不相交。
-          key: clang-golden-${{ runner.os }}-${{ steps.clangver.outputs.value }}-${{ hashFiles('scripts/shadow_verify.go') }}
+          key: clang-golden-${{ runner.os }}-${{ steps.clangver.outputs.value }}-${{ hashFiles('scripts/shadow_verify/main.go', 'scripts/internal/**/*.go') }}
           restore-keys: |
             clang-golden-${{ runner.os }}-${{ steps.clangver.outputs.value }}-
 
@@ -93,7 +93,7 @@ jobs:
             EXTRA="--refresh-clang"
             echo "夜间模式：Clang Golden 全量重算（$EXTRA）"
           fi
-          go run scripts/shadow_verify.go $EXTRA --report native/tests/shadow_verification/reports/shadow_report.md --json native/tests/shadow_verification/reports/shadow_data.json
+          go run ./scripts/shadow_verify $EXTRA --report native/tests/shadow_verification/reports/shadow_report.md --json native/tests/shadow_verification/reports/shadow_data.json
 
       - name: Upload Shadow Report
         uses: actions/upload-artifact@v4
@@ -107,7 +107,7 @@ jobs:
       - name: C++ Shadow Verification
         # D5 语言迁移第一站（2026-09-12）：Go 版与 Python 版双轨对账一致后切换。
         # Python 版保留为对照基准；go vet 豁免口径见 scripts/shadow_verify_cpp.go 头注。
-        run: go run scripts/shadow_verify_cpp.go
+        run: go run ./scripts/shadow_verify_cpp
         shell: bash
 
       - name: Upload C++ Shadow Report

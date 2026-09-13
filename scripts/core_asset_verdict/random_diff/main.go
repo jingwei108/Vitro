@@ -22,17 +22,18 @@
 //     等价 runner），clang/cide 动态输出以 verdict 对账；② 本脚本首次有成功基线
 //     （Python 版 2026-09-12 实测 1000/1000 agree / 50.7s，此前从无产物）。
 //
-// 用法：go run scripts/core_asset_verdict/random_diff.go [--per-family 100] [--seed 20260912] [--jobs 6]
+// 用法：go run ./scripts/core_asset_verdict/random_diff [--per-family 100] [--seed 20260912] [--jobs 6]
 package main
 
 import (
+	"cide/scripts/internal/capi"
+	"cide/scripts/internal/probeutil"
+	"cide/scripts/internal/pyrandom"
+
 	"bytes"
 	"context"
-	"crypto/sha512"
-
 	"encoding/json"
 	"fmt"
-	"math/bits"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -40,53 +41,17 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 	"unsafe"
 )
 
 var (
-	here     = mustFindHere()
+	here     = probeutil.VerdictDir()
 	work     = filepath.Join(here, ".randomdiff")
 	findings = filepath.Join(here, ".findings")
 	report   = filepath.Join(here, "random_diff.json")
-	dllPath  = filepath.Join(filepath.Dir(filepath.Dir(here)), "native", "target", "release", "cide_native.dll")
+	dllPath  = filepath.Join(capi.ProjectRoot(), "native", "target", "release", "cide_native.dll")
 )
-
-// mustFindHere：Go 无 __file__ 锚点，按"包含 native/ 与 scripts/ 的目录"向上探测
-// 项目根（与 shadow_verify_cpp.go / replay_s1_s5.go 同约定），here = 探针目录。
-func mustFindHere() string {
-	wd, err := os.Getwd()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "无法确定工作目录:", err)
-		os.Exit(2)
-	}
-	dir := wd
-	for i := 0; i < 5; i++ {
-		ok := true
-		for _, marker := range []string{"native", "scripts"} {
-			if fi, err := os.Stat(filepath.Join(dir, marker)); err != nil || !fi.IsDir() {
-				ok = false
-			}
-		}
-		if ok {
-			return filepath.Join(dir, "scripts", "core_asset_verdict")
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			break
-		}
-		dir = parent
-	}
-	fmt.Fprintln(os.Stderr, "请在仓库内运行：go run scripts/core_asset_verdict/random_diff.go")
-	os.Exit(2)
-	return ""
-}
-
-func fatal(format string, args ...any) {
-	fmt.Fprintf(os.Stderr, "FATAL: "+format+"\n", args...)
-	os.Exit(2)
-}
 
 // ───────────────────────── CPython random 复刻（MT19937） ─────────────────────────
 //
@@ -95,135 +60,6 @@ func fatal(format string, args ...any) {
 //   n = int.from_bytes(str_utf8 + sha512(str_utf8), 'big')
 //   key = n 的 32bit word（LSB word 在前），去掉高位全零 word，至少 1 个
 //   init_by_array(key)
-
-type pyRandom struct {
-	mt  [624]uint32
-	idx int
-}
-
-func newPyRandom(seed string) *pyRandom {
-	sb := []byte(seed)
-	h := sha512.Sum512(sb)
-	buf := append(sb, h[:]...)
-	// nbits：buf 视为 big-endian 大整数的有效 bit 数
-	nbits := 0
-	for i, b := range buf {
-		if b != 0 {
-			nbits = (len(buf)-1-i)*8 + bits.Len8(b)
-			break
-		}
-	}
-	keyUsed := 1
-	if nbits > 0 {
-		keyUsed = (nbits-1)/32 + 1
-	}
-	key := make([]uint32, keyUsed)
-	L := len(buf)
-	for i := 0; i < keyUsed; i++ {
-		start := L - 4*(i+1)
-		var w uint32
-		for j := 0; j < 4; j++ {
-			var b byte
-			if start+j >= 0 {
-				b = buf[start+j]
-			}
-			w = w<<8 | uint32(b)
-		}
-		key[i] = w
-	}
-	r := &pyRandom{}
-	r.initByArray(key)
-	return r
-}
-
-func (r *pyRandom) initGenrand(s uint32) {
-	r.mt[0] = s
-	for i := 1; i < 624; i++ {
-		r.mt[i] = 1812433253*(r.mt[i-1]^(r.mt[i-1]>>30)) + uint32(i)
-	}
-	r.idx = 624
-}
-
-func (r *pyRandom) initByArray(key []uint32) {
-	r.initGenrand(19650218)
-	i, j := 1, 0
-	k := 624
-	if len(key) > k {
-		k = len(key)
-	}
-	for ; k > 0; k-- {
-		r.mt[i] = (r.mt[i] ^ (r.mt[i-1]^(r.mt[i-1]>>30))*1664525) + key[j] + uint32(j)
-		i++
-		j++
-		if i >= 624 {
-			r.mt[0] = r.mt[623]
-			i = 1
-		}
-		if j >= len(key) {
-			j = 0
-		}
-	}
-	for k = 623; k > 0; k-- {
-		r.mt[i] = (r.mt[i] ^ (r.mt[i-1]^(r.mt[i-1]>>30))*1566083941) - uint32(i)
-		i++
-		if i >= 624 {
-			r.mt[0] = r.mt[623]
-			i = 1
-		}
-	}
-	r.mt[0] = 0x80000000
-}
-
-func (r *pyRandom) genrandUint32() uint32 {
-	if r.idx >= 624 {
-		for i := 0; i < 624; i++ {
-			y := r.mt[i]&0x80000000 | r.mt[(i+1)%624]&0x7fffffff
-			r.mt[i] = r.mt[(i+397)%624] ^ (y >> 1)
-			if y&1 != 0 {
-				r.mt[i] ^= 0x9908b0df
-			}
-		}
-		r.idx = 0
-	}
-	y := r.mt[r.idx]
-	r.idx++
-	y ^= y >> 11
-	y ^= (y << 7) & 0x9d2c5680
-	y ^= (y << 15) & 0xefc60000
-	y ^= y >> 18
-	return y
-}
-
-// getrandbits 对齐 CPython：k ≤ 32 时一发右移
-func (r *pyRandom) getrandbits(k int) uint32 {
-	return r.genrandUint32() >> (32 - k)
-}
-
-// randbelow 对齐 Python _randbelow_with_getrandbits（拒绝采样）
-func (r *pyRandom) randbelow(n int) int {
-	k := bits.Len(uint(n))
-	for {
-		v := int(r.getrandbits(k))
-		if v < n {
-			return v
-		}
-	}
-}
-
-func (r *pyRandom) randint(a, b int) int {
-	return a + r.randbelow(b-a+1)
-}
-
-func (r *pyRandom) choice(n int) int {
-	return r.randbelow(n)
-}
-
-// random 对齐 CPython genrand_res53
-func (r *pyRandom) random() float64 {
-	a := uint64(r.genrandUint32() >> 5)
-	b := uint64(r.genrandUint32() >> 6)
-	return float64(a*67108864+b) * (1.0 / 9007199254740992.0)
-}
 
 // ───────────────────────── 语义模型工具（对齐 C int 语义） ─────────────────────────
 
@@ -289,61 +125,61 @@ func evalInt(op string, lv, rv int64) (int64, bool) {
 	case ">>":
 		return lv >> uint(rv), true
 	}
-	fatal("evalInt 未知运算符 %s", op)
+	capi.Fatal("evalInt 未知运算符 %s", op)
 	return 0, false
 }
 
 // renderInt 返回 (c_code, value)；值域受限（|v| ≤ 500_000）避免 UB。
 // RNG 调用顺序与 Python render_int 逐行对齐。
-func renderInt(r *pyRandom, e *env, depth int) (string, int64) {
+func renderInt(r *pyrandom.Random, e *env, depth int) (string, int64) {
 	if depth <= 0 {
-		if len(e.names) > 0 && r.random() < 0.6 {
-			n := e.names[r.choice(len(e.names))]
+		if len(e.names) > 0 && r.Random() < 0.6 {
+			n := e.names[r.Choice(len(e.names))]
 			return n, e.get(n)
 		}
-		k := r.randint(0, 20)
+		k := r.Randint(0, 20)
 		return fmt.Sprint(k), int64(k)
 	}
-	op := intBinops[r.choice(len(intBinops))]
+	op := intBinops[r.Choice(len(intBinops))]
 	lc, lv := renderInt(r, e, depth-1)
 	var rc string
 	var rv int64
 	switch op {
 	case "<<", ">>":
-		k := r.randint(0, 3)
+		k := r.Randint(0, 3)
 		rc, rv = fmt.Sprint(k), int64(k)
 	case "*":
-		k := r.randint(0, 5)
+		k := r.Randint(0, 5)
 		rc, rv = fmt.Sprint(k), int64(k)
 	case "/", "%":
-		k := r.randint(1, 9)
+		k := r.Randint(1, 9)
 		rc, rv = fmt.Sprint(k), int64(k)
 	default:
 		rc, rv = renderInt(r, e, depth-1)
 	}
 	v, ok := evalInt(op, lv, rv)
 	if !ok || v > 500_000 || v < -500_000 {
-		k := r.randint(0, 20)
+		k := r.Randint(0, 20)
 		return fmt.Sprint(k), int64(k)
 	}
 	return fmt.Sprintf("(%s %s %s)", lc, op, rc), v
 }
 
-func famInt(r *pyRandom) (string, string, bool) {
+func famInt(r *pyrandom.Random) (string, string, bool) {
 	// build_int_program：200 次尝试，RNG 状态跨尝试延续
 	for attempt := 0; attempt < 200; attempt++ {
 		e := newEnv()
 		var lines []string
 		ok := true
-		nvars := r.randint(2, 4)
+		nvars := r.Randint(2, 4)
 		for i := 0; i < nvars; i++ {
-			val := r.randint(0, 30)
+			val := r.Randint(0, 30)
 			e.set(fmt.Sprint("v", i), int64(val))
 			lines = append(lines, fmt.Sprintf("    int v%d = %d;", i, val))
 		}
-		nstmt := r.randint(2, 5)
+		nstmt := r.Randint(2, 5)
 		for i := 0; i < nstmt; i++ {
-			tgt := e.names[r.choice(len(e.names))]
+			tgt := e.names[r.Choice(len(e.names))]
 			code, val := renderInt(r, e, 2)
 			if val > 2_000_000 || val < -2_000_000 {
 				ok = false
@@ -368,35 +204,35 @@ func famInt(r *pyRandom) (string, string, bool) {
 
 // ───────────────────────── 族 2：unsigned 算术 ─────────────────────────
 
-func famUnsigned(r *pyRandom) (string, string, bool) {
+func famUnsigned(r *pyrandom.Random) (string, string, bool) {
 	e := newEnv()
 	var lines []string
-	nvars := r.randint(2, 4)
+	nvars := r.Randint(2, 4)
 	for i := 0; i < nvars; i++ {
-		val := r.randint(0, 4_000_000_000)
+		val := r.Randint(0, 4_000_000_000)
 		e.set(fmt.Sprint("u", i), int64(uint64(val)))
 		lines = append(lines, fmt.Sprintf("    unsigned int u%d = %du;", i, val))
 	}
-	nstmt := r.randint(2, 4)
+	nstmt := r.Randint(2, 4)
 	for i := 0; i < nstmt; i++ {
-		tgt := e.names[r.choice(len(e.names))]
-		aName := e.names[r.choice(len(e.names))]
+		tgt := e.names[r.Choice(len(e.names))]
+		aName := e.names[r.Choice(len(e.names))]
 		a := uint64(e.get(aName))
-		op := intBinops[r.choice(len(intBinops))]
+		op := intBinops[r.Choice(len(intBinops))]
 		var b uint64
 		var rhs string
 		switch op {
 		case "<<", ">>":
-			k := r.randint(0, 31)
+			k := r.Randint(0, 31)
 			b, rhs = uint64(k), fmt.Sprint(k)
 		case "/", "%":
-			k := r.randint(1, 65535)
+			k := r.Randint(1, 65535)
 			b, rhs = uint64(k), fmt.Sprint(k)
 		case "*":
-			k := r.randint(0, 1_000_000)
+			k := r.Randint(0, 1_000_000)
 			b, rhs = uint64(k), fmt.Sprintf("%du", k)
 		default:
-			bName := e.names[r.choice(len(e.names))]
+			bName := e.names[r.Choice(len(e.names))]
 			b = uint64(e.get(bName))
 			rhs = bName
 		}
@@ -437,15 +273,15 @@ func famUnsigned(r *pyRandom) (string, string, bool) {
 
 // ───────────────────────── 族 3：数组/指针循环 ─────────────────────────
 
-func famArray(r *pyRandom) (string, string, bool) {
-	k := r.randint(2, 8)
+func famArray(r *pyrandom.Random) (string, string, bool) {
+	k := r.Randint(2, 8)
 	init := make([]int, k)
 	mult := make([]int, k)
 	for i := 0; i < k; i++ {
-		init[i] = r.randint(-20, 20)
+		init[i] = r.Randint(-20, 20)
 	}
 	for i := 0; i < k; i++ {
-		mult[i] = r.randint(-3, 3)
+		mult[i] = r.Randint(-3, 3)
 	}
 	var parts []string
 	setParts := make([]string, k)
@@ -485,13 +321,13 @@ func famArray(r *pyRandom) (string, string, bool) {
 
 // ───────────────────────── 族 4：控制流 ─────────────────────────
 
-func famControl(r *pyRandom) (string, string, bool) {
-	x0 := r.randint(-10, 10)
-	m := r.randint(3, 12)
-	stepAdd := r.randint(-4, 4)
-	stepSub := r.randint(-4, 4)
-	lim := r.randint(-20, 20)
-	brk := r.randint(0, m)
+func famControl(r *pyrandom.Random) (string, string, bool) {
+	x0 := r.Randint(-10, 10)
+	m := r.Randint(3, 12)
+	stepAdd := r.Randint(-4, 4)
+	stepSub := r.Randint(-4, 4)
+	lim := r.Randint(-20, 20)
+	brk := r.Randint(0, m)
 	x := x0
 	for i := 0; i < m; i++ {
 		if i > brk {
@@ -525,12 +361,12 @@ int main() {
 
 // ───────────────────────── 族 5：函数调用 + 递归 ─────────────────────────
 
-func famFuncs(r *pyRandom) (string, string, bool) {
-	a1 := r.randint(1, 30)
-	b1 := r.randint(1, 30)
-	a2 := r.randint(1, 30)
-	b2 := r.randint(1, 30)
-	n := r.randint(1, 7)
+func famFuncs(r *pyrandom.Random) (string, string, bool) {
+	a1 := r.Randint(1, 30)
+	b1 := r.Randint(1, 30)
+	a2 := r.Randint(1, 30)
+	b2 := r.Randint(1, 30)
+	n := r.Randint(1, 7)
 	src := fmt.Sprintf(`#include <stdio.h>
 int f1(int a, int b) { return a * %d + b - %d; }
 int f2(int a, int b) { return a + b * %d %% (%d + 1); }
@@ -559,13 +395,13 @@ int main() {
 
 // ───────────────────────── 族 6：struct 与 struct 指针 ─────────────────────────
 
-func famStruct(r *pyRandom) (string, string, bool) {
+func famStruct(r *pyrandom.Random) (string, string, bool) {
 	k := 4
 	xs := make([]int, k)
 	ys := make([]int, k)
 	for i := 0; i < k; i++ {
-		xs[i] = r.randint(-15, 15)
-		ys[i] = r.randint(-15, 15)
+		xs[i] = r.Randint(-15, 15)
+		ys[i] = r.Randint(-15, 15)
 	}
 	rowParts := make([]string, k)
 	for i := 0; i < k; i++ {
@@ -599,8 +435,8 @@ int main() {
 
 var words = []string{"hello", "abcde", "xyz12", "World", "qwert"}
 
-func famChar(r *pyRandom) (string, string, bool) {
-	w := words[r.choice(len(words))]
+func famChar(r *pyrandom.Random) (string, string, bool) {
+	w := words[r.Choice(len(words))]
 	n := len(w)
 	src := fmt.Sprintf(`#include <stdio.h>
 #include <string.h>
@@ -628,11 +464,11 @@ int main() {
 
 // ───────────────────────── 族 8：malloc 链表 ─────────────────────────
 
-func famMallocList(r *pyRandom) (string, string, bool) {
-	k := r.randint(2, 6)
+func famMallocList(r *pyrandom.Random) (string, string, bool) {
+	k := r.Randint(2, 6)
 	vals := make([]int, k)
 	for i := 0; i < k; i++ {
-		vals[i] = r.randint(-9, 9)
+		vals[i] = r.Randint(-9, 9)
 	}
 	pushParts := make([]string, k)
 	for i := 0; i < k; i++ {
@@ -663,9 +499,9 @@ int main() {
 
 // ───────────────────────── 族 9：二维数组 + 嵌套循环 ─────────────────────────
 
-func famNested(r *pyRandom) (string, string, bool) {
-	rr := r.randint(2, 4)
-	c := r.randint(2, 4)
+func famNested(r *pyrandom.Random) (string, string, bool) {
+	rr := r.Randint(2, 4)
+	c := r.Randint(2, 4)
 	src := fmt.Sprintf(`#include <stdio.h>
 int main() {
     int a[%d][%d];
@@ -711,8 +547,8 @@ int main() {
 
 // ───────────────────────── 族 10：switch / do-while / 位运算 ─────────────────────────
 
-func famSwitch(r *pyRandom) (string, string, bool) {
-	n := r.randint(3, 8)
+func famSwitch(r *pyrandom.Random) (string, string, bool) {
+	n := r.Randint(3, 8)
 	src := fmt.Sprintf(`#include <stdio.h>
 int main() {
     int s = 0;
@@ -752,7 +588,7 @@ int main() {
 
 type family struct {
 	name string
-	fn   func(*pyRandom) (string, string, bool)
+	fn   func(*pyrandom.Random) (string, string, bool)
 }
 
 var families = []family{
@@ -880,120 +716,14 @@ func ifStr(s string, cond bool) string {
 
 // cide DLL 绑定（进程内加载一次；session 由每例独立 create/destroy）
 type cideAPI struct {
-	handle       uintptr
-	compile      *syscall.LazyProc
-	setInputMode *syscall.LazyProc
-	run          *syscall.LazyProc
-	compileErrs  *syscall.LazyProc
-	runtimeErr   *syscall.LazyProc
-	progOutLen   *syscall.LazyProc
-	progOut      *syscall.LazyProc
-	destroy      *syscall.LazyProc
+	d      *capi.DLL
+	handle uintptr
 }
 
 var (
 	cideOnce   sync.Once
 	cideShared *cideAPI
 )
-
-func loadCide() *cideAPI {
-	cideOnce.Do(func() {
-		if _, err := os.Stat(dllPath); err != nil {
-			fatal("找不到引擎 DLL：%s（请先 cd native && cargo build --release）", dllPath)
-		}
-		dll := syscall.NewLazyDLL(dllPath)
-		bind := func(name string) *syscall.LazyProc {
-			p := dll.NewProc(name)
-			if err := p.Find(); err != nil {
-				fatal("DLL 缺少符号 %s（需要 ABI >= 1.1.0）：%v", name, err)
-			}
-			return p
-		}
-		for _, name := range []string{
-			"cide_get_program_output_length", "cide_get_program_output",
-			"cide_get_engine_notes_length", "cide_get_engine_notes",
-		} {
-			bind(name)
-		}
-		a := &cideAPI{
-			compile:      bind("cide_compile"),
-			setInputMode: bind("cide_set_input_mode"),
-			run:          bind("cide_run"),
-			compileErrs:  bind("cide_get_compile_errors"),
-			runtimeErr:   bind("cide_get_runtime_error"),
-			progOutLen:   bind("cide_get_program_output_length"),
-			progOut:      bind("cide_get_program_output"),
-			destroy:      bind("cide_session_destroy"),
-		}
-		a.handle, _, _ = bind("cide_session_create").Call()
-		if a.handle == 0 {
-			fatal("cide_session_create 返回 NULL")
-		}
-		// 产物新鲜度门禁（fail fast）：版本串须含当前 HEAD
-		checkFreshness(dll, bind)
-		cideShared = a
-	})
-	return cideShared
-}
-
-func checkFreshness(dll *syscall.LazyDLL, bind func(string) *syscall.LazyProc) {
-	if dll.NewProc("cide_engine_version").Find() != nil {
-		return
-	}
-	verProc := dll.NewProc("cide_engine_version")
-	raw, _, _ := verProc.Call()
-	if raw == 0 {
-		return
-	}
-	version := ptrToGoString(raw)
-	dll.NewProc("cide_free_string").Call(raw)
-	head := gitShortHead()
-	if head != "" && !strings.Contains(version, head) {
-		fatal("引擎产物不是当前提交构建的：cide_engine_version()=%q 不含 HEAD %s。\n请先 cd native && cargo build --release —— 否则会在陈旧二进制上得到假绿。", version, head)
-	}
-}
-
-func gitShortHead() string {
-	out, err := exec.Command("git", "rev-parse", "--short", "HEAD").Output()
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(out))
-}
-
-func ptrToGoString(ptr uintptr) string {
-	if ptr == 0 {
-		return ""
-	}
-	// uintptr→Pointer 立即转换（vet -unsafeptr=false 豁免，同 gosmoke/shadow_cpp 裁定）
-	for win := 4096; win <= 1<<20; win *= 2 {
-		s := unsafe.Slice((*byte)(unsafe.Pointer(ptr)), win)
-		for i, b := range s {
-			if b == 0 {
-				return string(s[:i])
-			}
-		}
-	}
-	fatal("C 字符串超过 1MB 扫描上限，拒绝静默截断")
-	return ""
-}
-
-func readChannel(h uintptr, lenProc, copyProc *syscall.LazyProc) string {
-	r, _, _ := lenProc.Call(h)
-	n := int(int32(r))
-	if n <= 0 {
-		return ""
-	}
-	buf := make([]byte, n+1)
-	copyProc.Call(h, uintptr(unsafe.Pointer(&buf[0])), uintptr(n+1))
-	runtime.KeepAlive(buf)
-	for i, b := range buf {
-		if b == 0 {
-			return string(buf[:i])
-		}
-	}
-	return string(buf)
-}
 
 // cideMu：Cide 调用必须串行。**实证**（2026-09-12）：与 clang 并发同池跑 DLL 时
 // 进程以 0xc0000374（STATUS_HEAP_CORRUPTION）崩死——引擎 DLL 存在非线程安全的
@@ -1003,19 +733,30 @@ func readChannel(h uintptr, lenProc, copyProc *syscall.LazyProc) string {
 // CI 热路径上，迁移价值在编码安全与可审计性，非性能。
 var cideMu sync.Mutex
 
+func loadCide() *cideAPI {
+	cideOnce.Do(func() {
+		d := capi.Load(dllPath) // 符号绑定 + 产物新鲜度门禁（fail fast）
+		h, _, _ := d.SessionCreate.Call()
+		if h == 0 {
+			capi.Fatal("cide_session_create 返回 NULL")
+		}
+		cideShared = &cideAPI{d: d, handle: h}
+	})
+	return cideShared
+}
+
 func runWithCide(source string) runResult {
 	cideMu.Lock()
 	defer cideMu.Unlock()
 	start := time.Now()
 	a := loadCide()
 
-	srcB := cBytes(source)
+	srcB := capi.CBytes(source)
 	// shadow_verify.run_with_cide 无 filename 路径：cide_compile(session, source)
-	ret, _, _ := a.compile.Call(a.handle, uintptr(unsafe.Pointer(&srcB[0])))
+	ret, _, _ := a.d.Compile.Call(a.handle, uintptr(unsafe.Pointer(&srcB[0])))
 	runtime.KeepAlive(srcB)
 	if int32(ret) != 0 {
-		p, _, _ := a.compileErrs.Call(a.handle)
-		msg := ptrToGoString(p)
+		msg := a.d.CompileErrorsExact(a.handle)
 		if msg == "" {
 			msg = "Unknown compile error"
 		}
@@ -1023,22 +764,15 @@ func runWithCide(source string) runResult {
 			Stderr: msg, ExitCode: int(int32(ret)), DurationMs: ms(time.Since(start))}
 	}
 
-	a.setInputMode.Call(a.handle, 1)
-	runRet, _, _ := a.run.Call(a.handle)
-	stdout := strings.TrimSpace(readChannel(a.handle, a.progOutLen, a.progOut))
-	p, _, _ := a.runtimeErr.Call(a.handle)
-	runtimeErr := ptrToGoString(p)
+	a.d.SetInputMode.Call(a.handle, 1)
+	runRet, _, _ := a.d.Run.Call(a.handle)
+	stdout := strings.TrimSpace(capi.ReadChannel(a.handle, a.d.ProgOutLen, a.d.ProgOut))
+	runtimeErr := a.d.RuntimeErr(a.handle)
 
 	return runResult{Compiler: "cide", CompileSuccess: true,
 		RunSuccess: int32(runRet) == 0 && runtimeErr == "",
 		RunError:   runtimeErr, Stdout: stdout, Stderr: runtimeErr,
 		ExitCode: int(int32(runRet)), DurationMs: ms(time.Since(start))}
-}
-
-func cBytes(s string) []byte {
-	b := make([]byte, len(s)+1)
-	copy(b, s)
-	return b
 }
 
 // ───────────────────────── 判定与主流程 ─────────────────────────
@@ -1100,36 +834,36 @@ func runOne(item struct {
 
 func selfTest() {
 	// 金标：CPython 3.14 实测（seed="20260912:int_expr"）
-	r := newPyRandom("20260912:int_expr")
-	got := []float64{r.random(), r.random(), r.random()}
+	r := pyrandom.NewByString("20260912:int_expr")
+	got := []float64{r.Random(), r.Random(), r.Random()}
 	want := []float64{0.12077530804515435, 0.13829212145236314, 0.3025312629379405}
 	for i := range want {
 		if got[i] != want[i] {
-			fatal("selftest：random()[%d] = %v，期望 %v（RNG 复刻破坏，用例集合将与 Python 版不一致）", i, got[i], want[i])
+			capi.Fatal("selftest：random()[%d] = %v，期望 %v（RNG 复刻破坏，用例集合将与 Python 版不一致）", i, got[i], want[i])
 		}
 	}
-	r2 := newPyRandom("20260912:int_expr")
+	r2 := pyrandom.NewByString("20260912:int_expr")
 	for i, w := range []int{7, 28, 8, 21, 19} {
-		if g := r2.randint(0, 40); g != w {
-			fatal("selftest：randint(0,40)[%d] = %d，期望 %d", i, g, w)
+		if g := r2.Randint(0, 40); g != w {
+			capi.Fatal("selftest：randint(0,40)[%d] = %d，期望 %d", i, g, w)
 		}
 	}
-	r3 := newPyRandom("20260912:int_expr")
-	if g := r3.randint(2, 4); g != 2 {
-		fatal("selftest：randint(2,4) = %d，期望 2", g)
+	r3 := pyrandom.NewByString("20260912:int_expr")
+	if g := r3.Randint(2, 4); g != 2 {
+		capi.Fatal("selftest：randint(2,4) = %d，期望 2", g)
 	}
-	if g := r3.choice(len(words)); words[g] != "World" {
-		fatal("selftest：choice(WORDS) = %s，期望 World", words[g])
+	if g := r3.Choice(len(words)); words[g] != "World" {
+		capi.Fatal("selftest：choice(WORDS) = %s，期望 World", words[g])
 	}
-	if g := r3.randint(0, 4_000_000_000); g != 593960143 {
-		fatal("selftest：randint(0,4e9) = %d，期望 593960143", g)
+	if g := r3.Randint(0, 4_000_000_000); g != 593960143 {
+		capi.Fatal("selftest：randint(0,4e9) = %d，期望 593960143", g)
 	}
 	// 语义模型：负数除法/取模向零截断（C 语义）
 	if v, _ := evalInt("/", -7, 2); v != -3 {
-		fatal("selftest：-7/2 = %v，期望 -3（C 截断除）", v)
+		capi.Fatal("selftest：-7/2 = %v，期望 -3（C 截断除）", v)
 	}
 	if v, _ := evalInt("%", -7, 2); v != -1 {
-		fatal("selftest：-7%%2 = %v，期望 -1（C 余号随被除数）", v)
+		capi.Fatal("selftest：-7%%2 = %v，期望 -1（C 余号随被除数）", v)
 	}
 	fmt.Println("selftest：RNG 逐比特复刻与语义模型断言全部通过（金标 = CPython 3.14 实测）")
 }
@@ -1160,7 +894,7 @@ func main() {
 	}
 	var items []item
 	for _, f := range families {
-		r := newPyRandom(fmt.Sprintf("%d:%s", seed, f.name))
+		r := pyrandom.NewByString(fmt.Sprintf("%d:%s", seed, f.name))
 		made, attempt := 0, 0
 		for made < per && attempt < per*5 {
 			attempt++
@@ -1175,7 +909,7 @@ func main() {
 	fmt.Printf("生成 %d 例（%d 族），开始三路差分…\n", len(items), len(families))
 
 	if err := os.MkdirAll(work, 0o755); err != nil {
-		fatal("无法创建工作目录 %s: %v", work, err)
+		capi.Fatal("无法创建工作目录 %s: %v", work, err)
 	}
 
 	results := make([]diffRecord, len(items))
@@ -1246,14 +980,14 @@ func main() {
 
 	f, err := os.Create(report)
 	if err != nil {
-		fatal("无法写报告 %s: %v", report, err)
+		capi.Fatal("无法写报告 %s: %v", report, err)
 	}
 	enc := json.NewEncoder(f)
 	enc.SetEscapeHTML(false)
 	enc.SetIndent("", " ")
 	if err := enc.Encode(results); err != nil {
 		f.Close()
-		fatal("报告序列化失败: %v", err)
+		capi.Fatal("报告序列化失败: %v", err)
 	}
 	f.Close()
 	fmt.Printf("\nJSON 已写出: %s\n最小复现目录: %s\n耗时: %.1fs\n", report, findings, time.Since(start).Seconds())

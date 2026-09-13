@@ -15,10 +15,12 @@
 //   - 采样口径同（驱动侧 psapi commit_mb，50ms 间隔）；
 //   - 数值（wall_s / commit_mb）是测量值，双轨不要求相等，结构/机制对齐即可。
 //
-// 用法：go run scripts/core_asset_verdict/resource_longrun.go [--cap-mb 1500]
+// 用法：go run ./scripts/core_asset_verdict/resource_longrun [--cap-mb 1500]
 package main
 
 import (
+	"cide/scripts/internal/probeutil"
+
 	"context"
 	"encoding/json"
 	"fmt"
@@ -27,108 +29,14 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
-	"unsafe"
 )
 
 var (
-	here = mustFindHere()
-	cli  = mustFindCLI()
+	here = probeutil.VerdictDir()
+	cli  = probeutil.MustFindCLI()
 	work = filepath.Join(here, ".longrun")
 )
-
-func mustFindHere() string {
-	wd, err := os.Getwd()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "无法确定工作目录:", err)
-		os.Exit(2)
-	}
-	dir := wd
-	for i := 0; i < 5; i++ {
-		ok := true
-		for _, marker := range []string{"native", "scripts"} {
-			if fi, err := os.Stat(filepath.Join(dir, marker)); err != nil || !fi.IsDir() {
-				ok = false
-			}
-		}
-		if ok {
-			return filepath.Join(dir, "scripts", "core_asset_verdict")
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			break
-		}
-		dir = parent
-	}
-	fmt.Fprintln(os.Stderr, "请在仓库内运行：go run scripts/core_asset_verdict/resource_longrun.go")
-	os.Exit(2)
-	return ""
-}
-
-func mustFindCLI() string {
-	native := filepath.Join(filepath.Dir(filepath.Dir(here)), "native")
-	for _, rel := range []string{filepath.Join("target", "release", "cide_cli.exe"), filepath.Join("target", "debug", "cide_cli.exe")} {
-		p := filepath.Join(native, rel)
-		if _, err := os.Stat(p); err == nil {
-			return p
-		}
-	}
-	fmt.Fprintln(os.Stderr, "FATAL: 找不到 cide_cli.exe（先 cargo build --release）")
-	os.Exit(2)
-	return ""
-}
-
-// ── psapi 驱动侧采样（口径同 winmem.py / interaction_probe.go） ──
-
-type processMemoryCounters struct {
-	CB             uint32
-	PageFaultCount uint32
-	PeakWorkingSetSize, WorkingSetSize,
-	QuotaPeakPagedPoolUsage, QuotaPagedPoolUsage,
-	QuotaPeakNonPagedPoolUsage, QuotaNonPagedPoolUsage,
-	PagefileUsage, PeakPagefileUsage uintptr
-}
-
-var (
-	kernel32        = syscall.NewLazyDLL("kernel32.dll")
-	procOpenProc    = kernel32.NewProc("OpenProcess")
-	procCloseHandle = kernel32.NewProc("CloseHandle")
-	psapiDLL        = syscall.NewLazyDLL("psapi.dll")
-	procGetMemInfo  = psapiDLL.NewProc("GetProcessMemoryInfo")
-)
-
-func commitMB(pid int) float64 {
-	const processQueryLimitedInformation = 0x1000
-	h, _, _ := procOpenProc.Call(processQueryLimitedInformation, 0, uintptr(pid))
-	if h == 0 {
-		return -1
-	}
-	defer procCloseHandle.Call(h)
-	var c processMemoryCounters
-	c.CB = uint32(unsafe.Sizeof(c))
-	ok, _, _ := procGetMemInfo.Call(h, uintptr(unsafe.Pointer(&c)), uintptr(unsafe.Sizeof(c)))
-	if ok == 0 {
-		return -1
-	}
-	return float64(c.PagefileUsage) / 1048576.0
-}
-
-func peakCommitMB(pid int) float64 {
-	const processQueryLimitedInformation = 0x1000
-	h, _, _ := procOpenProc.Call(processQueryLimitedInformation, 0, uintptr(pid))
-	if h == 0 {
-		return -1
-	}
-	defer procCloseHandle.Call(h)
-	var c processMemoryCounters
-	c.CB = uint32(unsafe.Sizeof(c))
-	ok, _, _ := procGetMemInfo.Call(h, uintptr(unsafe.Pointer(&c)), uintptr(unsafe.Sizeof(c)))
-	if ok == 0 {
-		return -1
-	}
-	return float64(c.PeakPagefileUsage) / 1048576.0
-}
 
 // ── Sampler：驱动侧采样 + 硬看门狗 ──
 
@@ -151,7 +59,7 @@ func newSampler(pid int, capMB float64) *sampler {
 			case <-s.stop:
 				return
 			case <-t.C:
-				c := commitMB(pid)
+				c := probeutil.CommitMBRaw(pid)
 				if c > 0 {
 					if c > s.peak {
 						s.peak = c
@@ -159,7 +67,7 @@ func newSampler(pid int, capMB float64) *sampler {
 					s.samples = append(s.samples, c)
 					if c > capMB && !s.killed {
 						s.killed = true
-						killPID(pid)
+						probeutil.KillPID(pid)
 						return
 					}
 				}
@@ -168,16 +76,6 @@ func newSampler(pid int, capMB float64) *sampler {
 	}()
 	return s
 }
-
-func killPID(pid int) {
-	// Python 版经 taskkill /F；Go 直接打开进程句柄终止
-	h, _, _ := procOpenProc.Call(0x0001 /*PROCESS_TERMINATE*/, 0, uintptr(pid))
-	if h != 0 {
-		syscall.NewLazyDLL("kernel32.dll").NewProc("TerminateProcess").Call(h, 1)
-		procCloseHandle.Call(h)
-	}
-}
-
 func (s *sampler) finish() float64 {
 	close(s.stop)
 	<-s.done
@@ -212,8 +110,8 @@ func sampleRun(cmdArgs []string, timeout time.Duration, capMB float64, stdinLine
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Start(); err != nil {
-		return runRecord{WallS: sec(time.Since(start)), Exit: -1, CommitPeakMB: -1, PeakPsapiMB: -1,
-			StderrTail: tail(err.Error(), 200)}
+		return runRecord{WallS: probeutil.Sec(time.Since(start)), Exit: -1, CommitPeakMB: -1, PeakPsapiMB: -1,
+			StderrTail: probeutil.Tail(err.Error(), 200)}
 	}
 	s := newSampler(cmd.Process.Pid, capMB)
 
@@ -233,13 +131,13 @@ func sampleRun(cmdArgs []string, timeout time.Duration, capMB float64, stdinLine
 	}
 	_ = waitErr
 	return runRecord{
-		WallS:        sec(time.Since(start)),
+		WallS:        probeutil.Sec(time.Since(start)),
 		Exit:         exitCode,
-		CommitPeakMB: round2(peak),
-		PeakPsapiMB:  round2(peakCommitMB(cmd.Process.Pid)),
+		CommitPeakMB: probeutil.Round2(peak),
+		PeakPsapiMB:  probeutil.Round2(probeutil.PeakCommitMBRaw(cmd.Process.Pid)),
 		KilledByWD:   s.killed,
-		StdoutTail:   tail(stdout.String(), 200),
-		StderrTail:   tail(stderr.String(), 200),
+		StdoutTail:   probeutil.Tail(stdout.String(), 200),
+		StderrTail:   probeutil.Tail(stderr.String(), 200),
 	}
 }
 
@@ -258,15 +156,6 @@ func (b *syncBuffer) String() string {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return b.buf.String()
-}
-
-func sec(d time.Duration) float64 { return float64(int(d.Seconds()*100)) / 100 }
-func round2(f float64) float64    { return float64(int(f*100+0.5)) / 100 }
-func tail(s string, n int) string {
-	if len(s) > n {
-		return s[len(s)-n:]
-	}
-	return s
 }
 
 // ── 三个 case ──
@@ -290,7 +179,7 @@ func seekScaling(capMB float64) []runRecord {
 		r := sampleRun([]string{cli, "serve"}, 300*time.Second, capMB, lines)
 		r.Case = fmt.Sprintf("seek_iters%d", iters)
 		r.EstSteps = nEst
-		r.MBPer1kSteps = round2(r.CommitPeakMB / float64(maxInt(1, nEst)) * 1000)
+		r.MBPer1kSteps = probeutil.Round2(r.CommitPeakMB / float64(maxInt(1, nEst)) * 1000)
 		out = append(out, r)
 		fmt.Printf("  seek iters=%d (~%d 步) 峰值提交 %vMB  %vMB/千步  墙钟 %vs  watchdog=%v\n",
 			iters, nEst, r.CommitPeakMB, r.MBPer1kSteps, r.WallS, r.KilledByWD)
@@ -358,5 +247,5 @@ func main() {
 		fmt.Fprintln(os.Stderr, "FATAL:", err)
 		os.Exit(2)
 	}
-	fmt.Printf("\nJSON 已写出: %s\n耗时: %.1fs\n", p, sec(time.Since(start)))
+	fmt.Printf("\nJSON 已写出: %s\n耗时: %.1fs\n", p, probeutil.Sec(time.Since(start)))
 }

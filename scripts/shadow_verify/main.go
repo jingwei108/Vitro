@@ -34,12 +34,14 @@
 //   - 启动自检（selfCheck，J9）：对 analyzeDiff / classifyCompileError 注入必然违反的输入，
 //     断言必须变红，否则退出码 2 拒绝跑（判定函数坏了的"全绿"比没有门禁更坏）。
 //
-// 用法：go run scripts/shadow_verify.go [--jobs N] [--refresh-clang] [--rebuild]
+// 用法：go run ./scripts/shadow_verify [--jobs N] [--refresh-clang] [--rebuild]
 //
 //	[--limit N] [--report path.md] [--json path.json]
 package main
 
 import (
+	"cide/scripts/internal/capi"
+
 	"bytes"
 	"context"
 	"crypto/sha256"
@@ -56,7 +58,6 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 	"unsafe"
 )
@@ -64,7 +65,7 @@ import (
 // ---------------------------------------------------------------- 路径与常量
 
 var (
-	projectRoot   = findProjectRoot()
+	projectRoot   = capi.ProjectRoot()
 	nativeDir     = filepath.Join(projectRoot, "native")
 	dllPath       = filepath.Join(nativeDir, "target", "release", "cide_native.dll")
 	scriptDir     = filepath.Join(nativeDir, "tests", "shadow_verification")
@@ -99,48 +100,6 @@ var (
 	}
 )
 
-// findProjectRoot：Go 没有 Python 的 __file__ 锚点（go run 的可执行文件在
-// GOCACHE 临时目录），按"包含 native/ 与 scripts/ 的目录"向上探测项目根，
-// 允许从仓库根、scripts/ 或更深子目录运行。
-func findProjectRoot() string {
-	wd, err := os.Getwd()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "无法确定工作目录:", err)
-		os.Exit(2)
-	}
-	dir := wd
-	for i := 0; i < 5; i++ {
-		if isProjectRoot(dir) {
-			return dir
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			break
-		}
-		dir = parent
-	}
-	fmt.Fprintln(os.Stderr, "请在仓库内运行本脚本：go run scripts/shadow_verify.go（找不到包含 native/ 与 scripts/ 的项目根）")
-	os.Exit(2)
-	return ""
-}
-
-func isProjectRoot(dir string) bool {
-	for _, marker := range []string{"native", "scripts"} {
-		if fi, err := os.Stat(filepath.Join(dir, marker)); err != nil || !fi.IsDir() {
-			return false
-		}
-	}
-	return true
-}
-
-// E-P1-5：结构化输出通道必需符号（ABI >= 1.1.0），缺失即 fail fast，不退回文本清洗。
-var requiredSymbols = []string{
-	"cide_get_program_output_length",
-	"cide_get_program_output",
-	"cide_get_engine_notes_length",
-	"cide_get_engine_notes",
-}
-
 // ---------------------------------------------------------------- 数据结构
 
 type runResult struct {
@@ -170,41 +129,6 @@ type shadowCase struct {
 	stdin    string // 同名 .in 内容（universal-newlines 归一后；空串 = 无输入）
 }
 
-// ---------------------------------------------------------------- 工具函数
-
-func fatal(format string, args ...any) {
-	fmt.Fprintf(os.Stderr, "FATAL: "+format+"\n", args...)
-	os.Exit(2)
-}
-
-// cBytes 把 Go 字符串转为 NUL 结尾字节切片（调用方须 runtime.KeepAlive）。
-func cBytes(s string) []byte {
-	b := make([]byte, len(s)+1)
-	copy(b, s)
-	return b
-}
-
-// ptrToGoString 读取 DLL 返回的 NUL 结尾 UTF-8 C 字符串（rust-alloc，只读扫描）。
-// 形态与 scripts/shadow_verify_cpp.go 的同名函数同款（D5 共享 helper 约定）：
-// uintptr→Pointer 立即转换后不再做算术；vet 对此的单项豁免已裁定：
-// `go vet -unsafeptr=false`（业务脚本的转换只允许出现在本函数内）。
-func ptrToGoString(ptr uintptr) string {
-	if ptr == 0 {
-		return ""
-	}
-	// 窗口从 4KB 起翻倍扫描 NUL：compile_errors 可能超过 4KB 假设
-	for win := 4096; win <= 1<<20; win *= 2 {
-		s := unsafe.Slice((*byte)(unsafe.Pointer(ptr)), win)
-		for i, b := range s {
-			if b == 0 {
-				return string(s[:i])
-			}
-		}
-	}
-	fatal("C 字符串超过 1MB 扫描上限（指针 0x%x），拒绝静默截断", ptr)
-	return ""
-}
-
 // normalizeNewlines 等价 Python 文本模式读取的 universal newlines：
 // \r\n → \n、孤立 \r → \n。用例源码 / .in 内容统一经此归一，
 // 保证 Cide 与缓存材料看到的字节与 Python 驱动一致。
@@ -214,21 +138,6 @@ func normalizeNewlines(s string) string {
 	}
 	s = strings.ReplaceAll(s, "\r\n", "\n")
 	return strings.ReplaceAll(s, "\r", "\n")
-}
-
-// normalize 输出比对口径：strip 两端 + CRLF → LF。
-// Python 版靠 text=True 的 universal newlines 在读取时翻译 CRLF，此处显式归一。
-func normalize(s string) string {
-	return strings.ReplaceAll(strings.TrimSpace(s), "\r\n", "\n")
-}
-
-// truncateRunes 按字符数截断（Python 的 s[:n] 是字符截断，Go 切片是字节）。
-func truncateRunes(s string, n int) string {
-	r := []rune(s)
-	if len(r) <= n {
-		return s
-	}
-	return string(r[:n])
 }
 
 // ---------------------------------------------------------------- 启动自检（J9）
@@ -269,130 +178,20 @@ func selfCheck() {
 	}
 	for _, ck := range checks {
 		if got := analyzeDiff(ck.cs, ck.clang, ck.cide); got != ck.want {
-			fatal("启动自检失败：%s：期望 %s，实际 %s（判定口径已破坏，拒绝运行）", ck.name, ck.want, got)
+			capi.Fatal("启动自检失败：%s：期望 %s，实际 %s（判定口径已破坏，拒绝运行）", ck.name, ck.want, got)
 		}
 	}
 	// classifyCompileError：expected_category 优先 + 关键词 fallback
 	if got := classifyCompileError("error: unknown type name 'double'", "file_io"); got != "file_io" {
-		fatal("启动自检失败：expected_category 应优先（期望 file_io，实际 %s）", got)
+		capi.Fatal("启动自检失败：expected_category 应优先（期望 file_io，实际 %s）", got)
 	}
 	if got := classifyCompileError("E1001: double not supported", "baseline"); got != "double" {
-		fatal("启动自检失败：关键词 fallback 失效（期望 double，实际 %s）", got)
+		capi.Fatal("启动自检失败：关键词 fallback 失效（期望 double，实际 %s）", got)
 	}
 	if got := classifyCompileError("", "baseline"); got != "unknown" {
-		fatal("启动自检失败：空错误应归类 unknown（实际 %s）", got)
+		capi.Fatal("启动自检失败：空错误应归类 unknown（实际 %s）", got)
 	}
 	fmt.Printf("启动自检：analyzeDiff %d 条 + classifyCompileError 3 条断言全部通过\n", len(checks))
-}
-
-// ---------------------------------------------------------------- DLL 绑定
-
-type cideDLL struct {
-	dll            *syscall.LazyDLL
-	sessionCreate  *syscall.LazyProc
-	sessionDestroy *syscall.LazyProc
-	compile        *syscall.LazyProc
-	compileUnit    *syscall.LazyProc
-	compileAll     *syscall.LazyProc
-	run            *syscall.LazyProc
-	setInputMode   *syscall.LazyProc
-	setInput       *syscall.LazyProc
-	compileErrors  *syscall.LazyProc
-	runtimeError   *syscall.LazyProc
-	progOutLen     *syscall.LazyProc
-	progOut        *syscall.LazyProc
-	notesLen       *syscall.LazyProc
-	notes          *syscall.LazyProc
-	engineVersion  *syscall.LazyProc
-	freeString     *syscall.LazyProc
-}
-
-func loadCideDLL() *cideDLL {
-	if _, err := os.Stat(dllPath); err != nil {
-		fmt.Printf("错误: 找不到 Cide DLL: %s\n请先运行: cd native && cargo build --release\n", dllPath)
-		os.Exit(1)
-	}
-	d := &cideDLL{dll: syscall.NewLazyDLL(dllPath)}
-	bind := func(name string) *syscall.LazyProc {
-		p := d.dll.NewProc(name)
-		if err := p.Find(); err != nil {
-			fatal("DLL 缺少符号 %s：%v\n需要 ABI >= 1.1.0 的结构化输出通道。请重建引擎：cd native && cargo build --release\n不要退回文本清洗：E-P1-5 已废除该口径。", name, err)
-		}
-		return p
-	}
-	for _, name := range requiredSymbols {
-		bind(name)
-	}
-	d.sessionCreate = bind("cide_session_create")
-	d.sessionDestroy = bind("cide_session_destroy")
-	d.compile = bind("cide_compile")
-	d.compileUnit = bind("cide_compile_unit")
-	d.compileAll = bind("cide_compile_all")
-	d.run = bind("cide_run")
-	d.setInputMode = bind("cide_set_input_mode")
-	d.setInput = bind("cide_set_input")
-	d.compileErrors = bind("cide_get_compile_errors")
-	d.runtimeError = bind("cide_get_runtime_error")
-	d.progOutLen = bind("cide_get_program_output_length")
-	d.progOut = bind("cide_get_program_output")
-	d.notesLen = bind("cide_get_engine_notes_length")
-	d.notes = bind("cide_get_engine_notes")
-	// 新鲜度校验依赖这两个符号；缺失时与 Python 版同口径：跳过（ABI 校验兜底）。
-	if d.dll.NewProc("cide_engine_version").Find() == nil && d.dll.NewProc("cide_free_string").Find() == nil {
-		d.engineVersion = d.dll.NewProc("cide_engine_version")
-		d.freeString = d.dll.NewProc("cide_free_string")
-	}
-	ensureFreshArtifacts(d)
-	return d
-}
-
-// ensureFreshArtifacts：DLL 版本串必须含当前 HEAD 短哈希，否则 fail fast（exit 2）。
-// 产物不新鲜时全部用例会在陈旧二进制上假绿（实测：HEAD 前进后产物仍是上一个哈希）。
-func ensureFreshArtifacts(d *cideDLL) {
-	if d.engineVersion == nil {
-		return
-	}
-	head := gitShortHead()
-	if head == "" {
-		return // git 不可用（导出源码、无 .git）：跳过，ABI 校验兜底
-	}
-	raw, _, _ := d.engineVersion.Call()
-	version := ptrToGoString(raw)
-	if raw != 0 {
-		d.freeString.Call(raw)
-	}
-	if !strings.Contains(version, head) {
-		fatal("引擎产物不是当前提交构建的：cide_engine_version()=%q 不含 HEAD %s。\n影子验证读的是 native/target/release/cide_native.dll，请先 cd native && cargo build --release ——\n否则会在陈旧二进制上得到假绿（实测：HEAD 前进后产物仍是上一个哈希）。",
-			version, head)
-	}
-}
-
-func gitShortHead() string {
-	cmd := exec.Command("git", "rev-parse", "--short", "HEAD")
-	cmd.Dir = projectRoot
-	out, err := cmd.Output()
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(out))
-}
-
-// readChannel 等价 Python 侧 _read：length<=0 → ""，否则取 NUL 结尾缓冲。
-func readChannel(h uintptr, lenProc, copyProc *syscall.LazyProc) string {
-	r, _, _ := lenProc.Call(h)
-	n := int(int32(r))
-	if n <= 0 {
-		return ""
-	}
-	buf := make([]byte, n+1)
-	copyProc.Call(h, uintptr(unsafe.Pointer(&buf[0])), uintptr(n+1))
-	runtime.KeepAlive(buf)
-	for i, b := range buf {
-		if b == 0 {
-			return string(buf[:i])
-		}
-	}
-	return string(buf)
 }
 
 // ---------------------------------------------------------------- Clang 侧
@@ -560,7 +359,7 @@ func caseOrigin(cs shadowCase) string {
 func clangCacheKey(cs shadowCase, clangVersion string) string {
 	sourceText, err := os.ReadFile(cs.path)
 	if err != nil {
-		fatal("缓存材料读取用例失败 %s: %v", cs.path, err)
+		capi.Fatal("缓存材料读取用例失败 %s: %v", cs.path, err)
 	}
 	includeFiles := map[string]string{}
 	if entries, err := os.ReadDir(filepath.Dir(cs.path)); err == nil {
@@ -574,7 +373,7 @@ func clangCacheKey(cs shadowCase, clangVersion string) string {
 		for _, h := range headers {
 			data, err := os.ReadFile(filepath.Join(filepath.Dir(cs.path), h))
 			if err != nil {
-				fatal("缓存材料读取头文件失败 %s: %v", h, err)
+				capi.Fatal("缓存材料读取头文件失败 %s: %v", h, err)
 			}
 			sum := sha256.Sum256(data)
 			includeFiles[h] = hex.EncodeToString(sum[:])
@@ -602,7 +401,7 @@ func clangCacheKey(cs shadowCase, clangVersion string) string {
 	enc := json.NewEncoder(&buf)
 	enc.SetEscapeHTML(false)
 	if err := enc.Encode(material); err != nil {
-		fatal("缓存材料序列化失败: %v", err)
+		capi.Fatal("缓存材料序列化失败: %v", err)
 	}
 	sum := sha256.Sum256(buf.Bytes())
 	return hex.EncodeToString(sum[:])
@@ -663,37 +462,36 @@ func clangCacheStore(key string, result runResult) {
 var cideMu sync.Mutex
 
 // runWithCide 通过 C API 调用 Cide 编译并运行（文件用例走 compile_unit+compile_all）。
-func runWithCide(d *cideDLL, cs shadowCase) runResult {
+func runWithCide(d *capi.DLL, cs shadowCase) runResult {
 	cideMu.Lock()
 	defer cideMu.Unlock()
 
 	start := time.Now()
-	handle, _, _ := d.sessionCreate.Call()
+	handle, _, _ := d.SessionCreate.Call()
 	if handle == 0 {
 		return runResult{Compiler: "cide", CompileSuccess: false, CompileError: "session create failed", ExitCode: -1,
 			DurationMs: msSince(start)}
 	}
-	defer d.sessionDestroy.Call(handle)
+	defer d.SessionDestroy.Call(handle)
 
 	var compileRet uintptr
 	if cs.path != "" {
-		pathB := cBytes(cs.path)
-		srcB := cBytes(cs.source)
-		compileRet, _, _ = d.compileUnit.Call(handle,
+		pathB := capi.CBytes(cs.path)
+		srcB := capi.CBytes(cs.source)
+		compileRet, _, _ = d.CompileUnit.Call(handle,
 			uintptr(unsafe.Pointer(&pathB[0])), uintptr(unsafe.Pointer(&srcB[0])))
 		runtime.KeepAlive(pathB)
 		runtime.KeepAlive(srcB)
 		if compileRet == 0 {
-			compileRet, _, _ = d.compileAll.Call(handle)
+			compileRet, _, _ = d.CompileAll.Call(handle)
 		}
 	} else {
-		srcB := cBytes(cs.source)
-		compileRet, _, _ = d.compile.Call(handle, uintptr(unsafe.Pointer(&srcB[0])))
+		srcB := capi.CBytes(cs.source)
+		compileRet, _, _ = d.Compile.Call(handle, uintptr(unsafe.Pointer(&srcB[0])))
 		runtime.KeepAlive(srcB)
 	}
 	if int32(compileRet) != 0 {
-		errPtr, _, _ := d.compileErrors.Call(handle)
-		errMsg := ptrToGoString(errPtr)
+		errMsg := d.CompileErrorsExact(handle)
 		if errMsg == "" {
 			errMsg = "Unknown compile error"
 		}
@@ -701,19 +499,18 @@ func runWithCide(d *cideDLL, cs shadowCase) runResult {
 			Stderr: errMsg, ExitCode: int(int32(compileRet)), DurationMs: msSince(start)}
 	}
 
-	d.setInputMode.Call(handle, 1)
+	d.SetInputMode.Call(handle, 1)
 	if cs.stdin != "" {
 		// 与 Clang 侧喂同一份字节，保证两侧可比
-		inB := cBytes(cs.stdin)
-		d.setInput.Call(handle, uintptr(unsafe.Pointer(&inB[0])))
+		inB := capi.CBytes(cs.stdin)
+		d.SetInput.Call(handle, uintptr(unsafe.Pointer(&inB[0])))
 		runtime.KeepAlive(inB)
 	}
-	runRet, _, _ := d.run.Call(handle)
+	runRet, _, _ := d.Run.Call(handle)
 
 	// E-P1-5：直接读纯程序 stdout 通道（引擎附注走 note 通道），禁止文本清洗。
-	stdoutStr := strings.TrimSpace(readChannel(handle, d.progOutLen, d.progOut))
-	errPtr, _, _ := d.runtimeError.Call(handle)
-	runtimeErr := ptrToGoString(errPtr)
+	stdoutStr := strings.TrimSpace(capi.ReadChannel(handle, d.ProgOutLen, d.ProgOut))
+	runtimeErr := d.RuntimeErr(handle)
 
 	return runResult{Compiler: "cide", CompileSuccess: true,
 		RunSuccess: int32(runRet) == 0 && runtimeErr == "",
@@ -740,7 +537,7 @@ func analyzeDiff(cs shadowCase, clang, cide runResult) string {
 			}
 			return "runtime_gap"
 		}
-		if normalize(clang.Stdout) != normalize(cide.Stdout) {
+		if capi.Normalize(clang.Stdout) != capi.Normalize(cide.Stdout) {
 			// 已知问题（预期行为差异）不统计为 output_gap
 			if strings.Contains(cs.category, "bug") || knownFailureCases[cs.name] {
 				return "known_issue"
@@ -847,7 +644,7 @@ func loadCaseFiles() []shadowCase {
 			path := filepath.Join(rootPath, fn)
 			raw, err := os.ReadFile(path)
 			if err != nil {
-				fatal("读取用例失败 %s: %v", path, err)
+				capi.Fatal("读取用例失败 %s: %v", path, err)
 			}
 			source := normalizeNewlines(string(raw))
 			// 提取 @category 注释。占位符限定 ASCII：`\S` 类宽松匹配会跨越 C 注释
@@ -881,7 +678,7 @@ func loadCaseFiles() []shadowCase {
 		}
 	}
 	if len(cases) == 0 {
-		fatal("用例目录加载为空（native/tests/cases/** 与 cases_template_generated 均无 .c）。\n" +
+		capi.Fatal("用例目录加载为空（native/tests/cases/** 与 cases_template_generated 均无 .c）。\n" +
 			"防线 1 不允许在空用例集上给出\"门禁通过\"（空转假绿）。")
 	}
 	return cases
@@ -970,7 +767,7 @@ func executeCases(cases []shadowCase, jobs int, refreshClang bool, clangVersion 
 // ensureRunDir 建槽位隔离运行目录并写 VFS 预设文件（幂等）。
 func ensureRunDir(runDir string) {
 	if err := os.MkdirAll(runDir, 0o755); err != nil {
-		fatal("无法创建运行目录 %s: %v", runDir, err)
+		capi.Fatal("无法创建运行目录 %s: %v", runDir, err)
 	}
 	// 排序遍历：确定性纪律（写文件顺序虽无语义，不留随机序）
 	var names []string
@@ -980,7 +777,7 @@ func ensureRunDir(runDir string) {
 	sort.Strings(names)
 	for _, name := range names {
 		if err := os.WriteFile(filepath.Join(runDir, name), []byte(presetFiles[name]), 0o644); err != nil {
-			fatal("无法写预设文件 %s: %v", name, err)
+			capi.Fatal("无法写预设文件 %s: %v", name, err)
 		}
 	}
 }
@@ -1225,18 +1022,18 @@ func generateReport(diffs []diffInfo, outputPath string, cfg *runConfig) {
 		lines = append(lines, fmt.Sprintf("- Clang: compile=%s, run=%s", okTag(d.clang.CompileSuccess), okTag(d.clang.RunSuccess)))
 		lines = append(lines, fmt.Sprintf("- Cide: compile=%s, run=%s", okTag(d.cide.CompileSuccess), okTag(d.cide.RunSuccess)))
 		if !d.cide.CompileSuccess {
-			lines = append(lines, fmt.Sprintf("- Cide 编译错误: %s", truncateRunes(d.cide.CompileError, 200)))
+			lines = append(lines, fmt.Sprintf("- Cide 编译错误: %s", capi.TruncateRunes(d.cide.CompileError, 200)))
 		} else if strings.TrimSpace(d.clang.Stdout) != strings.TrimSpace(d.cide.Stdout) {
-			lines = append(lines, fmt.Sprintf("- Clang stdout: %s", truncateRunes(strings.TrimSpace(d.clang.Stdout), 200)))
-			lines = append(lines, fmt.Sprintf("- Cide stdout: %s", truncateRunes(strings.TrimSpace(d.cide.Stdout), 200)))
+			lines = append(lines, fmt.Sprintf("- Clang stdout: %s", capi.TruncateRunes(strings.TrimSpace(d.clang.Stdout), 200)))
+			lines = append(lines, fmt.Sprintf("- Cide stdout: %s", capi.TruncateRunes(strings.TrimSpace(d.cide.Stdout), 200)))
 		}
 	}
 
 	if err := os.MkdirAll(filepath.Dir(outputPath), 0o755); err != nil {
-		fatal("无法创建报告目录: %v", err)
+		capi.Fatal("无法创建报告目录: %v", err)
 	}
 	if err := os.WriteFile(outputPath, []byte(strings.Join(lines, "\n")), 0o644); err != nil {
-		fatal("无法写报告 %s: %v", outputPath, err)
+		capi.Fatal("无法写报告 %s: %v", outputPath, err)
 	}
 	fmt.Printf("报告已生成: %s\n", outputPath)
 }
@@ -1263,7 +1060,7 @@ func buildJSONData(diffs []diffInfo, clangVersion string, cfg *runConfig) map[st
 
 func writeJSONData(diffs []diffInfo, outputPath string, clangVersion string, cfg *runConfig) {
 	if err := writeJSONFile(outputPath, buildJSONData(diffs, clangVersion, cfg)); err != nil {
-		fatal("无法写 JSON %s: %v", outputPath, err)
+		capi.Fatal("无法写 JSON %s: %v", outputPath, err)
 	}
 }
 
@@ -1300,7 +1097,7 @@ func detailsOf(diffs []diffInfo) []detailEntry {
 	for _, d := range diffs {
 		errText := ""
 		if !d.cide.CompileSuccess {
-			errText = truncateRunes(d.cide.CompileError, 500)
+			errText = capi.TruncateRunes(d.cide.CompileError, 500)
 		}
 		out = append(out, detailEntry{
 			Case:             d.cs.name,
@@ -1361,7 +1158,7 @@ func writeKrLeetCodeReport(diffs []diffInfo, outputPath string) {
 		}
 		errText := ""
 		if !d.cide.CompileSuccess {
-			errText = truncateRunes(d.cide.CompileError, 500)
+			errText = capi.TruncateRunes(d.cide.CompileError, 500)
 		}
 		gaps = append(gaps, map[string]any{
 			"case":               d.cs.name,
@@ -1369,13 +1166,13 @@ func writeKrLeetCodeReport(diffs []diffInfo, outputPath string) {
 			"diff_type":          d.diff,
 			"expected_category":  d.cs.category,
 			"cide_compile_error": errText,
-			"clang_stdout":       truncateRunes(strings.TrimSpace(d.clang.Stdout), 200),
-			"cide_stdout":        truncateRunes(strings.TrimSpace(d.cide.Stdout), 200),
+			"clang_stdout":       capi.TruncateRunes(strings.TrimSpace(d.clang.Stdout), 200),
+			"cide_stdout":        capi.TruncateRunes(strings.TrimSpace(d.cide.Stdout), 200),
 		})
 	}
 	report["gaps"] = gaps
 	if err := writeJSONFile(outputPath, report); err != nil {
-		fatal("无法写专项报告 %s: %v", outputPath, err)
+		capi.Fatal("无法写专项报告 %s: %v", outputPath, err)
 	}
 }
 
@@ -1464,7 +1261,7 @@ func main() {
 
 	// 产物新鲜度门禁（fail fast，exit 2）：版本串必须含当前 HEAD。
 	// 与 mtime 陈旧检测互补：mtime 发现不了"提交推进了没重建"。必须在主进程校验。
-	dll = loadCideDLL()
+	dll = capi.Load(dllPath)
 
 	jobs := resolveJobs(*jobsFlag)
 	cacheMode := "启用"
@@ -1555,7 +1352,7 @@ func main() {
 	if !debugLimit {
 		if err := writeJSONFile(filepath.Join(reportsDir, "shadow_data_latest.json"),
 			buildJSONData(diffs, clangVersion, &cfg)); err != nil {
-			fatal("无法写 latest JSON: %v", err)
+			capi.Fatal("无法写 latest JSON: %v", err)
 		}
 	}
 
@@ -1616,5 +1413,5 @@ func okOf(b bool) string {
 	return "FAIL"
 }
 
-// dll 全局 DLL 实例（loadCideDLL 后供 executeCases 使用）。
-var dll *cideDLL
+// dll 全局 DLL 实例（capi.Load 后供 executeCases 使用）。
+var dll *capi.DLL

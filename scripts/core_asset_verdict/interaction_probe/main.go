@@ -23,79 +23,34 @@
 // 本版在 会话死亡 / 非法响应 / 不变量违反 / fuzz 杀死进程 任一发生时 exit 1
 // （U0 验收标准"一行畸形输入不得到达 panic"被打破就该红）。
 //
-// 用法：go run scripts/core_asset_verdict/interaction_probe.go [--seed 20260912] [--ops 200] [--rss]
+// 用法：go run ./scripts/core_asset_verdict/interaction_probe [--seed 20260912] [--ops 200] [--rss]
 package main
 
 import (
+	"cide/scripts/internal/capi"
+	"cide/scripts/internal/probeutil"
+	"cide/scripts/internal/pyrandom"
+
 	"bufio"
-	"crypto/sha512"
 	"encoding/json"
 	"fmt"
-	"math/bits"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"sync/atomic"
-	"syscall"
 	"time"
-	"unsafe"
 )
 
 var (
-	here = mustFindHere()
-	cli  = mustFindCLI()
+	here = probeutil.VerdictDir()
+	cli  = probeutil.MustFindCLI()
 )
 
-func mustFindHere() string {
-	wd, err := os.Getwd()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "无法确定工作目录:", err)
-		os.Exit(2)
-	}
-	dir := wd
-	for i := 0; i < 5; i++ {
-		ok := true
-		for _, marker := range []string{"native", "scripts"} {
-			if fi, err := os.Stat(filepath.Join(dir, marker)); err != nil || !fi.IsDir() {
-				ok = false
-			}
-		}
-		if ok {
-			return filepath.Join(dir, "scripts", "core_asset_verdict")
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			break
-		}
-		dir = parent
-	}
-	fmt.Fprintln(os.Stderr, "请在仓库内运行：go run scripts/core_asset_verdict/interaction_probe.go")
-	os.Exit(2)
-	return ""
-}
-
-func mustFindCLI() string {
-	native := filepath.Join(filepath.Dir(filepath.Dir(here)), "native")
-	for _, rel := range []string{
-		filepath.Join("target", "release", "cide_cli.exe"),
-		filepath.Join("target", "debug", "cide_cli.exe"),
-	} {
-		p := filepath.Join(native, rel)
-		if _, err := os.Stat(p); err == nil {
-			return p
-		}
-	}
-	fatal("找不到 cide_cli.exe（请先 cd native && cargo build --release）")
-	return ""
-}
-
-func fatal(format string, args ...any) {
-	fmt.Fprintf(os.Stderr, "FATAL: "+format+"\n", args...)
-	os.Exit(2)
-}
-
+// commitMB/peakCommitMB：interaction 口径 = 原始采样取整到 0.1（Raw 在 probeutil）。
+func commitMB(pid int) float64     { return probeutil.Round1(probeutil.CommitMBRaw(pid)) }
+func peakCommitMB(pid int) float64 { return probeutil.Round1(probeutil.PeakCommitMBRaw(pid)) }
 func truncateStr(s string, n int) string {
 	if len(s) > n {
 		return s[:n]
@@ -113,255 +68,6 @@ func mnum(v any) float64 {
 type pyRandom struct {
 	mt  [624]uint32
 	idx int
-}
-
-// newPyRandomInt：CPython 对 **int seed** 不走 sha512 路径——直接把整数的
-// 32bit little-endian words 交给 init_by_array（random_seed 的 int 分支）。
-// interaction_probe 的 --seed 是纯整数，必须用此构造器（字符串 seed 才用 newPyRandom）。
-func newPyRandomInt(n uint64) *pyRandom {
-	key := []uint32{0}
-	if n > 0 {
-		key = nil
-		for n > 0 {
-			key = append(key, uint32(n))
-			n >>= 32
-		}
-	}
-	r := &pyRandom{}
-	r.initByArray(key)
-	return r
-}
-
-func newPyRandom(seed string) *pyRandom {
-	sb := []byte(seed)
-	h := sha512.Sum512(sb)
-	buf := append(sb, h[:]...)
-	nbits := 0
-	for i, b := range buf {
-		if b != 0 {
-			nbits = (len(buf)-1-i)*8 + bits.Len8(b)
-			break
-		}
-	}
-	keyUsed := 1
-	if nbits > 0 {
-		keyUsed = (nbits-1)/32 + 1
-	}
-	key := make([]uint32, keyUsed)
-	L := len(buf)
-	for i := 0; i < keyUsed; i++ {
-		start := L - 4*(i+1)
-		var w uint32
-		for j := 0; j < 4; j++ {
-			var b byte
-			if start+j >= 0 {
-				b = buf[start+j]
-			}
-			w = w<<8 | uint32(b)
-		}
-		key[i] = w
-	}
-	r := &pyRandom{}
-	r.initByArray(key)
-	return r
-}
-
-func (r *pyRandom) initGenrand(s uint32) {
-	r.mt[0] = s
-	for i := 1; i < 624; i++ {
-		r.mt[i] = 1812433253*(r.mt[i-1]^(r.mt[i-1]>>30)) + uint32(i)
-	}
-	r.idx = 624
-}
-
-func (r *pyRandom) initByArray(key []uint32) {
-	r.initGenrand(19650218)
-	i, j := 1, 0
-	k := 624
-	if len(key) > k {
-		k = len(key)
-	}
-	for ; k > 0; k-- {
-		r.mt[i] = (r.mt[i] ^ (r.mt[i-1]^(r.mt[i-1]>>30))*1664525) + key[j] + uint32(j)
-		i++
-		j++
-		if i >= 624 {
-			r.mt[0] = r.mt[623]
-			i = 1
-		}
-		if j >= len(key) {
-			j = 0
-		}
-	}
-	for k = 623; k > 0; k-- {
-		r.mt[i] = (r.mt[i] ^ (r.mt[i-1]^(r.mt[i-1]>>30))*1566083941) - uint32(i)
-		i++
-		if i >= 624 {
-			r.mt[0] = r.mt[623]
-			i = 1
-		}
-	}
-	r.mt[0] = 0x80000000
-}
-
-func (r *pyRandom) genrandUint32() uint32 {
-	if r.idx >= 624 {
-		for i := 0; i < 624; i++ {
-			y := r.mt[i]&0x80000000 | r.mt[(i+1)%624]&0x7fffffff
-			r.mt[i] = r.mt[(i+397)%624] ^ (y >> 1)
-			if y&1 != 0 {
-				r.mt[i] ^= 0x9908b0df
-			}
-		}
-		r.idx = 0
-	}
-	y := r.mt[r.idx]
-	r.idx++
-	y ^= y >> 11
-	y ^= (y << 7) & 0x9d2c5680
-	y ^= (y << 15) & 0xefc60000
-	y ^= y >> 18
-	return y
-}
-
-func (r *pyRandom) getrandbits(k int) uint32 { return r.genrandUint32() >> (32 - k) }
-
-func (r *pyRandom) randbelow(n int) int {
-	k := bits.Len(uint(n))
-	for {
-		v := int(r.getrandbits(k))
-		if v < n {
-			return v
-		}
-	}
-}
-
-func (r *pyRandom) randint(a, b int) int { return a + r.randbelow(b-a+1) }
-
-func (r *pyRandom) choice(n int) int { return r.randbelow(n) }
-
-func (r *pyRandom) random() float64 {
-	a := uint64(r.genrandUint32() >> 5)
-	b := uint64(r.genrandUint32() >> 6)
-	return float64(a*67108864+b) * (1.0 / 9007199254740992.0)
-}
-
-// choices 加权选择：对齐 CPython random.choices（accumulate + bisect_right）
-func (r *pyRandom) choices(weights []int) int {
-	total := 0.0
-	cum := make([]float64, len(weights))
-	for i, w := range weights {
-		total += float64(w)
-		cum[i] = total
-	}
-	x := r.random() * total
-	// bisect_right(cum, x)：第一个 cum[i] > x 的下标
-	lo, hi := 0, len(cum)
-	for lo < hi {
-		mid := (lo + hi) / 2
-		if x < cum[mid] {
-			hi = mid
-		} else {
-			lo = mid + 1
-		}
-	}
-	if lo >= len(cum) {
-		lo = len(cum) - 1
-	}
-	return lo
-}
-
-// sample 对齐 CPython random.sample（population 视为 [1..n]）：
-// n ≤ setsize(21) 用池洗牌，否则 set 拒绝采样。
-func (r *pyRandom) sample(n, k int) []int {
-	result := make([]int, k)
-	setsize := 21
-	if k > 5 {
-		lg := 0
-		for p := 1; p < k*3; p *= 4 {
-			lg++
-		}
-		setsize += 1 << (2 * lg)
-	}
-	if n <= setsize {
-		pool := make([]int, n)
-		for i := 0; i < n; i++ {
-			pool[i] = i + 1
-		}
-		for i := 0; i < k; i++ {
-			j := r.randbelow(n - i)
-			result[i] = pool[j]
-			pool[j] = pool[n-i-1]
-		}
-	} else {
-		selected := map[int]bool{}
-		for i := 0; i < k; i++ {
-			j := r.randbelow(n)
-			for selected[j] {
-				j = r.randbelow(n)
-			}
-			result[i] = j + 1
-			selected[j] = true
-		}
-	}
-	return result
-}
-
-// ───────────────────────── winmem：psapi 驱动侧采样（口径同 winmem.py） ─────────────────────────
-
-type processMemoryCounters struct {
-	CB                         uint32
-	PageFaultCount             uint32
-	PeakWorkingSetSize         uintptr
-	WorkingSetSize             uintptr
-	QuotaPeakPagedPoolUsage    uintptr
-	QuotaPagedPoolUsage        uintptr
-	QuotaPeakNonPagedPoolUsage uintptr
-	QuotaNonPagedPoolUsage     uintptr
-	PagefileUsage              uintptr
-	PeakPagefileUsage          uintptr
-}
-
-var (
-	kernel32              = syscall.NewLazyDLL("kernel32.dll")
-	procOpenProcess       = kernel32.NewProc("OpenProcess")
-	procCloseHandle       = kernel32.NewProc("CloseHandle")
-	psapiDLL              = syscall.NewLazyDLL("psapi.dll")
-	procGetProcessMemInfo = psapiDLL.NewProc("GetProcessMemoryInfo")
-)
-
-func memCounters(pid int) *processMemoryCounters {
-	const processQueryLimitedInformation = 0x1000
-	h, _, _ := procOpenProcess.Call(processQueryLimitedInformation, 0, uintptr(pid))
-	if h == 0 {
-		return nil
-	}
-	defer procCloseHandle.Call(h)
-	var c processMemoryCounters
-	c.CB = uint32(unsafe.Sizeof(c))
-	ok, _, _ := procGetProcessMemInfo.Call(h, uintptr(unsafe.Pointer(&c)), uintptr(unsafe.Sizeof(c)))
-	if ok == 0 {
-		return nil
-	}
-	return &c
-}
-
-func round1(f float64) float64 { return float64(int(f*10+0.5)) / 10 }
-
-func commitMB(pid int) float64 {
-	c := memCounters(pid)
-	if c == nil {
-		return -1
-	}
-	return round1(float64(c.PagefileUsage) / 1048576.0)
-}
-
-func peakCommitMB(pid int) float64 {
-	c := memCounters(pid)
-	if c == nil {
-		return -1
-	}
-	return round1(float64(c.PeakPagefileUsage) / 1048576.0)
 }
 
 // ───────────────────────── Serve：serve 会话 + watchdog ─────────────────────────
@@ -392,7 +98,7 @@ func newServe(tag string) *Serve {
 	}
 	f, err := os.Create(s.errPath)
 	if err != nil {
-		fatal("无法创建 stderr 日志 %s: %v", s.errPath, err)
+		capi.Fatal("无法创建 stderr 日志 %s: %v", s.errPath, err)
 	}
 	s.errFile = f
 	cmd := exec.Command(cli, "serve")
@@ -400,7 +106,7 @@ func newServe(tag string) *Serve {
 	stdout, _ := cmd.StdoutPipe()
 	cmd.Stderr = f
 	if err := cmd.Start(); err != nil {
-		fatal("无法启动 serve: %v", err)
+		capi.Fatal("无法启动 serve: %v", err)
 	}
 	s.cmd = cmd
 	s.pid = cmd.Process.Pid
@@ -637,7 +343,7 @@ type partAResult struct {
 }
 
 func partA(seed, ops int, doRSS bool) partAResult {
-	rng := newPyRandomInt(uint64(seed))
+	rng := pyrandom.NewByInt(uint64(seed))
 	var programs []struct {
 		name string
 		src  string
@@ -688,30 +394,30 @@ func partA(seed, ops int, doRSS bool) partAResult {
 	died:
 		for i := 0; i < ops; i++ {
 			nOps++
-			op := opsNames[rng.choices(opsWeights)]
+			op := opsNames[rng.Choices(opsWeights)]
 			var params map[string]any
 			switch op {
 			case "seek":
-				params = map[string]any{"step": seekChoices[rng.choice(len(seekChoices))]}
+				params = map[string]any{"step": seekChoices[rng.Choice(len(seekChoices))]}
 			case "payload.get":
-				choiceIdx := rng.choice(len(pgStarts) + 1)
+				choiceIdx := rng.Choice(len(pgStarts) + 1)
 				start := pgStarts[0]
 				if choiceIdx < len(pgStarts) {
 					start = pgStarts[choiceIdx]
 				} else if maxStepSeen > 0 {
 					start = maxStepSeen
 				}
-				span := pgSpans[rng.choice(len(pgSpans))]
+				span := pgSpans[rng.Choice(len(pgSpans))]
 				params = map[string]any{"start": start, "end": start + span}
 			case "breakpoints.set":
 				n := maxInt(1, srcLines)
 				k := minInt(3, n)
-				lines := rng.sample(n, k)
+				lines := rng.Sample(n, k)
 				params = map[string]any{"lines": lines}
 			case "output.delta":
-				params = map[string]any{"cursor": deltaCursors[rng.choice(len(deltaCursors))]}
+				params = map[string]any{"cursor": deltaCursors[rng.Choice(len(deltaCursors))]}
 			case "config.set":
-				params = map[string]any{"max_steps": maxStepsOpts[rng.choice(len(maxStepsOpts))]}
+				params = map[string]any{"max_steps": maxStepsOpts[rng.Choice(len(maxStepsOpts))]}
 			case "input.feed":
 				params = map[string]any{"text": "1 2 3\n"}
 			}
@@ -971,7 +677,7 @@ func main() {
 	data, _ := json.MarshalIndent(out, "", " ")
 	p := filepath.Join(here, "interaction_probe.json")
 	if err := os.WriteFile(p, data, 0o644); err != nil {
-		fatal("JSON 写出失败: %v", err)
+		capi.Fatal("JSON 写出失败: %v", err)
 	}
 	fmt.Printf("\nJSON 已写出: %s\n耗时: %.1fs\n", p, time.Since(start).Seconds())
 

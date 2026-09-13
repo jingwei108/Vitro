@@ -141,7 +141,7 @@ def main() -> int:
     print("== 基线：cargo build --release + 影子 + cargo test ==", flush=True)
     b = run(["cargo", "build", "--release"], NATIVE, 1800, LOGS / "baseline_build.log")
     print(f"  build exit={b['exit']} ({b['wall_s']}s)", flush=True)
-    s = run(["go", "run", "scripts/shadow_verify.go", "--jobs", "8"],
+    s = run(["go", "run", "./scripts/shadow_verify", "--jobs", "8"],
             ROOT, 900, LOGS / "baseline_shadow.log")
     base_shadow = parse_shadow(s["out"])
     print(f"  影子基线 {base_shadow}", flush=True)
@@ -180,7 +180,7 @@ def main() -> int:
                 rec["verdict"] = "build_failed（突变不可编译，不计入 margin）"
                 continue
 
-            s = run(["go", "run", "scripts/shadow_verify.go",
+            s = run(["go", "run", "./scripts/shadow_verify",
                      "--jobs", "8"], ROOT, 900, LOGS / f"{m['id']}_shadow.log")
             sh = parse_shadow(s["out"])
             rec["shadow"] = sh
@@ -218,7 +218,7 @@ def main() -> int:
     # 最终：还原后重建并复跑，证明修复与防线回到基线
     print("\n== 还原验证：重建 + 影子复跑 ==", flush=True)
     b = run(["cargo", "build", "--release"], NATIVE, 1800, LOGS / "restore_build.log")
-    s = run(["go", "run", "scripts/shadow_verify.go", "--jobs", "8"],
+    s = run(["go", "run", "./scripts/shadow_verify", "--jobs", "8"],
             ROOT, 900, LOGS / "restore_shadow.log")
     restore = {"build_exit": b["exit"], "shadow": parse_shadow(s["out"]), "shadow_exit": s["exit"]}
     print(f"  restore {restore}", flush=True)

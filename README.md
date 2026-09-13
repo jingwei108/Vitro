@@ -111,8 +111,8 @@ cd native && cargo test --workspace --all-features
 cd native && cargo clippy --workspace --all-targets --all-features -- -D warnings
 
 # 6. 测试防线（Shadow Verification：与 Clang / Clang++ 对照 stdout）
-go run scripts/shadow_verify.go
-go run scripts/shadow_verify_cpp.go
+go run ./scripts/shadow_verify
+go run ./scripts/shadow_verify_cpp
 python scripts/serve_smoke.py
 ```
 

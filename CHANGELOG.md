@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (capi)：`cide_get_compile_errors_length`（ABI 1.2.0）
+
+- 新增编译错误 JSON 的字节长度出口（不含 NUL；无错误返回 0），与 `cide_get_compile_errors`
+  配套——驱动侧先取长度再定长读取，**根治** `ptrToGoString` 变长窗口扫描对短于
+  窗口的分配构成越界读的瑕疵（PR 评审第 1 项）。按"加函数 = minor"承诺升
+  `CIDE_ABI_VERSION` 1.1.0 → **1.2.0**；新增 capi 集成测试
+  `test_compile_errors_length_matches_string`（干净会话 0/null、失败会话 length 与
+  NUL 串字节数一致）。
+
+### Changed (tools)：D5 收尾重构——scripts 建共享包 + 白名单外置（PR 评审第 2/3 项）
+
+PR 评审认定的三项技术债全部落地（评审意见：ptrToGoString UB 假设 / v0.1 白名单
+双份硬编码 / serve 封装 ×8 份重复）：
+
+- **仓库根新建 `go.mod`**（`module cide`，零第三方依赖不变），新增共享包
+  `scripts/internal/{capi,pyrandom,probeutil}`：DLL 绑定 + 字符串读取 + 产物新鲜度、
+  CPython random 逐比特复刻（MT19937 双 seeding 路径单源）、探针 CLI 定位 + psapi
+  采样。六个 Go 驱动迁入各自子目录（`scripts/shadow_verify/main.go` 等，
+  git mv 保历史），同目录 package main 符号冲突随之消除，`go vet ./scripts/...`
+  达成全绿。删除跨文件重复约 **600 行**（pyRandom 整份 ×2、capi helper ×3-4、
+  psapi 采样 ×3、路径探测 ×6）。
+- **v0.1 字段白名单外置** `scripts/replay/v01_payload_fields.json`：Go/Python 两个
+  回放驱动共读同一份，加载失败/schema 不符 fail loud（exit 2）。**有意不从引擎
+  运行时拉取**：白名单是 S5 断言的"验收快照"，运行时跟随会取消漂移检测语义
+  （评审建议的部分采纳理由见 AGENTS.md D5 收尾重构段）。
+- **capi.Load 统一绑定全部符号**（含 `cide_get_compile_errors_length`），
+  shadow C/C++/random_diff 的编译错误读取全部改定长路径；`ptrToGoString` 剩余
+  调用方（engine_version / runtime_error）为短而有界串，UB 假设已在
+  `internal/capi` 头注声明（评审第 1 项的注释义务 + 根治一并落地）。
+- **有意保留**：serve 会话封装 ×3（replay / interaction_probe / seek_accumulation
+  各自的 stderr 捕获、退出检测、采样钩子语义有差异），留待单独一站统一；
+  `gosmoke/cabi_smoke.go` 维持单文件最小冒烟形态不动。
+- CI 同步：`go run ./scripts/shadow_verify` / `./scripts/shadow_verify_cpp`，
+  缓存 key 增列 `hashFiles('scripts/internal/**/*.go')`。
+
+## [Unreleased]
+
 ### Changed (D5 语言迁移最后一站：C 影子验证主驱动 shadow_verify.py Python→Go)
 
 唯一硬门禁（防线 1 主驱动）完成迁移，**D5 六站全部收官**：

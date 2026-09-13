@@ -141,8 +141,8 @@ Cide 采用**五条分层协作的测试防线**，核心哲学：*测试不是�
 - **门禁**：自 2026-09-06 起为 CI 硬门禁——Clang 预检缺失时 fail fast（exit 2）；存在非预期差异（compile_gap / runtime_gap / output_gap）时 exit 1；match / known_issue / cide_better 视为通过。`KNOWN_FAILURE_CASES` 与 E2E 防线的 `KNOWN_TEMPLATE_FAILURES` 常量对齐（双向监控：任一防线转绿需同步移除）。
 - **覆盖**：321 个 Baseline 用例 + 82 个模板生成用例 + 81 个 K&R 用例 + 138 个 LeetCode 题 + 14 个 gap 用例（C Shadow Verification 合计 636 个用例，完全匹配 617、cide_better 16、known_issue 3（`function_pointer_sizeof` / `sizeof_array_param` 存量 "bug" 分类 + `spfa_default` 模板已知偏差；`bTree_default` 已转为 match，见 `E2E_FAILURES.md`）；统计口径含 match + cide_better + known_issue；2026-09-11 复测）；100 个 C++ 用例（C++ Shadow Verification，98 个一致 + 2 个已记录的 `clang_compile_fail`：`cpp_cide_vec_class` / `cpp_cide_list_class` 使用 Cide 内置容器无法被 Clang++ 直接编译；2026-06-28 实测，2026-09-11 复测仍一致）
 - **标准输入（2026-09-11 新增能力）**：用例可自带同名 `.in` 文件，Clang 与 Cide 喂**同一份字节**（缓存 key 纳入真实 stdin）。此前防线一律批量运行且不喂 stdin —— K&R 目录里 29 个 `.in` 从未被使用，两侧"都无输入"造成的**虚假 match**；启用后立即暴露"输入注入丢换行"缺陷（`getchar()` 读不到 `'\n'`，19 例 `output_gap`），已随 `RuntimeState::split_stdin` 统一修复
-- **输出口径（E-P1-5，2026-09-11）**：比对读的是引擎的**纯程序 stdout 通道**（capi `cide_get_program_output*`，ABI 1.1.0）——引擎附注（"程序运行完成，返回值：N"、内存泄漏报告、教学警告）与 stderr 各有独立通道。**驱动侧不得再对输出做正则清洗**：此前十余处清洗规则语义互不一致，且在教学程序自己打印同类文本时会误删真实输出（假阳性 `output_gap`），现全部废除。读取入口统一在驱动内置的结构化通道封装（Go 版 `scripts/shadow_verify.go` 的 `readChannel`/`ptrToGoString`；原 Python 伴生模块 `cide_output.py` 已随主驱动退役）；DLL 缺新符号时 fail fast，不退回旧清洗。回归用例 `baseline/engine_note_lookalike.c` 固化该口径
-- **驱动**：`go run scripts/shadow_verify.go`（C 侧主驱动，2026-09-13 起 D5 语言迁移**最后一站**：与 Python 版双轨对账全维度一致后接管 CI，`shadow_verify.py` 退役删除。形态：两段流水线——Clang 侧并发（`--jobs N`，0=自动 min(CPU,16)），Cide 侧互斥串行（DLL 非线程安全实证）；实测冷启动全量重算 663 用例 ~26s、缓存热跑 ~5s。`--refresh-clang` 强制全量重算（CI 夜间防漂移）；`--rebuild` 在 release DLL 比引擎源码旧时自动重建；Clang 结果缓存为 Go 自有 schema（`go1`），与历史 Python 缓存同目录共存、key 空间不相交；瞬态环境异常（超时/启动失败/0xC0000005 映像崩溃）自动重试且**不落缓存**）、`go run scripts/shadow_verify_cpp.go`（C++ 侧驱动，2026-09-12 起 D5 第一站：Clang 并发 16 路，**24.75s → 5.2s**；工作目录自管 `.shadow_cpp_tmp/`，已 gitignore）
+- **输出口径（E-P1-5，2026-09-11）**：比对读的是引擎的**纯程序 stdout 通道**（capi `cide_get_program_output*`，ABI 1.1.0）——引擎附注（"程序运行完成，返回值：N"、内存泄漏报告、教学警告）与 stderr 各有独立通道。**驱动侧不得再对输出做正则清洗**：此前十余处清洗规则语义互不一致，且在教学程序自己打印同类文本时会误删真实输出（假阳性 `output_gap`），现全部废除。读取入口统一在驱动内置的结构化通道封装（共享包 `scripts/internal/capi` 的 `ReadChannel`/`PtrToGoString`；原 Python 伴生模块 `cide_output.py` 已随主驱动退役）；DLL 缺新符号时 fail fast，不退回旧清洗。回归用例 `baseline/engine_note_lookalike.c` 固化该口径
+- **驱动**：`go run ./scripts/shadow_verify`（C 侧主驱动，2026-09-13 起 D5 语言迁移**最后一站**：与 Python 版双轨对账全维度一致后接管 CI，`shadow_verify.py` 退役删除。形态：两段流水线——Clang 侧并发（`--jobs N`，0=自动 min(CPU,16)），Cide 侧互斥串行（DLL 非线程安全实证）；实测冷启动全量重算 663 用例 ~26s、缓存热跑 ~5s。`--refresh-clang` 强制全量重算（CI 夜间防漂移）；`--rebuild` 在 release DLL 比引擎源码旧时自动重建；Clang 结果缓存为 Go 自有 schema（`go1`），与历史 Python 缓存同目录共存、key 空间不相交；瞬态环境异常（超时/启动失败/0xC0000005 映像崩溃）自动重试且**不落缓存**）、`go run ./scripts/shadow_verify_cpp`（C++ 侧驱动，2026-09-12 起 D5 第一站：Clang 并发 16 路，**24.75s → 5.2s**；工作目录自管 `.shadow_cpp_tmp/`，已 gitignore）
 - **提速设施（2026-09-11 建立，Go 驱动延续）**：Clang Golden 结果缓存（key = 源码 + stdin + clang 版本 + 参数 + 预设文件）+ 并行执行；缓存与运行目录为 `.clang_cache/` / `.shadow_tmp/`（已 gitignore）——**改动用例后无需手动清缓存**（源码哈希变化自动失效）。**⚠️ 并行化对顺序敏感**：用例加载必须确定性（排序 + 按用例序重排结果），否则会出现"结果错配但门禁仍绿"的静默失败。**口径锚点（迁移中实证）**：Python `pathlib` 排序在 Windows 上是 casefold 序、Linux 上是码点序（平台相关缺陷），Go 版统一 casefold；Windows 高并发覆盖同名 `test.exe` 会触发映像加载竞态（确定性 0xC0000005），编译产物必须 per-case 唯一命名
 - **报告**：`native/tests/shadow_verification/reports/`
 
@@ -220,7 +220,7 @@ Cide 采用**五条分层协作的测试防线**，核心哲学：*测试不是�
 
 形态约定：
 
-- **`go run <file>.go` 单文件可跑**，不需要 project/module 结构；只有多文件共享时才建 `go.mod`；
+- **仓库根已有 `go.mod`**（`module cide`，2026-09-13 收尾重构引入；`go run ./scripts/<name>` 包路径形式，零第三方依赖不变）：跨驱动共享的绑定与口径**只允许**落在 `scripts/internal/` 包——`capi`（DLL 绑定 + 字符串读取 + 产物新鲜度）、`pyrandom`（CPython random 逐比特复刻）、`probeutil`（探针 CLI 定位 + psapi 采样）。新驱动默认 import 共享包，禁止再复制 helper（口径分叉是本仓库顽疾，重复即温床）；驱动各占一个子目录（`scripts/shadow_verify/main.go` 等），`go vet ./scripts/...` 必须干净；`pyrandom` 任意改动都可能使既有基线失效，必须附双轨对账证据；
 - **零第三方依赖**（只用标准库：`encoding/json` / `os/exec` / `path/filepath` / `sync`），必须能在离线 CI 直接跑；
 - **规则、期望值等"资产"外置为 JSON**，代码只做解释器——人审数据，不审代码；
 - 自带自检的脚本（如 oracle 的事件类型清单 × 规则表 key 对账）必须 **fail loud**：自检不过直接拒绝给出判定，**禁止静默 default**。
@@ -228,7 +228,8 @@ Cide 采用**五条分层协作的测试防线**，核心哲学：*测试不是�
 既有 Python 脚本的处置：
 
 - **不强制迁移、不冻结修改**；但触碰某脚本时若改动量已接近重写，优先用 Go 重写。**D5 进度（2026-09-13，全部完成 ✅）**：① 试点 `shadow_verify_cpp.py` 完成——`scripts/shadow_verify_cpp.go` 双轨对账一致（94 用例）后接管 CI，Clang 并发 16 路 **24.75s → 5.2s**；② 第二站 `replay_s1_s5.py` 完成——`scripts/replay/replay_s1_s5.go` 双轨对账一致（61 条断言状态与编号逐行一致），并带 `--selftest` 注入自检（J9）；③ 第三站探针集 `random_diff.py` 完成——`scripts/core_asset_verdict/random_diff.go` 以 **MT19937 逐比特复刻**（同 seed 同用例集合）双轨对账一致（1000 例 verdict+expected 逐用例一致），首次建立可复现基线；④⑤ 交互切面探针、资源域长跑探针完成；⑥ **最后一站主驱动 `shadow_verify.py` 完成（2026-09-13）**——`scripts/shadow_verify.go` 与 Python 版双轨对账 **PASS**（663 用例集合/顺序/逐用例 diff_type/expected/summary/category_frequency/clang_version 全一致），CI 已切换，`shadow_verify.py` / `cide_output.py` / `extract_shadow_cases.py` 退役删除。各站 Go 版均含启动自检 fail loud + 产物新鲜度门禁。**⚠️ 实证发现**：DLL 并发调用 → 堆损坏（引擎非线程安全），Cide 侧调用必须互斥；
-- ~~迁移 `shadow_verify.py`（唯一硬门禁、105KB、承载 6 类隐性口径）必须新旧双轨同跑，`663 / match 644 / known_issue 3 / cide_better 16 / 0 非预期差异` 五项一致才允许切换~~ — **已完成（2026-09-13）**：对账五项全一致后切换；迁移中新挖出三类隐性口径（`pathlib` 排序的平台差异、Go `ExitError` 与 Python 异常模型的结构性错位、同名 exe 映像竞态），均已锚定为 Go 版口径并记录于 `scripts/shadow_verify.go` 头注；
+- ~~迁移 `shadow_verify.py`（唯一硬门禁、105KB、承载 6 类隐性口径）必须新旧双轨同跑，`663 / match 644 / known_issue 3 / cide_better 16 / 0 非预期差异` 五项一致才允许切换~~ — **已完成（2026-09-13）**：对账五项全一致后切换；迁移中新挖出三类隐性口径（`pathlib` 排序的平台差异、Go `ExitError` 与 Python 异常模型的结构性错位、同名 exe 映像竞态），均已锚定为 Go 版口径并记录于 `scripts/shadow_verify/main.go` 头注；
+- **D5 收尾重构（2026-09-13，PR 评审三项全部落地）**：① `ptrToGoString` 变长窗口扫描的 UB 假设已声明，编译错误改走新增的 `cide_get_compile_errors_length`（ABI **1.2.0**，加函数 = minor）定长读取根治，剩余调用方（engine_version / runtime_error）均为短而有界串；② scripts 建根 `go.mod` + `internal/{capi,pyrandom,probeutil}` 共享包，六驱动迁入各自子目录，删除 DLL 绑定/字符串读取/pyRandom/psapi 采样等 **~600 行**跨文件重复（pyRandom 整份 ×2、capi helper ×3-4）；③ v0.1 字段白名单外置 `scripts/replay/v01_payload_fields.json`（Go/Py 共读、fail loud，语义快照随 git 版本化——**不从引擎运行时拉取**，保持 S5 断言的"验收快照"检测语义）。剩余已知重复：serve 会话封装 ×3（replay / interaction / seek 各自的 stderr/退出语义有差异），待单独一站统一；
 - 保留的 Python **判定型脚本**仍须满足 **J9**：有"注入必然违反 → 必须变红"的埋雷记录（这条是语言无关义务）。
 
 > 完整依据与迁移顺序见 [`G-质量与裁定/核心资产重构裁定.md`](G-质量与裁定/核心资产重构裁定.md) §13（D1 防线自身 / D5 工具链语言）。
@@ -321,8 +322,8 @@ cd native && cargo test --workspace --all-features
 cd native && cargo clippy --workspace --all-targets --all-features -- -D warnings
 
 # Shadow 防线（C / C++）
-go run scripts/shadow_verify.go
-go run scripts/shadow_verify_cpp.go
+go run ./scripts/shadow_verify
+go run ./scripts/shadow_verify_cpp
 
 # serve 协议冒烟
 cargo build --bin cide_cli && python scripts/serve_smoke.py

@@ -12,10 +12,12 @@
 //   - 看门狗击杀用进程句柄直接 Terminate（Python 经 taskkill 子进程）；
 //   - 采样口径同（驱动侧 psapi commit_mb，30ms 间隔）；数值是测量值，双轨不要求相等。
 //
-// 用法：go run scripts/core_asset_verdict/seek_accumulation.go [--cap-mb 1200]
+// 用法：go run ./scripts/core_asset_verdict/seek_accumulation [--cap-mb 1200]
 package main
 
 import (
+	"cide/scripts/internal/probeutil"
+
 	"bufio"
 	"bytes"
 	"encoding/json"
@@ -26,101 +28,16 @@ import (
 	"path/filepath"
 	"strings"
 	"sync/atomic"
-	"syscall"
 	"time"
-	"unsafe"
 )
 
 var (
-	here = mustFindHere()
-	cli  = mustFindCLI()
+	here = probeutil.VerdictDir()
+	cli  = probeutil.MustFindCLI()
 	work = filepath.Join(here, ".longrun")
 )
 
-func mustFindHere() string {
-	wd, err := os.Getwd()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "无法确定工作目录:", err)
-		os.Exit(2)
-	}
-	dir := wd
-	for i := 0; i < 5; i++ {
-		ok := true
-		for _, marker := range []string{"native", "scripts"} {
-			if fi, err := os.Stat(filepath.Join(dir, marker)); err != nil || !fi.IsDir() {
-				ok = false
-			}
-		}
-		if ok {
-			return filepath.Join(dir, "scripts", "core_asset_verdict")
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			break
-		}
-		dir = parent
-	}
-	fmt.Fprintln(os.Stderr, "请在仓库内运行：go run scripts/core_asset_verdict/seek_accumulation.go")
-	os.Exit(2)
-	return ""
-}
-
-func mustFindCLI() string {
-	native := filepath.Join(filepath.Dir(filepath.Dir(here)), "native")
-	for _, rel := range []string{filepath.Join("target", "release", "cide_cli.exe"), filepath.Join("target", "debug", "cide_cli.exe")} {
-		p := filepath.Join(native, rel)
-		if _, err := os.Stat(p); err == nil {
-			return p
-		}
-	}
-	fmt.Fprintln(os.Stderr, "FATAL: 找不到 cide_cli.exe（先 cargo build --release）")
-	os.Exit(2)
-	return ""
-}
-
 // ── psapi 采样（口径同 winmem.py） ──
-
-type processMemoryCounters struct {
-	CB             uint32
-	PageFaultCount uint32
-	PeakWorkingSetSize, WorkingSetSize,
-	QuotaPeakPagedPoolUsage, QuotaPagedPoolUsage,
-	QuotaPeakNonPagedPoolUsage, QuotaNonPagedPoolUsage,
-	PagefileUsage, PeakPagefileUsage uintptr
-}
-
-var (
-	kernel32        = syscall.NewLazyDLL("kernel32.dll")
-	procOpenProc    = kernel32.NewProc("OpenProcess")
-	procCloseHandle = kernel32.NewProc("CloseHandle")
-	procTerminate   = kernel32.NewProc("TerminateProcess")
-	psapiDLL        = syscall.NewLazyDLL("psapi.dll")
-	procGetMemInfo  = psapiDLL.NewProc("GetProcessMemoryInfo")
-)
-
-func commitMB(pid int) float64 {
-	const processQueryLimitedInformation = 0x1000
-	h, _, _ := procOpenProc.Call(processQueryLimitedInformation, 0, uintptr(pid))
-	if h == 0 {
-		return -1
-	}
-	defer procCloseHandle.Call(h)
-	var c processMemoryCounters
-	c.CB = uint32(unsafe.Sizeof(c))
-	ok, _, _ := procGetMemInfo.Call(h, uintptr(unsafe.Pointer(&c)), uintptr(unsafe.Sizeof(c)))
-	if ok == 0 {
-		return -1
-	}
-	return float64(c.PagefileUsage) / 1048576.0
-}
-
-func terminatePID(pid int) {
-	h, _, _ := procOpenProc.Call(0x0001 /*PROCESS_TERMINATE*/, 0, uintptr(pid))
-	if h != 0 {
-		procTerminate.Call(h, 1)
-		procCloseHandle.Call(h)
-	}
-}
 
 // ── Session：serve 会话 + 采样看门狗 ──
 
@@ -173,12 +90,12 @@ func newSession(capMB float64) *session {
 				if s.exited.Load() {
 					return
 				}
-				c := commitMB(s.pid)
+				c := probeutil.CommitMBRaw(s.pid)
 				if c > 0 {
 					s.samples = append(s.samples, c)
 					if c > capMB && !s.killed {
 						s.killed = true
-						terminatePID(s.pid)
+						probeutil.KillPID(s.pid)
 						return
 					}
 				}
@@ -214,7 +131,7 @@ func (s *session) req(method string, params map[string]any) map[string]any {
 	return resp
 }
 
-func (s *session) commit() float64 { return commitMB(s.pid) }
+func (s *session) commit() float64 { return probeutil.CommitMBRaw(s.pid) }
 
 func (s *session) close() string {
 	s.stop <- struct{}{}
@@ -250,7 +167,7 @@ func seekAccumulation(capMB float64) map[string]any {
 		after := s.commit()
 		time.Sleep(300 * time.Millisecond)
 		settled := s.commit()
-		wallS := sec(time.Since(t0))
+		wallS := probeutil.Sec(time.Since(t0))
 		var success any
 		if r != nil {
 			if m, ok := r["result"].(map[string]any); ok {
@@ -258,8 +175,8 @@ func seekAccumulation(capMB float64) map[string]any {
 			}
 		}
 		timeline = append(timeline, map[string]any{
-			"seek": t, "before_mb": round1(before), "after_mb": round1(after),
-			"settled_mb": round1(settled), "wall_s": wallS, "success": success,
+			"seek": t, "before_mb": probeutil.Round1(before), "after_mb": probeutil.Round1(after),
+			"settled_mb": probeutil.Round1(settled), "wall_s": wallS, "success": success,
 		})
 		fmt.Printf("  seek(%7d) before=%8.1fMB after=%8.1fMB settled=%8.1fMB (%vs)\n",
 			t, before, after, settled, wallS)
@@ -274,7 +191,7 @@ func seekAccumulation(capMB float64) map[string]any {
 			peak = v
 		}
 	}
-	out["peak_commit_mb"] = round1(peak)
+	out["peak_commit_mb"] = probeutil.Round1(peak)
 	out["stderr_tail"] = s.close()
 	return out
 }
@@ -293,7 +210,7 @@ func mallocTiming() []map[string]any {
 		cmd.Stdout = &stdout
 		cmd.Stderr = os.Stderr
 		runErr := cmd.Run()
-		wall := sec(time.Since(t0))
+		wall := probeutil.Sec(time.Since(t0))
 		exit := 0
 		if cmd.ProcessState != nil {
 			exit = cmd.ProcessState.ExitCode()
@@ -315,16 +232,12 @@ func mallocTiming() []map[string]any {
 		na, nb := float64(a["n"].(int)), float64(b["n"].(int))
 		wa, wb := a["wall_s"].(float64), b["wall_s"].(float64)
 		out = append(out, map[string]any{
-			"exponent_estimate": round3(math.Log(wb/wa) / math.Log(nb/na)),
+			"exponent_estimate": probeutil.Round3(math.Log(wb/wa) / math.Log(nb/na)),
 			"basis":             fmt.Sprintf("%d->%d", a["n"], b["n"]),
 		})
 	}
 	return out
 }
-
-func round1(f float64) float64    { return float64(int(f*10+0.5)) / 10 }
-func round3(f float64) float64    { return float64(int(f*1000+0.5)) / 1000 }
-func sec(d time.Duration) float64 { return float64(int(d.Seconds()*100)) / 100 }
 
 func main() {
 	capMB := 1200.0
@@ -350,5 +263,5 @@ func main() {
 		fmt.Fprintln(os.Stderr, "FATAL:", err)
 		os.Exit(2)
 	}
-	fmt.Printf("\nJSON 已写出: %s\n耗时: %.1fs\n", p, sec(time.Since(start)))
+	fmt.Printf("\nJSON 已写出: %s\n耗时: %.1fs\n", p, probeutil.Sec(time.Since(start)))
 }

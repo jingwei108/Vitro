@@ -1,0 +1,26 @@
+{
+  "schema": "v0.1",
+  "_comment": "STEP_PAYLOAD schema v0.1 字段白名单（单源资产）：S5 断言的判据，Go/Python 两个回放驱动共读同一份。语义快照随本文件 git 版本化——schema 激活 v0.2 时在此登记新字段，两驱动自动跟随；修改后须附 replay --selftest 与 61 断言全量回放证据（字段清单与 docs/spec/STEP_PAYLOAD_SCHEMA_V0_1.md §字段表对齐）。",
+  "v01_payload_fields": [
+    "step_index",
+    "code_line",
+    "func_name",
+    "semantic_label",
+    "algorithm_step",
+    "local_vars",
+    "call_stack",
+    "vis_events",
+    "heatmap_line",
+    "heatmap_count",
+    "accessed_vars",
+    "array_snapshots",
+    "pointer_snapshots",
+    "root_cause_hint"
+  ],
+  "reserved_fields": [
+    "handler_depth",
+    "unwinding",
+    "unwind_frames_left",
+    "current_exception"
+  ]
+}

@@ -33,12 +33,23 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 CLI_DEFAULT = PROJECT_ROOT / "native" / "target" / "release" / "cide_cli.exe"
 
-V01_PAYLOAD_FIELDS = {
-    "step_index", "code_line", "func_name", "semantic_label", "algorithm_step",
-    "local_vars", "call_stack", "vis_events", "heatmap_line", "heatmap_count",
-    "accessed_vars", "array_snapshots", "pointer_snapshots", "root_cause_hint",
-}
-RESERVED_FIELDS = {"handler_depth", "unwinding", "unwind_frames_left", "current_exception"}
+def _load_v01_fields():
+    """v0.1 字段白名单单源资产（与 replay_s1_s5.go 共读 v01_payload_fields.json）。
+
+    加载失败 / 为空 / schema 不符一律 fail loud（exit 2）：白名单是 S5 断言的
+    判据，静默降级等于拔掉防线 5 的牙。语义快照随该 JSON 文件 git 版本化。
+    """
+    p = Path(__file__).resolve().parent / "v01_payload_fields.json"
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as e:
+        raise SystemExit(f"FATAL: 读取字段白名单失败 {p}: {e}")
+    if data.get("schema") != "v0.1" or not data.get("v01_payload_fields") or not data.get("reserved_fields"):
+        raise SystemExit(f"FATAL: 字段白名单 {p} schema/内容不合法")
+    return frozenset(data["v01_payload_fields"]), frozenset(data["reserved_fields"])
+
+
+V01_PAYLOAD_FIELDS, RESERVED_FIELDS = _load_v01_fields()
 
 
 class Serve:

@@ -7,7 +7,7 @@ C++ Shadow Verification 框架
 用法:
     python scripts/shadow_verify_cpp.py
 
-**已被 Go 版取代（2026-09-12，D5 语言迁移第一站）**：`go run scripts/shadow_verify_cpp.go`
+**已被 Go 版取代（2026-09-12，D5 语言迁移第一站）**：`go run ./scripts/shadow_verify_cpp`
 与本版双轨对账一致（94 用例 / 判定与 stdout 内容逐项一致）后接管 CI。
 本文件保留为**双轨对照基准**——Go 版判定异常时用它复现归因；日常运行请用 Go 版。
 """

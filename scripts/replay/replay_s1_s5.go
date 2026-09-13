@@ -19,6 +19,8 @@
 package main
 
 import (
+	"cide/scripts/internal/capi"
+
 	"bufio"
 	"encoding/json"
 	"flag"
@@ -32,7 +34,6 @@ import (
 	"strings"
 	"syscall"
 	"time"
-	"unsafe"
 )
 
 // ---------------------------------------------------------------- 路径
@@ -43,36 +44,9 @@ var (
 )
 
 func init() {
-	// Go 无 __file__ 锚点：按"包含 native/ 与 scripts/ 的目录"向上探测项目根
-	wd, err := os.Getwd()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "无法确定工作目录:", err)
-		os.Exit(2)
-	}
-	dir := wd
-	for i := 0; i < 4; i++ {
-		if isProjectRoot(dir) {
-			cliDefault = filepath.Join(dir, "native", "target", "release", "cide_cli.exe")
-			dllPath = filepath.Join(dir, "native", "target", "release", "cide_native.dll")
-			return
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			break
-		}
-		dir = parent
-	}
-	fmt.Fprintln(os.Stderr, "请在仓库内运行本脚本：go run scripts/replay/replay_s1_s5.go")
-	os.Exit(2)
-}
-
-func isProjectRoot(dir string) bool {
-	for _, marker := range []string{"native", "scripts"} {
-		if fi, err := os.Stat(filepath.Join(dir, marker)); err != nil || !fi.IsDir() {
-			return false
-		}
-	}
-	return true
+	root := capi.ProjectRoot()
+	cliDefault = filepath.Join(root, "native", "target", "release", "cide_cli.exe")
+	dllPath = filepath.Join(root, "native", "target", "release", "cide_native.dll")
 }
 
 // ---------------------------------------------------------------- JSON 访问 helper
@@ -137,15 +111,15 @@ func newServe(cliPath string) *Serve {
 	cmd := exec.Command(cliPath, "serve")
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
-		fatal("serve stdin pipe: %v", err)
+		capi.Fatal("serve stdin pipe: %v", err)
 	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		fatal("serve stdout pipe: %v", err)
+		capi.Fatal("serve stdout pipe: %v", err)
 	}
 	cmd.Stderr = os.Stderr
 	if err := cmd.Start(); err != nil {
-		fatal("无法启动 %s serve：%v（请先 cd native && cargo build --release）", cliPath, err)
+		capi.Fatal("无法启动 %s serve：%v（请先 cd native && cargo build --release）", cliPath, err)
 	}
 	return &Serve{
 		cmd:    cmd,
@@ -165,18 +139,18 @@ func (s *Serve) request(method string, params map[string]any) map[string]any {
 	}
 	line, err := json.Marshal(req)
 	if err != nil {
-		fatal("请求序列化失败: %v", err)
+		capi.Fatal("请求序列化失败: %v", err)
 	}
 	if _, err := s.stdin.Write(append(line, '\n')); err != nil {
-		fatal("写 serve stdin 失败（进程已退出？）: %v", err)
+		capi.Fatal("写 serve stdin 失败（进程已退出？）: %v", err)
 	}
 	respLine, err := s.stdout.ReadBytes('\n')
 	if err != nil && len(respLine) == 0 {
-		fatal("serve 进程提前退出（无响应）：%v", err)
+		capi.Fatal("serve 进程提前退出（无响应）：%v", err)
 	}
 	var resp map[string]any
 	if err := json.Unmarshal(respLine, &resp); err != nil {
-		fatal("响应解析失败 %q: %v", string(respLine), err)
+		capi.Fatal("响应解析失败 %q: %v", string(respLine), err)
 	}
 	resp["id"] = mnum(resp["id"]) // 统一数字形态，A1 的 id 比较用 float64
 	s.frames = append(s.frames, frame{req: req, resp: resp})
@@ -837,15 +811,41 @@ func runS3A16(cliPath string, rep *Report, p3Src string) {
 
 // ---------------------------------------------------------------- S5：预留位缺省语义
 
-var v01PayloadFields = map[string]bool{
-	"step_index": true, "code_line": true, "func_name": true, "semantic_label": true,
-	"algorithm_step": true, "local_vars": true, "call_stack": true, "vis_events": true,
-	"heatmap_line": true, "heatmap_count": true, "accessed_vars": true, "array_snapshots": true,
-	"pointer_snapshots": true, "root_cause_hint": true,
-}
+// v01PayloadFields / reservedFields：v0.1 字段白名单，单源资产
+// v01_payload_fields.json（与 replay_s1_s5.py 共读同一份）。语义快照随该文件
+// git 版本化——加载失败/为空/schema 不符一律 fail loud：白名单是 S5 断言的
+// 判据，静默降级等于拔掉防线 5 的牙。
+var (
+	v01PayloadFields, reservedFields = loadV01Fields()
+)
 
-var reservedFields = map[string]bool{
-	"handler_depth": true, "unwinding": true, "unwind_frames_left": true, "current_exception": true,
+func loadV01Fields() (v01, reserved map[string]bool) {
+	path := filepath.Join(capi.ProjectRoot(), "scripts", "replay", "v01_payload_fields.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		capi.Fatal("读取字段白名单失败 %s: %v", path, err)
+	}
+	var parsed struct {
+		Schema           string   `json:"schema"`
+		V01PayloadFields []string `json:"v01_payload_fields"`
+		ReservedFields   []string `json:"reserved_fields"`
+	}
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		capi.Fatal("字段白名单 JSON 非法 %s: %v", path, err)
+	}
+	if parsed.Schema != "v0.1" || len(parsed.V01PayloadFields) == 0 || len(parsed.ReservedFields) == 0 {
+		capi.Fatal("字段白名单 %s schema/内容不合法（schema=%q, v0.1 字段 %d, 预留字段 %d）",
+			path, parsed.Schema, len(parsed.V01PayloadFields), len(parsed.ReservedFields))
+	}
+	v01 = map[string]bool{}
+	for _, f := range parsed.V01PayloadFields {
+		v01[f] = true
+	}
+	reserved = map[string]bool{}
+	for _, f := range parsed.ReservedFields {
+		reserved[f] = true
+	}
+	return v01, reserved
 }
 
 func runS5(s *Serve, rep *Report, payloads []map[string]any, anchor string) {
@@ -915,31 +915,15 @@ func readEngineVersion(path string) string {
 	procVer := dll.NewProc("cide_engine_version")
 	procFree := dll.NewProc("cide_free_string")
 	if procVer.Find() != nil {
-		fatal("DLL 缺少 cide_engine_version: %s", path)
+		capi.Fatal("DLL 缺少 cide_engine_version: %s", path)
 	}
 	raw, _, _ := procVer.Call()
 	if raw == 0 {
 		return ""
 	}
-	s := ptrToGoString(raw)
+	s := capi.PtrToGoString(raw)
 	procFree.Call(raw)
 	return s
-}
-
-func ptrToGoString(ptr uintptr) string {
-	if ptr == 0 {
-		return ""
-	}
-	for win := 4096; win <= 1<<20; win *= 2 {
-		s := unsafe.Slice((*byte)(unsafe.Pointer(ptr)), win)
-		for i, b := range s {
-			if b == 0 {
-				return string(s[:i])
-			}
-		}
-	}
-	fatal("C 字符串超过 1MB 扫描上限（指针 0x%x），拒绝静默截断", ptr)
-	return ""
 }
 
 // ---------------------------------------------------------------- 前置门禁
@@ -1057,7 +1041,7 @@ func selfTest() {
 		}
 	}
 	if nFail > 0 {
-		fatal("selftest %d 条注入未变红，判定口径已破坏，拒绝运行", nFail)
+		capi.Fatal("selftest %d 条注入未变红，判定口径已破坏，拒绝运行", nFail)
 	}
 	fmt.Printf("selftest：判定口径 %d 条注入断言全部通过\n", len(checks))
 }
@@ -1068,11 +1052,6 @@ func isContainer(v any) bool {
 		return true
 	}
 	return false
-}
-
-func fatal(format string, args ...any) {
-	fmt.Fprintf(os.Stderr, "FATAL: "+format+"\n", args...)
-	os.Exit(2)
 }
 
 // ---------------------------------------------------------------- main
