@@ -1,7 +1,18 @@
 use super::*;
 
 impl Parser {
-    pub(crate) fn parse_unary(&mut self) -> Expr {
+pub(crate) fn parse_unary(&mut self) -> Expr {
+        // U1#8：本通道递归（一元表达式）不必然经过 parse_primary 的深度防护，
+        // 独立挂 enter_depth——超限返回占位并跳到 EOF 让外层循环收敛。
+        if !self.enter_depth("一元") {
+            return Expr::default();
+        }
+        let r = self.parse_unary_body();
+        self.leave_depth();
+        r
+    }
+
+        fn parse_unary_body(&mut self) -> Expr {
         if self.match_token(TokenType::Sizeof) {
             return self.parse_sizeof();
         }
@@ -144,6 +155,17 @@ impl Parser {
     }
 
     pub(crate) fn parse_abstract_declarator(&mut self) -> Option<DeclaratorNode> {
+        // U1#8：抽象声明符递归（sizeof(int(*)(*)…) 深链）防御性挂深度防护
+        //（外部审查实锤 ~150 层即崩的通道；当前形状多被 primary 覆盖，此处兜底）。
+        if !self.enter_depth("抽象声明符") {
+            return None;
+        }
+        let r = self.parse_abstract_declarator_body();
+        self.leave_depth();
+        r
+    }
+
+    fn parse_abstract_declarator_body(&mut self) -> Option<DeclaratorNode> {
         let mut guard = DeclaratorGuard::default();
         let (node, _) = self.parse_declarator_node(&mut guard, true, true);
         if matches!(node, DeclaratorNode::Base) {

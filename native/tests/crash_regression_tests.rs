@@ -709,3 +709,78 @@ fn test_include_does_not_shift_diagnostic_line_numbers() {
         err
     );
 }
+
+// =============================================================================
+// U1#8：递归深度防护补全（五通道）+ 后置 AST 深度预算（2026-09-13）
+// 修复前全部实测栈溢出（release cide_cli "has overflowed its stack"）：
+// init_list / 赋值右结合链 / 一元链崩在 parser 递归；数组后缀链 / 左结合
+// 加法链崩在 typeck 与 AST 递归 Drop（parser 层是循环不递归）。
+// =============================================================================
+
+#[test]
+fn test_deep_init_list_reports_error_no_crash() {
+    // 修复前：3000 层嵌套花括号初始化使 parse_init_list 递归栈溢出。
+    let mut src = String::from("int main() { int x = ");
+    src.push_str(&"{".repeat(3000));
+    src.push('1');
+    src.push_str(&"}".repeat(3000));
+    src.push_str("; return x; }\n");
+    let result = compile_and_run(&src);
+    assert!(result.is_err(), "过深初始化列表嵌套应编译失败而非崩溃");
+}
+
+#[test]
+fn test_deep_assign_chain_reports_error_no_crash() {
+    // 修复前：3000 级右结合赋值链（a = b = b = ...）栈溢出——
+    // 每层右侧递归 parse_assign，不经过 parse_primary 的深度防护。
+    let mut src = String::from("int main() { int a, b; a ");
+    src.push_str(&"= b ".repeat(3000));
+    src.push_str("= 1; return a; }\n");
+    let result = compile_and_run(&src);
+    assert!(result.is_err(), "过长赋值链应编译失败而非崩溃");
+}
+
+#[test]
+fn test_deep_unary_chain_reports_error_no_crash() {
+    // 修复前：5000 个 `!` 使 parse_unary 递归栈溢出。
+    let mut src = String::from("int main() { int x = 1; return ");
+    src.push_str(&"!".repeat(5000));
+    src.push_str("x; }\n");
+    let result = compile_and_run(&src);
+    assert!(result.is_err(), "过长一元运算符链应编译失败而非崩溃");
+}
+
+#[test]
+fn test_array_suffix_chain_ast_budget_reports_error_no_crash() {
+    // 修复前：5000 个 `[0]` 后缀使 AST 深度 5004，typeck / 递归 Drop 栈溢出。
+    // parser 层是循环不递归——由后置 AST 深度预算（512）拦截。
+    let mut src = String::from("int main() { int a[1][1]; return a[0]");
+    src.push_str(&"[0]".repeat(5000));
+    src.push_str("; }\n");
+    let result = compile_and_run(&src);
+    assert!(result.is_err(), "过长数组后缀链应被 AST 深度预算拒绝而非崩溃");
+}
+
+#[test]
+fn test_left_assoc_chain_ast_budget_reports_error_no_crash() {
+    // 修复前：5000 项左结合加法链（AST 深度 5003）崩在 typeck（外部审查实锤
+    // "5000 项 a+a+... 崩，且崩在 typeck 非 codegen"）——后置 AST 深度预算拦截。
+    let mut src = String::from("int main() { int a = 1; return a");
+    src.push_str(&"+a".repeat(5000));
+    src.push_str("; }\n");
+    let result = compile_and_run(&src);
+    assert!(result.is_err(), "过长左结合链应被 AST 深度预算拒绝而非崩溃");
+}
+
+#[test]
+fn test_normal_depth_expressions_not_affected_by_budget() {
+    // 反向锚：合法的适度嵌套（几十层）不受五通道防护与 AST 预算误伤。
+    let mut src = String::from("int main() { int a = 1; return ");
+    src.push_str(&"(".repeat(30));
+    src.push('a');
+    src.push_str(&")".repeat(30));
+    src.push_str(&" + a".repeat(100));
+    src.push_str("; }\n");
+    let result = compile_and_run(&src);
+    assert!(result.is_ok(), "30 层括号 + 100 项加法的合法表达式不应被拒: {:?}", result.err());
+}

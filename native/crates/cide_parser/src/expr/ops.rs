@@ -1,7 +1,18 @@
 use super::*;
 
 impl Parser {
-    pub(crate) fn parse_assign(&mut self) -> Expr {
+pub(crate) fn parse_assign(&mut self) -> Expr {
+        // U1#8：本通道递归（赋值表达式）不必然经过 parse_primary 的深度防护，
+        // 独立挂 enter_depth——超限返回占位并跳到 EOF 让外层循环收敛。
+        if !self.enter_depth("赋值") {
+            return Expr::default();
+        }
+        let r = self.parse_assign_body();
+        self.leave_depth();
+        r
+    }
+
+        fn parse_assign_body(&mut self) -> Expr {
         let left = self.parse_ternary();
         let loc = SourceLoc {
             line: self.previous().line,
@@ -123,7 +134,18 @@ impl Parser {
         left
     }
 
-    pub(crate) fn parse_ternary(&mut self) -> Expr {
+pub(crate) fn parse_ternary(&mut self) -> Expr {
+        // U1#8：本通道递归（三目表达式）不必然经过 parse_primary 的深度防护，
+        // 独立挂 enter_depth——超限返回占位并跳到 EOF 让外层循环收敛。
+        if !self.enter_depth("三目") {
+            return Expr::default();
+        }
+        let r = self.parse_ternary_body();
+        self.leave_depth();
+        r
+    }
+
+        fn parse_ternary_body(&mut self) -> Expr {
         let cond = self.parse_or();
         if self.match_token(TokenType::Question) {
             let then_branch = self.parse_ternary();

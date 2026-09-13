@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (parser/ast)：U1 第六批 #8——递归深度防护补全（五通道）+ 后置 AST 深度预算（红→绿）
+
+- **五通道实测栈溢出复现后修复**（修复前 release cide_cli 全部
+  "has overflowed its stack"）：初始化列表嵌套（3000 层）、赋值右结合链
+  （3000 级 `a = b = b = …`）、一元运算符链（5000 个 `!`）崩在 parser
+  递归；数组后缀链（5000 个 `[0]`）与左结合加法链（5000 项，外部审查
+  实锤"崩在 typeck 非 codegen"）崩在 typeck / 递归 Drop——parser 层是
+  循环不递归，构造期无拦截点。
+- **修复双层**：
+  - parser 挂点：`parse_init_list` / `parse_assign` / `parse_ternary` /
+    `parse_unary` / `parse_abstract_declarator` 五个递归入口挂防护壳
+    （超限 E1006 + 跳 EOF 让外层循环收敛）。
+  - 后置 AST 深度预算：`cide_ast::depth` 迭代式 DFS（显式栈——被测的
+    就是病态深 AST，递归测量自身会先溢出），`parse()` 成功后对函数体/
+    全局初始化式测深，超 512 报 E1006 并 `mem::forget`（递归 Drop 同样
+    溢出，在"泄漏一次编译的 AST"与"崩溃进程"间选前者）。
+- **首版口径错误教训（当轮抓回）**：链壳挂共享计数后每层括号消耗 4 计数
+  （primary+assign+ternary+unary），上限 64 时 16 层括号即触发——**误伤
+  30~40 层合法嵌套与既有回归测试** `test_legal_deep_expression_still_compiles`。
+  修正：上限 64 → 256（256/4 = 64 层语法嵌套，**与原语义精确等价**）；
+  中间试验过"链计数独立 + primary 重置"方案因链式操作数也经 primary（
+  重置把链计数每级清零，s3 赋值链漏拦）而废弃。
+- 红→绿锚：crash_regression_tests 新增 6 条（五通道 + 合法嵌套反向锚，
+  修复前 5 通道实测溢出留痕）；全量验证 cargo 68 套件 / shadow C 671
+  （664/3/4）/ C++ 非预期 0 / clippy 零警告。
+
 ### Fixed (lexer 预处理器)：U1 第五批 #6——宏展开双保险丝修复（死代码复活 + 字节口径，红→绿）
 
 - **缺陷 ①（深度保险丝死代码）**：深度检查只在 `expand_tokens`（depth=0

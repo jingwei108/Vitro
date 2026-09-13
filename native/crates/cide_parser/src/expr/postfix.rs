@@ -235,7 +235,18 @@ impl Parser {
         expr
     }
 
-    pub(crate) fn parse_init_list(&mut self) -> Expr {
+pub(crate) fn parse_init_list(&mut self) -> Expr {
+        // U1#8：本通道递归（初始化列表）不必然经过 parse_primary 的深度防护，
+        // 独立挂 enter_depth——超限返回占位并跳到 EOF 让外层循环收敛。
+        if !self.enter_depth("初始化列表") {
+            return Expr::default();
+        }
+        let r = self.parse_init_list_body();
+        self.leave_depth();
+        r
+    }
+
+        fn parse_init_list_body(&mut self) -> Expr {
         let loc = self.current().clone();
         self.consume(TokenType::LBrace, "初始化列表预期 '{'");
         let mut elements = Vec::new();

@@ -86,7 +86,37 @@ pub struct Parser {
 /// 实测每层括号嵌套消耗 ~3KB 栈（完整二元/一元/后缀优先级链 + 大体积 Expr 帧），
 /// 300 层即溢出 1MB 线程栈，因此上限必须远低于溢出阈值；合法教学代码的
 /// 语句/表达式嵌套远达不到 64 层。
-pub(crate) const MAX_PARSE_DEPTH: i32 = 64;
+///
+/// U1#8 计数口径更新：赋值/三目/一元/初始化列表四个链壳也计入本计数后，
+/// 每层括号嵌套消耗 4 计数（primary + assign + ternary + unary 壳），上限
+/// 相应 64 → 256——**语义与原"64 层语法嵌套"精确等价**（256/4），同时使
+/// 无括号链式递归（赋值链每级 4 计数、一元链每级 2 计数）在 64/128 级
+/// 触发（每级链的真实栈帧是完整优先级瀑布 ~13 帧，64 级 ≈ 400KB 安全）。
+/// 注意各挂点共享计数是总量语义：混合嵌套形态的总和不得越界。
+pub(crate) const MAX_PARSE_DEPTH: i32 = 256;
+
+/// 后置 AST 深度预算（U1#8）：typeck / AST Drop / 快照等所有递归遍历的
+/// 安全上界。合法教学代码的表达式/初始化深度极浅（两位数）；宏展开的
+/// 算式链可达数百项（如嵌套 SUM 宏）；实测 5000 项左结合链崩在 typeck。
+/// 512 对合法场景余量充足、对递归遍历安全（每层栈帧数百字节，
+/// 512 层远低于 1MB 线程栈）。
+pub(crate) const MAX_AST_DEPTH: usize = 512;
+
+/// 全程序最大 AST 深度（函数体 / 全局初始化式取最大）；无内容返回 None。
+fn program_max_depth(prog: &ProgramNode) -> Option<usize> {
+    let mut max = 0usize;
+    for g in &prog.globals {
+        if let Some(init) = &g.init {
+            max = max.max(cide_ast::depth::expr_depth(init));
+        }
+    }
+    for f in &prog.funcs {
+        if let Some(body) = &f.body {
+            max = max.max(cide_ast::depth::stmt_depth(body));
+        }
+    }
+    if max == 0 { None } else { Some(max) }
+}
 
 impl Parser {
     /// 保存回滚点（pos / errors / anonymous_structs 三元快照，U1#10）
@@ -164,6 +194,25 @@ impl Parser {
             }
             None => return (None, self.errors),
         };
+        // U1#8 后置 AST 深度预算：构造期挂点（五通道 + 链长截断）拦已知
+        // 溢出形状，这里迭代测量兜底未预料的新形状。超限时 mem::forget——
+        // 递归 Drop 同样会溢出（左结合链 5000 项实测崩在 typeck/Drop），
+        // 在"泄漏一次编译的 AST"与"崩溃整个进程"间选前者。
+        if let Some(d) = program_max_depth(&prog) {
+            if d > MAX_AST_DEPTH {
+                self.errors.push(ParseError {
+                    message: format!(
+                        "AST 嵌套深度 {} 超过预算 {}：过深的表达式/初始化链会使后续处理栈溢出，请拆分表达式",
+                        d, MAX_AST_DEPTH
+                    ),
+                    line: 1,
+                    column: 1,
+                    code: ErrorCode::E1006_UnsupportedFeature as i32,
+                });
+                std::mem::forget(prog);
+                return (None, self.errors);
+            }
+        }
         (Some(prog), self.errors)
     }
 

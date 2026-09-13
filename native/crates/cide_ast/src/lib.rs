@@ -3,6 +3,7 @@
 //! 从 `cide_native::compiler::ast` 拆分而来，作为独立 crate 供编译器各阶段、VM、诊断等模块共享。
 
 pub mod decl;
+pub mod depth;
 pub mod expr;
 pub mod stmt;
 pub mod types;
