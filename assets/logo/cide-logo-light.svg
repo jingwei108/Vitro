@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 256" role="img" aria-label="Cide">
+  <title>Cide — 教学 C/C++ 子集参考执行引擎（白箱）</title>
+  <!-- light 版：用于浅色背景（深色墨线 + 深橙），背景透明 -->
+
+  <!-- 图标：白箱线框，内嵌七段数码管 C（亮段 a/f/e/d/c） -->
+  <!-- 熄灭段（b 右上竖 / g 中横）细线幽灵可见：白箱哲学，未执行的部分同样可见 -->
+  <g fill="none" stroke-linecap="round" stroke="#1f2328">
+    <rect x="96" y="30" width="196" height="196" rx="44" stroke-width="12"/>
+    <path opacity=".32" stroke-width="12" d="M236 94v16M176 128h36"/>
+    <path stroke="#c2410c" stroke-width="24" d="M176 70h36M152 94v16M152 146v16M176 186h36M236 146v16"/>
+  </g>
+
+  <!-- 字标：单线几何 Cide + 终端光标 -->
+  <g fill="none" stroke="#1f2328" stroke-linecap="round" stroke-width="28">
+    <path d="M453 92a53 53 0 1 0 0 72"/>
+    <path d="M532 106v88"/>
+    <circle cx="648" cy="150" r="44"/>
+    <path d="M692 66v128"/>
+    <path d="M752 150h88M840 150a44 44 0 1 0 -19 36"/>
+  </g>
+  <circle cx="532" cy="76" r="16" fill="#c2410c"/>
+  <rect x="888" y="108" width="30" height="86" rx="10" fill="#c2410c"/>
+</svg>

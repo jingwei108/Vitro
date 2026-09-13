@@ -4,7 +4,7 @@ use crate::*;
 // 动态规划
 // ============================================================================
 
-pub(crate) fn infer_dp(source_line: &str, vars: &VarMap, algorithm: &AlgorithmMatch) -> Option<AlgorithmStepSnapshot> {
+pub(crate) fn infer_dp(source_line: &str, vars: &VarMap, algorithm: &AlgorithmMatch, env: &crate::InferEnv<'_>) -> Option<AlgorithmStepSnapshot> {
     let line_lower = source_line.to_lowercase();
     let i = vars.get_int_any(&["i", "n"]).unwrap_or(-1);
     let w = vars.get_int_any(&["w", "j", "capacity"]).unwrap_or(-1);
@@ -23,7 +23,24 @@ pub(crate) fn infer_dp(source_line: &str, vars: &VarMap, algorithm: &AlgorithmMa
         // 二审 P1-1：4/6 模板的 outer_loop 首现挂在初始化循环
         //（for (…) dp[i] = 1000; / dp[i] = 1; / dp[i][0] = 0; 等）——
         // 循环体为 dp[..] = 纯字面量时不算子问题遍历。
-        if i_head && !dp_loop_body_is_init(&line_lower) {
+        // U1#1 管道批（P1-1 边界收口）：多行/嵌套 for 的体不在 for 行内
+        //（dpLCS L10 for i / L11 for j / L12 体）——lookahead 里找首个
+        // 非循环头/非花括号的行作为体。
+        let body_line = if line_lower.contains("dp[") {
+            line_lower.clone()
+        } else {
+            env.lookahead
+                .lines()
+                .map(|l| l.trim().to_lowercase())
+                .find(|l| {
+                    !l.is_empty()
+                        && !l.starts_with("for ")
+                        && !l.starts_with("while ")
+                        && !l.starts_with('{')
+                })
+                .unwrap_or_default()
+        };
+        if i_head && !dp_loop_body_is_init(&body_line) {
             return Some(build_step(algorithm, "outer_loop", &format!("遍历子问题 i={}", i)));
         }
         if line_lower.contains("int j") || line_lower.contains(" j <") || line_lower.contains("(j <") {

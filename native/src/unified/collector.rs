@@ -9,7 +9,7 @@ use cide_algorithm_steps::infer_algorithm_step;
 pub struct StepCollector;
 
 impl StepCollector {
-    pub fn collect(vm: &mut CideVM, session: &Session, step_index: i32) -> StepPayload {
+    pub fn collect(vm: &mut CideVM, session: &mut Session, step_index: i32) -> StepPayload {
         let code_line = vm.get_current_line();
         let func_name = vm.get_call_stack().last().map(|f| f.func_name.clone()).unwrap_or_default();
 
@@ -77,6 +77,13 @@ impl StepCollector {
             .unwrap_or(false);
         let semantic_label =
             infer_semantic_label(code_line, Some(&local_vars), &func_name, session, at_callee_entry);
+        // U1#1 管道批（P0-4/P1-3/P1-4/P1-1 边界）：行入口变量快照维护——
+        // 行变化时把上一帧行（上一行末帧）的变量固化为 row_entry_vars，
+        // 供"展示运算过程"的 phase 取语句执行前操作数。
+        if code_line != session.unified_last_line {
+            session.unified_row_entry_vars = session.unified_last_frame_vars.clone();
+            session.unified_last_line = code_line;
+        }
         let algorithm_step = {
             let ctx: &dyn cide_algorithm_steps::AlgorithmContext = session;
             let algo_vars: Vec<cide_algorithm_steps::VariableSnapshot> = local_vars
@@ -86,7 +93,29 @@ impl StepCollector {
                     value: v.value.clone(),
                 })
                 .collect();
-            infer_algorithm_step(code_line, &algo_vars, &func_name, ctx).map(|s| {
+            // env：caller 栈层的函数名（callee entry 且 caller 是 main =
+            // 顶层启动调用）+ 下一行源码（多行 for 的体）。
+            let stack = vm.get_call_stack();
+            let caller_is_main =
+                stack.len() >= 2 && stack[stack.len() - 2].func_name.eq_ignore_ascii_case("main");
+            // lookahead：下 3 行拼接（嵌套 for 头穿透——dpLCS 的
+            // L10 for i / L11 for j / L12 体，+1 行不够）。
+            let mut lookahead = String::new();
+            for dl in 1..=3 {
+                if let Some(l) = ctx.source_line(code_line + dl) {
+                    lookahead.push_str(&l);
+                    lookahead.push(0x0A as char);
+                }
+            }
+            let env = cide_algorithm_steps::InferEnv {
+                prev_vars: &session.unified_row_entry_vars,
+                at_callee_entry,
+                caller_is_main,
+                lookahead: &lookahead,
+            };
+            let step = infer_algorithm_step(code_line, &algo_vars, &func_name, ctx, &env);
+            session.unified_last_frame_vars = algo_vars;
+            step.map(|s| {
                 crate::unified::types::AlgorithmStepSnapshot {
                     algorithm_name: s.algorithm_name,
                     display_name: s.display_name,

@@ -46,6 +46,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   补充分支在模板集上零新命中。门禁：cargo test 962/0、clippy 零警告、
   serve_smoke 54/54。
 
+### Fixed (教学标注)：U1#1 管道批——collector→infer 上下文扩容，四项登记全部收口（P0-4/P1-3/P1-4/P1-1 边界）
+
+新增 `InferEnv`（collector 构造，随帧传入 inferrer）：`prev_vars`（行入口
+变量快照——session 维护行变化时的上一行末帧变量）、`at_callee_entry` +
+`caller_is_main`（callee entry 帧的 caller 栈层判定）、`lookahead`（下 3
+行源码，嵌套 for 头穿透）。
+
+- **P0-4 收口**：gcd mod 用行入口操作数拼算式——三轮全部正确
+  （`48 % 18 = 12` / `18 % 12 = 6` / `12 % 6 = 0`，二审实锤的
+  "48 % 12 = 0" 错误算式消除）。
+- **P1-3/P1-4 收口**：`at_callee_entry && caller_is_main` 区分顶层启动
+  调用——quick 首现"启动快速排序：处理区间 [left=0, right=4]"、merge
+  "启动归并"从死代码 0 次变 1 次（均挂 main 调用行）。
+- **P1-1 边界收口**：lookahead 穿透嵌套 for 头——dpLCS outer_loop 首现
+  L13（初始化 for L10 已离开）、matrixChain L9（L5 已离开）；dpFib/
+  dpCoinChange 保持正确位点；六 dp 模板 transition 全在真转移行。
+- **顺带实锤并修复**：上批 §7.3 的 append 改动把逻辑写反（curr 被发布、
+  缓冲置 None——gcd 帧级调试暴露中间帧带标注泄漏），回正为 curr 整体
+  移入缓冲 + match 外统一赋值。
+- 验收：cargo 69 套件 / clippy 零警告 / serve_smoke 54/54。
+
 ### Fixed (教学标注)：U1#1 第四批（二审 P0-C + P1 批，含两处如实登记未修）
 
 - **P0-C**：gcd mod 判据 `contains('%')` 过宽（printf 格式符命中，首现

@@ -4,7 +4,7 @@ use crate::*;
 // 最大公约数
 // ============================================================================
 
-pub(crate) fn infer_gcd(source_line: &str, vars: &VarMap, algorithm: &AlgorithmMatch) -> Option<AlgorithmStepSnapshot> {
+pub(crate) fn infer_gcd(source_line: &str, vars: &VarMap, algorithm: &AlgorithmMatch, env: &crate::InferEnv<'_>) -> Option<AlgorithmStepSnapshot> {
     let line_lower = source_line.to_lowercase();
     let a = vars.get_int_any(&["a"]).unwrap_or(-1);
     let b = vars.get_int_any(&["b"]).unwrap_or(-1);
@@ -25,6 +25,21 @@ pub(crate) fn infer_gcd(source_line: &str, vars: &VarMap, algorithm: &AlgorithmM
         || line_lower.contains("snprintf");
     let has_mod_expr = line_lower.contains(" % ") || line_lower.contains("%=");
     if has_mod_expr && !is_io_line {
+        // U1#1 管道批（P0-4 收口）：运算过程类 phase 用**行入口操作数**拼
+        // 算式——行末帧的 b 已被 `b = a % b` 赋值（48 % 12 = 0 是错的），
+        // prev 是进入本行前一刻（48 % 18），结果恰是行末的 b（余数 12）。
+        let pa = env.prev_vars.iter().find(|v| v.name == "a").and_then(|v| v.value.parse::<i32>().ok());
+        let pb = env.prev_vars.iter().find(|v| v.name == "b").and_then(|v| v.value.parse::<i32>().ok());
+        let b_now = vars.get_int("b").unwrap_or(-1);
+        if let (Some(x), Some(y)) = (pa, pb) {
+            if x > 0 && y > 0 && b_now >= 0 {
+                return Some(build_step(
+                    algorithm,
+                    "mod",
+                    &format!("计算 {} % {} = {}（余数作为新的 b）", x, y, b_now),
+                ));
+            }
+        }
         return Some(build_step(algorithm, "mod", "求余并更新 b（辗转相除一步）"));
     }
 

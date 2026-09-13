@@ -264,18 +264,15 @@ pub fn step_next(session: &mut Session) -> Result<Value, String> {
             result.payloads.insert(0, pending);
         }
     } else {
-        let mut curr = result.payloads.pop();
+        let curr = result.payloads.pop();
         match session.unified_pending.take() {
             Some(mut pending) => {
                 if Some(pending.code_line) == curr.as_ref().map(|c| c.code_line) {
                     pending.algorithm_step = None;
                 }
-                // 二审 §7.3：append 语义而非整体替换——run_batch 当前恒
-                // batch=1 无影响，但若 batch 调大，vec![pending] 会静默
-                // 丢弃批内其余帧（批内中间帧本应原样发布）。
-                if let Some(c) = curr.take() {
-                    result.payloads.push(c);
-                }
+                // §7.3 append 语义：pending 前插发布位；curr 由 match 外
+                // 统一移入缓冲（首版把 curr 发布出去并把缓冲置 None——
+                // 中间帧带标注泄漏，帧级调试实锤后回正）。
                 result.payloads.insert(0, pending);
             }
             None => {

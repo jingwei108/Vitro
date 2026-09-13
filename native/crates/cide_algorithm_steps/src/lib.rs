@@ -45,11 +45,31 @@ pub trait AlgorithmContext {
 }
 
 /// 推断当前执行步骤对应的算法语义描述。
+/// U1#1 管道批（P0-4/P1-3/P1-4/P1-1 边界）：inferrer 需要的帧上下文，
+/// 由 collector 构造——单行源码判据够不到的三类信息：
+/// - `prev_vars`：**行入口**变量快照（进入当前源码行之前一刻的值）。
+///   "展示运算过程"的 phase（gcd mod）用它拼算式——行末帧的 b 已被本
+///   语句赋值，48 % 12 = 0 是错的，真值 48 % 18 = 12（P0-4）。
+/// - `at_callee_entry` / `caller_is_main`：当前帧是被调函数入口帧
+///   （code_line 归因 caller 行）且 caller 是 main——顶层启动调用与
+///   函数体内递归的区分（P1-3/P1-4：带标注帧是 callee entry，
+///   func_name 已是被调函数，单靠 func_name 判不了）。
+/// - `lookahead`：下 3 行源码（含当前行之后的连续行）——多行/嵌套 for
+///   的循环体不在 for 行内，初始化循环判定需要看体（P1-1 边界：
+///   dpLCS 的 L10 for i / L11 for j / L12 体，+1 行不够）。
+pub struct InferEnv<'a> {
+    pub prev_vars: &'a [VariableSnapshot],
+    pub at_callee_entry: bool,
+    pub caller_is_main: bool,
+    pub lookahead: &'a str,
+}
+
 pub fn infer_algorithm_step(
     code_line: i32,
     local_vars: &[VariableSnapshot],
     func_name: &str,
     ctx: &dyn AlgorithmContext,
+    env: &InferEnv<'_>,
 ) -> Option<AlgorithmStepSnapshot> {
     if code_line <= 0 || func_name.is_empty() {
         return None;
@@ -71,13 +91,13 @@ pub fn infer_algorithm_step(
         "bubble_sort" => sorting::infer_bubble_sort(&source_line, &vars, &algorithm),
         "selection_sort" => sorting::infer_selection_sort(&source_line, &vars, &algorithm),
         "insertion_sort" => sorting::infer_insertion_sort(&source_line, &vars, &algorithm),
-        "quick_sort" => sorting::infer_quick_sort(&source_line, &vars, &algorithm, func_name),
-        "merge_sort" => sorting::infer_merge_sort(&source_line, &vars, &algorithm, func_name),
+        "quick_sort" => sorting::infer_quick_sort(&source_line, &vars, &algorithm, func_name, env),
+        "merge_sort" => sorting::infer_merge_sort(&source_line, &vars, &algorithm, func_name, env),
         "binary_search" => search::infer_binary_search(&source_line, &vars, &algorithm),
         "heap_sort" => sorting::infer_heap_sort(&source_line, &vars, &algorithm, func_name),
         "bfs" => graph::infer_bfs(&source_line, &vars, &algorithm),
         "dfs" => graph::infer_dfs(&source_line, &vars, &algorithm, func_name),
-        "dp" => dp::infer_dp(&source_line, &vars, &algorithm),
+        "dp" => dp::infer_dp(&source_line, &vars, &algorithm, env),
         "shell_sort" => sorting::infer_shell_sort(&source_line, &vars, &algorithm),
         "counting_sort" => sorting::infer_counting_sort(&source_line, &vars, &algorithm),
         "linked_list_delete" => structures::infer_linked_list_delete(&source_line, &vars, &algorithm),
@@ -86,7 +106,7 @@ pub fn infer_algorithm_step(
         "bst_delete" => tree::infer_bst_delete(&source_line, &vars, &algorithm, func_name),
         "bst_validate" => tree::infer_bst_validate(&source_line, &vars, &algorithm, func_name),
         "string_reverse" => search::infer_string_reverse(&source_line, &vars, &algorithm),
-        "gcd" => math::infer_gcd(&source_line, &vars, &algorithm),
+        "gcd" => math::infer_gcd(&source_line, &vars, &algorithm, env),
         "is_prime" => math::infer_is_prime(&source_line, &vars, &algorithm),
         "hanoi" => math::infer_hanoi(&source_line, &vars, &algorithm, func_name),
         "seq_list" => structures::infer_seq_list(&source_line, &vars, &algorithm),

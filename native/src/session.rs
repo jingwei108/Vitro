@@ -372,6 +372,13 @@ pub struct Session {
     /// 回改（同行 → 清其 algorithm_step，它是语句中间帧、数值为旧值）
     /// 后再发布。
     pub unified_pending: Option<crate::unified::types::StepPayload>,
+    /// U1#1 管道批（P0-4/P1-3/P1-4）：行入口变量快照的维护状态——
+    /// last_line 是上一帧 code_line；行变化时把上一帧行（上一行末帧）的
+    /// 变量存入 row_entry_vars，供"展示运算过程"的 phase 取语句执行前
+    /// 操作数（gcd mod 的 48 % 18 而非行末的 48 % 12）。
+    pub unified_last_line: i32,
+    pub unified_last_frame_vars: Vec<cide_algorithm_steps::VariableSnapshot>,
+    pub unified_row_entry_vars: Vec<cide_algorithm_steps::VariableSnapshot>,
 }
 
 impl Session {
@@ -395,6 +402,9 @@ impl Default for Session {
             vfs: VirtualFileSystem::new(),
             unified: None,
             unified_pending: None,
+            unified_last_line: 0,
+            unified_last_frame_vars: Vec::new(),
+            unified_row_entry_vars: Vec::new(),
         }
     }
 }

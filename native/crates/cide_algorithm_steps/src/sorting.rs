@@ -223,6 +223,7 @@ pub(crate) fn infer_quick_sort(
     vars: &VarMap,
     algorithm: &AlgorithmMatch,
     func_name: &str,
+    env: &crate::InferEnv<'_>,
 ) -> Option<AlgorithmStepSnapshot> {
     let line_lower = source_line.to_lowercase();
     let left = vars.get_int_any(&["left", "low", "l"]).unwrap_or(-1);
@@ -232,11 +233,16 @@ pub(crate) fn infer_quick_sort(
 
     // 递归调用自身
     if source_line.contains(&format!("{}(", func_name)) {
-        // 二审 P1-3（登记未修）：顶层调用（quickSort(arr,0,n-1);）仍自称
-        // "递归调用"——带标注的帧是 callee entry（func_name 已是 quickSort、
-        // code_line 仍是 main 调用行），func_name=="main" 判定不触发。
-        // 正解需 at_callee_entry 传入 inferrer（与 P0-4 prev_vars 同批的
-        // 管道改动），本批不硬凑。
+        // U1#1 管道批（P1-3 收口）：带标注帧是 callee entry（func_name 已是
+        // quickSort、code_line 仍是 main 调用行）——env.caller_is_main 区分
+        // 顶层启动与函数体内递归。
+        if env.at_callee_entry && env.caller_is_main {
+            return Some(build_step(
+                algorithm,
+                "recursive",
+                &format!("启动快速排序：处理区间 [left={}, right={}]", left, right),
+            ));
+        }
         // side 默认空串：旧默认 "子" 与文案 "…处理{}子数组" 拼出
         // "子子数组"（用户审阅 P1-79 错字实锤——不是文案字面量能 replace 的）。
         let side = if i >= 0 && pivot >= 0 {
@@ -295,16 +301,22 @@ pub(crate) fn infer_merge_sort(
     vars: &VarMap,
     algorithm: &AlgorithmMatch,
     func_name: &str,
+    env: &crate::InferEnv<'_>,
 ) -> Option<AlgorithmStepSnapshot> {
     let line_lower = source_line.to_lowercase();
     let left = vars.get_int_any(&["left", "low", "l", "start"]).unwrap_or(-1);
     let right = vars.get_int_any(&["right", "high", "r", "end"]).unwrap_or(-1);
 
     if source_line.contains(&format!("{}(", func_name)) {
-        // 二审 P1-4（登记未修）：顶层调用与递归的区分——带标注帧是
-        // callee entry（func_name 已是 mergeSort、code_line 是 main 调用行），
-        // func_name=="main" 判定不触发；旧 contains("main") 是死代码已删。
-        // 正解同 P1-3：at_callee_entry 管道（与 P0-4 prev_vars 同批）。
+        // U1#1 管道批（P1-4 收口）：env.caller_is_main 区分顶层启动调用
+        //（旧 contains("main") 死代码的正解）。
+        if env.at_callee_entry && env.caller_is_main {
+            return Some(build_step(
+                algorithm,
+                "recursive_split",
+                &format!("启动归并：处理区间 [{}, {}]", left, right),
+            ));
+        }
         if left >= 0 && right >= 0 && left < right {
             return Some(build_step(
                 algorithm,

@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 256" role="img" aria-label="Cide">
+  <title>Cide — 教学 C/C++ 子集参考执行引擎（白箱）</title>
+  <!-- default 版：纯 CSS @media 自动适配深浅背景，无脚本 -->
+  <style>
+    .ink   { stroke: #1f2328; }
+    .brand { stroke: #c2410c; }
+    .fill-brand { fill: #c2410c; }
+    .dim   { opacity: .32; }
+    @media (prefers-color-scheme: dark) {
+      .ink   { stroke: #f0ebe4; }
+      .brand { stroke: #ff7a45; }
+      .fill-brand { fill: #ff7a45; }
+      .dim   { opacity: .38; }
+    }
+  </style>
+
+  <!-- 图标：白箱线框，内嵌七段数码管 C（亮段 a/f/e/d/c） -->
+  <!-- 熄灭段（b 右上竖 / g 中横）细线幽灵可见：白箱哲学，未执行的部分同样可见 -->
+  <g fill="none" stroke-linecap="round">
+    <rect class="ink" x="96" y="30" width="196" height="196" rx="44" stroke-width="12"/>
+    <path class="ink dim" stroke-width="12" d="M236 94v16M176 128h36"/>
+    <path class="brand" stroke-width="24" d="M176 70h36M152 94v16M152 146v16M176 186h36M236 146v16"/>
+  </g>
+
+  <!-- 字标：单线几何 Cide + 终端光标 -->
+  <g fill="none" stroke-linecap="round" stroke-width="28">
+    <path class="ink" d="M453 92a53 53 0 1 0 0 72"/>
+    <path class="ink" d="M532 106v88"/>
+    <circle class="fill-brand" cx="532" cy="76" r="16" stroke="none"/>
+    <circle class="ink" cx="648" cy="150" r="44"/>
+    <path class="ink" d="M692 66v128"/>
+    <path class="ink" d="M752 150h88M840 150a44 44 0 1 0 -19 36"/>
+    <rect class="fill-brand" x="888" y="108" width="30" height="86" rx="10" stroke="none"/>
+  </g>
+</svg>
