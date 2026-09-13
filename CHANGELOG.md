@@ -701,6 +701,28 @@ C23 锚定决议下的第一批语言能力（详细口径与差异见 `C_SUBSET
   原载体为 `CideFlutter/lib/models/algorithm_validation.dart`（见 `ROADMAP.md` G9；
   注：`AlgorithmMatch` 结构体在 `native/src/session.rs` 确实存在，缺的是"验证"环节）。
 
+### Removed (tools)：D5 收官——7 个被 Go 版替代的 Python 驱动退役删除（仅留 git 历史）
+
+- 删除：`shadow_verify_cpp.py`（630 行）、`replay/replay_s1_s5.py`（639 行）、
+  `core_asset_verdict/{interaction_probe,random_diff,resource_longrun,seek_accumulation,winmem}.py`
+  ——全部满足三条件：Go 版已接管 CI/防线、双轨对账一致的记录已归档
+  （裁定 §13.7 各站）、CI 与活性代码零引用。`winmem.py`（ctypes psapi）唯一
+  消费者即上述将删文件，Go 侧同款实现在 `scripts/internal/probeutil`。
+  需要回看时 `git show 1d458eb^:scripts/<path>` 可取。
+- 顺带清理：`scripts/{,__pycache__}`、`replay/__pycache__` 与 replay 目录下
+  两个调试残留日志（均已被 gitignore，不在 git 内）。
+- **保留不动**（各有明确理由）：① CI 活性 Python 四件
+  `ci_three_tier_check.py` / `serve_smoke.py` / `precompile_bytecode_libc.py` /
+  `engineering_health.py`（迁移 Go 是后续批次，删除即防线缺口）；
+  ② 一次性取证脚本（`case_census` / `clang_oracle_audit` / `repro_panics` 等，
+  裁定 §13.7 明确不迁移）；③ `mutation_facet_test.py`（会再跑，J3 测量工具，
+  迁移待办）；④ 活性生成器/工具（`extract_cpp_builtin_layout.py`——
+  C++ 布局真相来源、`sync_templates.py`、`unified_perf_baseline.py`、
+  `debug_p3_leak.py`）。
+- 验证：删除前后 `go vet ./scripts/...` 输出逐字节一致（3 个存量
+  `unsafe.Pointer` 警告非本批引入）；`precompile --check` / `serve_smoke`
+  / `ci_three_tier_check` 全绿。
+
 ### Removed (前端切割：仓库转型为纯后端)
 - **执行主计划的前端切割决议**（[`CIDE_BACKEND_SPLIT_WASM_WHITEBOX_PLAN.md`](docs/current/CIDE_BACKEND_SPLIT_WASM_WHITEBOX_PLAN.md)）：
   本仓库只保留教学 C/C++ 子集参考执行引擎（白箱后端），前端迁出给社区，原生移动端放弃。

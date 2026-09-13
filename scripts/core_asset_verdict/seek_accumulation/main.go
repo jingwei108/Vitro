@@ -37,7 +37,7 @@ var (
 	work = filepath.Join(here, ".longrun")
 )
 
-// ── psapi 采样（口径同 winmem.py） ──
+// ── psapi 采样（口径沿自原 winmem.py，已随 Python 版退役；同款实现在 scripts/internal/probeutil） ──
 
 // ── Session：serve 会话 + 采样看门狗 ──
 
