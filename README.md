@@ -14,7 +14,7 @@
 cide 引擎核心（Rust workspace，禁止平台 API 耦合）
 │
 ├─ 出口 1：native cdylib / C ABI（native/src/capi/，ABI 版本化 cide_abi_version()）
-│    第一消费者：cide_cli、shadow_verify.py（Python ctypes，636 个用例的生产验证）
+│    第一消费者：cide_cli、scripts/shadow_verify.go（capi 直调，663 个用例的生产验证）
 │    外部消费者：第三方教学 IDE（.NET P/Invoke 子进程等）、任意语言 FFI
 │
 ├─ 出口 2：wasm32-unknown-unknown（.wasm + 薄 JS/TS 绑定）
@@ -111,7 +111,7 @@ cd native && cargo test --workspace --all-features
 cd native && cargo clippy --workspace --all-targets --all-features -- -D warnings
 
 # 6. 测试防线（Shadow Verification：与 Clang / Clang++ 对照 stdout）
-python native/tests/shadow_verification/shadow_verify.py --jobs 8
+go run scripts/shadow_verify.go
 go run scripts/shadow_verify_cpp.go
 python scripts/serve_smoke.py
 ```

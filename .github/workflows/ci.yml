@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
   schedule:
     # 夜间全量重算（北京时间 02:00）：Clang Golden 缓存强制失效重算，防版本漂移
-    # （见 shadow_verify.py 文件头「提速设施」与 docs/current 工作记录）
+    # （见 scripts/shadow_verify.go 文件头与 docs/current 工作记录）
     - cron: '0 18 * * *'
 
 # 前端切割（2026-09-11）：CideFlutter / FRB / flutter-android-ios jobs 已随前端
@@ -75,10 +75,15 @@ jobs:
         uses: actions/cache@v4
         with:
           path: native/tests/shadow_verification/.clang_cache
-          key: clang-golden-${{ runner.os }}-${{ steps.clangver.outputs.value }}-${{ hashFiles('native/tests/shadow_verification/shadow_verify.py') }}
+          # key 含驱动脚本哈希：缓存 schema/口径变化时整体失效。
+          # go1 缓存条目与历史 Python 条目（schema=1）同目录共存、key 空间不相交。
+          key: clang-golden-${{ runner.os }}-${{ steps.clangver.outputs.value }}-${{ hashFiles('scripts/shadow_verify.go') }}
           restore-keys: |
             clang-golden-${{ runner.os }}-${{ steps.clangver.outputs.value }}-
 
+      # D5 语言迁移最后一站（2026-09-13）：C 影子验证主驱动 Python→Go。
+      # 双轨对账 PASS（663 用例集合/顺序/逐用例 diff_type/summary/category_frequency
+      # 全一致）后切换；Python 版 shadow_verify.py 已退役删除。
       - name: Shadow Verification
         shell: bash
         run: |
@@ -88,7 +93,7 @@ jobs:
             EXTRA="--refresh-clang"
             echo "夜间模式：Clang Golden 全量重算（$EXTRA）"
           fi
-          python native/tests/shadow_verification/shadow_verify.py $EXTRA --report native/tests/shadow_verification/reports/shadow_report.md --json native/tests/shadow_verification/reports/shadow_data.json
+          go run scripts/shadow_verify.go $EXTRA --report native/tests/shadow_verification/reports/shadow_report.md --json native/tests/shadow_verification/reports/shadow_data.json
 
       - name: Upload Shadow Report
         uses: actions/upload-artifact@v4

@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (D5 语言迁移最后一站：C 影子验证主驱动 shadow_verify.py Python→Go)
+
+唯一硬门禁（防线 1 主驱动）完成迁移，**D5 六站全部收官**：
+
+- **新增 `scripts/shadow_verify.go`**：判定口径与 Python 版逐项对齐——五目录
+  sorted(glob *.c) 用例加载（`@category` ASCII 限定提取、剔除 `// @` 行、同名 `.in`
+  注入 stdin）、文件用例原目录编译（`#include` 解析）、编译 30s / 运行 5s 超时、
+  worker 隔离运行目录 + VFS 预设文件、结果运行目录归一化 `<rundir>`、
+  `KNOWN_FAILURE_CASES` 豁免、`classify_compile_error` 关键词表、报告三件套
+  （Markdown/JSON 带时间戳 + latest + `kr_leetcode_report.json`）、门禁退出码
+  （非预期差异 exit 1 / Clang 预检与产物新鲜度 exit 2）。
+- **双轨对账 PASS**：663 用例集合/顺序/逐用例 diff_type/expected/summary/
+  category_frequency/clang_version 全维度一致（`663 / match 644 / known_issue 3 /
+  cide_better 16 / 0 非预期差异`）；`--refresh-clang` 全量重算与缓存热跑、16 路与
+  32 路并发三次交叉验证逐用例 verdict 一致。CI 已切换（缓存 key 同步改
+  `hashFiles(scripts/shadow_verify.go)`）；Python 主驱动（`shadow_verify.py` /
+  `cide_output.py` / `extract_shadow_cases.py`）退役删除。
+- **形态（有意差异）**：两段流水线——Clang 侧并发（`--jobs N`，0=自动
+  min(CPU,16)，实测 32 路仅比 16 路快 6%，瓶颈在子进程启动/IO），Cide 侧互斥串行
+  （DLL 非线程安全实证，实测串行段 ~1.5s 占比可忽略）；Clang 结果缓存为 Go 自有
+  schema（`go1`，Go 结构体序列化 + sha256），与历史 Python 缓存同目录共存、key
+  空间不相交；Clang 编译失败重试 3 次（第一站实证）；瞬态环境异常（超时 / 启动
+  失败 / `0xC0000005` 映像崩溃）自动重试且**不落缓存**（Python 连超时异常也落缓存
+  的固化风险未踩到，此处加固）；无硬编码 `SHADOW_CASES` fallback（目录加载失败
+  fail loud，不留 ~300 行永不执行的死重）。
+- **迁移中新挖出的三类隐性口径（对账逐用例 diff 抓出，均已锚定并记录于 Go 版头注）**：
+  1. **`pathlib` 排序平台差异**——Python `sorted(glob)` 在 Windows 上按大小写规范化
+     字符串比较（casefold 序），Linux 上是码点序；`bTree_default` 等大小写混排用例
+     的顺序两侧不一致。Go 版统一 casefold（跨平台稳定，`--limit` 语义不随 runner 漂移）。
+  2. **Go `ExitError` 与 Python 异常模型的结构性错位**——Python `subprocess.run`
+     不带 check 时程序自身 exit != 0 是**正常返回**（输出保留），仅超时/启动失败抛异常；
+     Go `cmd.Run()` 对两者都返回 error。首版把 exit 1 误走"丢输出"分支，被
+     `e1_func_identifier`（全仓唯一 `return helper()` 即 exit 1 的用例）当场抓出。
+  3. **同名 exe 并发覆盖映像竞态**——Windows 上 16 路并发快速覆盖+执行同名
+     `test.exe` 确定性触发 `0xC0000005`；编译产物改 per-case 唯一命名
+     （`test_<name>.exe`，C++ 版第一站早已采用）。
+- **性能**：冷启动全量重算 663 用例 ~26s（Python 632 用例时代 ~20.4s，同量级；
+  用例数 +5%）；缓存热跑 ~5s（Python ~1.0s，均为秒级，CI 门禁占比可忽略）；
+  J9 启动自检 15 条断言（判定树全分支 + strip/CRLF 雷 + 豁免口径 + 分类器优先级）。
+- CI 同步：Shadow Verification 步骤 `go run scripts/shadow_verify.go`（夜间
+  `--refresh-clang` 语义不变）；AGENTS / AGENTS_EN / README / 影子验证框架 /
+  模板维护指南 / 快速入门 / 构建指南 / 架构图引用同步。
+
 ### Changed (D5 语言迁移第五站：资源域长跑探针 Python→Go)
 
 `resource_longrun.go` + `seek_accumulation.go`（U2 验收的测量通道，psapi 驱动侧采样）：

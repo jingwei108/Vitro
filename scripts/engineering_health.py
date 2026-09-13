@@ -245,7 +245,7 @@ def read_shadow_match_rate() -> dict[str, str]:
     else:
         result["C++"] = "N/A"
 
-    # C 报告：读取 shadow_data_latest.json（由 shadow_verify.py 同步更新）
+    # C 报告：读取 shadow_data_latest.json（由 scripts/shadow_verify.go 同步更新）
     latest = SHADOW_REPORT_DIR / "shadow_data_latest.json"
     if latest.exists():
         try:
