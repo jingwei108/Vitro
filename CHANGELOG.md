@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (tools/ci)：U0 #2/#3/#4 观测设施收尾——RSS 护栏 + 磁盘卫生门禁 + 事故留痕核查
+
+- **RSS 护栏（U0#2）**：`serve_smoke.py` 新增第三批——远距 seek 压力形状
+  （65 万逻辑步程序 × 多轮远距 seek 重放）下以 ctypes psapi 采 serve 子进程
+  提交峰值（与 `scripts/internal/probeutil` 同口径，**驱动侧独立测量**），
+  超预算 fail 并回显峰值。默认预算 512MB = 当前基线的宽松护栏（实测形状
+  峰值 75MB；**非 J5 的 64B/步**——那要等 U2 生命周期重构后收紧，注释中
+  明示分层）；`CIDE_RSS_BUDGET_MB=5` 证红（peak=75MB > 5MB → exit 1），
+  "先证会红"义务闭环。防线对宿主内存零观测（两次 GB 级事故的制度性根因）
+  就此补上常设监控。
+- **磁盘卫生（U0#4）**：删除已死 android 交叉 target 三目录 ~2.6GB
+  （aarch64-linux-android 1.6G / armv7-linux-androideabi 978M / android 7M，
+  随前端切割已废弃）；CI 在 engineering health 之后新增 **target 体积预算
+  门禁（10GB，超限 fail 并回显目录分布）**；策略文字制度化进 AGENTS.md
+  构建命令节（wasm32 为活性出口不清理；本地 debug 累积建议 cargo clean）。
+- **事故留痕（U0#3）核查结论：三项已于 2026-09-12 建档时全部完成**——
+  INCIDENTS/README 模板与归档规则、第二次泄漏补录（既有档案"63.6GB 事故 +
+  复发"回填两洞完整证据链）、`diag_mem.ps1` 已转正 `scripts/` 且被 git
+  跟踪。路线图"剩余项"表述过时已修正；仓库根一份未跟踪的本机副本属用户
+  工作区文件，不处理。
+
 ### Fixed (capi/tools)：U0#5 `as` 无防御转换收口（第一批）——负 argc 实锤 + `checked_conversions` 清零 deny
 
 - **负 argc 修复（红→绿）**：`cide_set_argv` 的 `Vec::with_capacity(argc as usize)`

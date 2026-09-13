@@ -340,6 +340,17 @@ go run ./scripts/shadow_verify_cpp
 cargo build --bin cide_cli && python scripts/serve_smoke.py
 ```
 
+> **磁盘卫生（U0#4，2026-09-13 制度化）**：① 已死交叉 target 不得残留——android
+> 三目录（`aarch64-linux-android` / `armv7-linux-androideabi` / `android`，合计
+> ~2.6GB）已随前端切割删除，重建它们前先确认确有需要；② CI 在 health 报告后
+> 有 **target 体积预算门禁（10GB）**，超限 fail 并回显分布——本地 `target/debug`
+> 长期累积超 10GB 时建议 `cargo clean`（重建成本 ≈ 一次全量构建）；③
+> `wasm32-unknown-unknown` 是活性出口（出口 2）的构建产物，不属于清理对象。
+> **RSS 护栏（U0#2）**：`serve_smoke.py` 第三批在远距 seek 压力形状下监控 serve
+> 子进程提交峰值（ctypes psapi，与 `scripts/internal/probeutil` 同口径），默认
+> 预算 512MB（当前基线的宽松护栏，U2 完成后按 J5 收紧）；`CIDE_RSS_BUDGET_MB=5`
+> 可证红（先证会红义务已履行，2026-09-13 实测 peak=75MB > 5MB → exit 1）。
+
 > 历史前端构建（Flutter / Android / iOS）已随前端迁出，脚本见标签 `before-frontend-split`。
 
 ## 调试技巧

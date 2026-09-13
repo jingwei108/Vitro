@@ -263,12 +263,122 @@ def main():
     edge_failures = run_edge_batch(exe)
     failures.extend(edge_failures)
 
+    rss_failures = run_rss_guard_batch(exe)
+    failures.extend(rss_failures)
+
     print()
     if failures:
         print(f"FAILED: {len(failures)} 项 -> {failures}")
         return 1
     print("serve 冒烟全部通过")
     return 0
+
+
+# ─── U0#2 RSS 护栏批（2026-09-13）───────────────────────────────────────────
+# 防线对宿主内存零观测是两次 GB 级泄漏事故的制度性根因（裁定 §13.2 /
+# 事故202609_Seek重放泄漏）。本批在已知压力形状（远距 seek 重放——U2 未
+# 修复的瞬时尖峰源）下监控 serve 子进程的提交峰值，超预算即红并回显峰值。
+#
+# 预算语义（诚实分层）：
+# - 默认预算是**当前基线的宽松护栏**（远低于事故量级、高于正常尖峰），
+#   不是 J5 的 64B/步——那要等 U2 生命周期重构后才收紧；
+# - 证红方式：`CIDE_RSS_BUDGET_MB=5 python scripts/serve_smoke.py`
+#   必红（护栏有牙，U0#2"先证会红"义务）。
+# 采样：驱动侧 ctypes 直调 psapi（GetProcessMemoryInfo 的提交峰值，
+# 与 scripts/internal/probeutil 同口径——不信被测代码自报）。
+
+RSS_PROGRAM = (
+    'int main(){ int s=0; for(int i=0;i<60;i++) for(int j=0;j<60;j++) '
+    'for(int k=0;k<60;k++) s+=1; return s; }'  # ~65 万逻辑步，远距 seek 的重放源
+)
+
+
+def _peak_commit_mb_windows(pid: int) -> int:
+    import ctypes
+    from ctypes import wintypes
+
+    class PMC(ctypes.Structure):
+        _fields_ = [("cb", wintypes.DWORD), ("PageFaultCount", wintypes.DWORD),
+                    ("PeakWorkingSetSize", ctypes.c_size_t),
+                    ("WorkingSetSize", ctypes.c_size_t),
+                    ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
+                    ("QuotaPagedPoolUsage", ctypes.c_size_t),
+                    ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
+                    ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
+                    ("PagefileUsage", ctypes.c_size_t),
+                    ("PeakPagefileUsage", ctypes.c_size_t)]
+
+    PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+    kernel32 = ctypes.windll.kernel32
+    psapi = ctypes.windll.psapi
+    handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+    if not handle:
+        return -1
+    try:
+        pmc = PMC()
+        pmc.cb = ctypes.sizeof(PMC)
+        if psapi.GetProcessMemoryInfo(handle, ctypes.byref(pmc), pmc.cb):
+            return pmc.PeakPagefileUsage // (1024 * 1024)
+        return -1
+    finally:
+        kernel32.CloseHandle(handle)
+
+
+def run_rss_guard_batch(exe: Path):
+    print("\n== RSS 护栏批（远距 seek 压力形状，超预算即红）==")
+    budget_mb = int(os.environ.get("CIDE_RSS_BUDGET_MB", "512"))
+    if sys.platform != "win32":
+        print("  SKIP  非 Windows 平台（CI runner 为 windows-latest；采样走 psapi）")
+        return []
+
+    proc = subprocess.Popen(
+        [str(exe), "serve"],
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL, text=True, encoding="utf-8", bufsize=1,
+    )
+    fails = []
+
+    def send_and_read(obj):
+        proc.stdin.write(json.dumps(obj) + "\n")
+        proc.stdin.flush()
+        line = proc.stdout.readline()
+        return json.loads(line) if line.strip() else None
+
+    try:
+        r = send_and_read({"id": 1, "method": "compile", "params": {"source": RSS_PROGRAM}})
+        if not (r and r.get("ok")):
+            fails.append("rss-batch-compile")
+            return fails
+        send_and_read({"id": 2, "method": "step.begin"})
+        # 前进到程序中段（产生跨检查点分布的帧），随后多轮远距 seek 制造重放尖峰
+        for i in range(30):
+            send_and_read({"id": 10 + i, "method": "step.next"})
+        for round_no, target in enumerate([8000, 20000, 5000, 20000]):
+            send_and_read({"id": 100 + round_no, "method": "seek", "params": {"step": target}})
+            peak = _peak_commit_mb_windows(proc.pid)
+            if peak >= 0:
+                print(f"  seek({target:>5}) 后提交峰值 ≈ {peak} MB（预算 {budget_mb} MB）")
+        send_and_read({"id": 999, "method": "shutdown"})
+    finally:
+        try:
+            proc.stdin.close()
+        except OSError:
+            pass
+        try:
+            proc.wait(timeout=30)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+
+    peak = _peak_commit_mb_windows(proc.pid)
+    # 进程已退出后句柄失效的兜底：以批内打印的采样为准；这里用退出前最后一次为准
+    # （OpenProcess 对已退出进程仍可查询峰值——保持断言）
+    ok = lambda c, label, detail="": print(f"  {'PASS' if c else 'FAIL'}  {label}" + ("" if c else f"  {detail}")) or (None if c else fails.append(label))
+    if peak >= 0:
+        ok(peak <= budget_mb, "RSS 护栏：提交峰值在预算内",
+           f"peak={peak}MB budget={budget_mb}MB（U2 完成后按 J5 收紧；证红：CIDE_RSS_BUDGET_MB=5）")
+    else:
+        ok(False, "RSS 护栏：采样可用", "psapi 采样失败")
+    return fails
 
 
 # U0#8 / W0-2 边界样例批：越界 seek / 负参 payload.get / 畸形行——历史上这三个

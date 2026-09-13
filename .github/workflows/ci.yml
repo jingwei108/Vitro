@@ -146,6 +146,21 @@ jobs:
           name: engineering-health
           path: reports/engineering_health.md
 
+      # U0#4：target 体积预算（防构建产物无界膨胀拖垮 runner 磁盘——两次 GB 级
+      # 事故的制度性护栏之一；预算 10GB，超限 fail 并回显分布）
+      - name: Target size budget (10GB)
+        shell: bash
+        run: |
+          cd native
+          total_bytes=$(du -sb target 2>/dev/null | cut -f1)
+          total_gb=$(( (total_bytes + 1073741823) / 1073741824 ))
+          echo "native/target = ${total_gb} GB (budget 10 GB)"
+          du -sh target/* 2>/dev/null | sort -rh | head -8
+          if [ "$total_gb" -gt 10 ]; then
+            echo "::error::native/target 超出 10GB 预算——检查是否引入巨型依赖或死 target"
+            exit 1
+          fi
+
       - name: Install cargo-llvm-cov
         run: cargo install cargo-llvm-cov --version 0.6.16
         # 固定版本，避免非确定性；rust-cache 已缓存 cargo 目录
