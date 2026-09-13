@@ -24,7 +24,15 @@ pub(crate) fn infer_binary_search(
         return Some(build_step(algorithm, "loop", &format!("搜索范围 [{}, {}]", l, r)));
     }
 
-    if line_lower.contains("mid") && (line_lower.contains('=') || line_lower.contains('/')) {
+    // U1#1 修复（审查实锤：三分支不可达）：mid_calc 的旧条件
+    // `contains("mid") && (contains('=') || contains('/'))` 过宽——
+    // `if (a[mid] == target)` 含 ==、`left = mid + 1` 含 =，compare /
+    // narrow_left / narrow_right 三个分支全部被短路，循环体里学生只看得到
+    // "计算中点"（机器取证：`if (a[mid] == target)` 被标"计算中点 mid=2"）。
+    // 收紧为声明/赋值形态（行首 int mid / mid = 且含除法特征）。
+    if (line_lower.starts_with("int mid") || line_lower.starts_with("mid ="))
+        && line_lower.contains('/')
+    {
         let m = if mid >= 0 { mid.to_string() } else { "?".to_string() };
         return Some(build_step(algorithm, "mid_calc", &format!("计算中点 mid={}", m)));
     }
@@ -42,24 +50,25 @@ pub(crate) fn infer_binary_search(
     }
 
     if line_lower.contains("right") && line_lower.contains('=') && line_lower.contains("mid") {
-        let m = if mid >= 0 { mid.to_string() } else { "?".to_string() };
+        // U1#1 修复（审查实锤：硬编码差一）：旧文案打印 `right={mid}`，但
+        // 标准二分是 `right = mid - 1`（对照 narrow_right 的 left=mid+1 打印
+        // 恰好正确）。改打印 right 变量的**实际值**——对 `right = mid - 1`
+        // 与 `right = mid`（左闭右开约定）两种实现都正确。
+        let r_now = if right >= 0 { right.to_string() } else { "?".to_string() };
         return Some(build_step(
             algorithm,
             "narrow_left",
-            &format!("目标值在左半区，调整右边界 right={}", m),
+            &format!("目标值在左半区，调整右边界 right={}", r_now),
         ));
     }
 
     if line_lower.contains("left") && line_lower.contains('=') && line_lower.contains("mid") {
-        let m = if mid >= 0 {
-            (mid + 1).to_string()
-        } else {
-            "?".to_string()
-        };
+        // 同上：打印 left 变量实际值，而非硬编码 mid+1。
+        let l_now = if left >= 0 { left.to_string() } else { "?".to_string() };
         return Some(build_step(
             algorithm,
             "narrow_right",
-            &format!("目标值在右半区，调整左边界 left={}", m),
+            &format!("目标值在右半区，调整左边界 left={}", l_now),
         ));
     }
 
@@ -146,6 +155,12 @@ pub(crate) fn infer_string_match_kmp(
     let k = vars.get_int_any(&["k"]).unwrap_or(-1);
 
     if line_lower.contains("getnext") || (line_lower.contains("next[") && line_lower.contains('=')) {
+        // U1#1 P1-19/96（用户审阅）：main 里的 getNext(T, next) 调用行命中
+        // contains("getnext")，数值取的是外层作用域 j/k（巧合非构建帧）。
+        // 调用点产出无数值的启动描述；函数体内（next[..] = 赋值形态）才带数值。
+        if !line_lower.contains("next[") {
+            return Some(build_step(algorithm, "build_next", "调用构建 next 数组"));
+        }
         return Some(build_step(
             algorithm,
             "build_next",
@@ -162,4 +177,71 @@ pub(crate) fn infer_string_match_kmp(
     }
 
     None
+}
+
+#[cfg(test)]
+mod tests {
+    // 测试断言失败即 panic 是合理语义（同 crash_regression_tests 先例）
+    #![allow(clippy::unwrap_used, clippy::expect_used)]
+
+    use super::*;
+
+    fn algo() -> AlgorithmMatch {
+        AlgorithmMatch {
+            name: "binary_search".to_string(),
+            display_name: "二分查找".to_string(),
+            func_name: "binary_search".to_string(),
+            confidence: 90,
+            suggestion: String::new(),
+            line: 1,
+        }
+    }
+
+    fn vars(pairs: &[(&str, &str)]) -> Vec<crate::VariableSnapshot> {
+        pairs
+            .iter()
+            .map(|(n, v)| crate::VariableSnapshot { name: n.to_string(), value: v.to_string() })
+            .collect()
+    }
+
+    /// U1#1 红锚①：比较行不得被 mid_calc 短路。旧条件
+    /// `contains("mid") && (contains('=') || contains('/'))` 过宽——
+    /// `if (a[mid] == target)` 含 ==，compare/narrow_left/narrow_right
+    /// 三分支全部不可达（机器取证：比较行被标"计算中点 mid=2"，
+    /// 学生在循环体里只看得到"计算中点"——概念教反级）。
+    #[test]
+    fn compare_line_not_swallowed_by_mid_calc() {
+        let v = vars(&[("left", "0"), ("right", "4"), ("mid", "2"), ("target", "7")]);
+        let step = infer_binary_search("if (a[mid] == target) return mid;", &VarMap::new(&v), &algo())
+            .expect("比较行应有算法步骤标注");
+        assert_eq!(step.phase, "compare", "比较行应命中 compare 分支，实际 {:?}", step);
+        assert!(step.description.contains("arr[2]"), "描述应含比较下标: {}", step.description);
+    }
+
+    /// U1#1 红锚②：narrow 打印**实际边界值**而非硬编码 mid（差一修复）。
+    /// `right = mid - 1` 执行后 right=1（mid=2）——旧文案打印 right=2。
+    /// 用实际值对 `right = mid - 1`（闭区间）与 `right = mid`（左闭右开）
+    /// 两种约定都正确。
+    #[test]
+    fn narrow_uses_actual_boundary_value() {
+        let v = vars(&[("left", "0"), ("right", "1"), ("mid", "2"), ("target", "7")]);
+        let step = infer_binary_search("right = mid - 1;", &VarMap::new(&v), &algo())
+            .expect("边界更新行应有算法步骤标注");
+        assert_eq!(step.phase, "narrow_left");
+        assert!(
+            step.description.contains("right=1"),
+            "应打印 right 实际值 1（mid=2 减一），而非 mid 本身（差一）: {}",
+            step.description
+        );
+    }
+
+    /// 反向锚：mid 计算行（声明/赋值形态 + 除法）仍命中 mid_calc。
+    #[test]
+    fn mid_calc_line_still_detected() {
+        let v = vars(&[("left", "0"), ("right", "4"), ("mid", "2"), ("target", "7")]);
+        let step = infer_binary_search("int mid = (left + right) / 2;", &VarMap::new(&v), &algo())
+            .expect("mid 计算行应有算法步骤标注");
+        assert_eq!(step.phase, "mid_calc");
+        assert!(step.description.contains("mid=2"));
+    }
 }

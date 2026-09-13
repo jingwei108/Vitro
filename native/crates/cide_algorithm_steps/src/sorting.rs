@@ -87,7 +87,11 @@ pub(crate) fn infer_selection_sort(
     let line_lower = source_line.to_lowercase();
     let i = vars.get_int("i").unwrap_or(-1);
     let j = vars.get_int("j").unwrap_or(-1);
-    let min_idx = vars.get_int_any(&["min_idx", "minIndex", "min", "minindex"]).unwrap_or(-1);
+    // U1#1 P1-84（用户审阅）：selection 模板变量名是驼峰 minIdx——别名表
+    // 曾漏它导致 min_idx=? / arr[?]（案例家族还暴露 arr[n] 越界，见下方守卫）。
+    let min_idx = vars
+        .get_int_any(&["min_idx", "minIndex", "min", "minindex", "minIdx"])
+        .unwrap_or(-1);
 
     if line_lower.starts_with("for ") || line_lower.starts_with("while ") {
         if line_lower.contains('i') && !line_lower.contains('j') {
@@ -114,6 +118,12 @@ pub(crate) fn infer_selection_sort(
     }
 
     if line_lower.starts_with("if ") && is_comparison_line(&line_lower) {
+        // U1#1 P1-84：越界守卫——案例家族实测出现 arr[5]（n=5 越界）与
+        // j == n 的收尾帧；j 不在 [0, n) 时该帧不产出 compare。
+        let n_val = vars.get_int("n").unwrap_or(-1);
+        if n_val >= 0 && j >= n_val {
+            return None;
+        }
         let j_str = if j >= 0 { j.to_string() } else { "?".to_string() };
         let min_str = if min_idx >= 0 {
             min_idx.to_string()
@@ -177,17 +187,24 @@ pub(crate) fn infer_insertion_sort(
         return Some(build_step(algorithm, "compare", &format!("比较 arr[{}] 与 key={}", j_str, key)));
     }
 
-    if (source_line.contains("arr[") || source_line.contains("a["))
+    // U1#1 P1-60（用户审阅）：旧条件过宽——命中 L5 `int key = arr[i];`
+    //（读操作，j 未定义 → "?"），并让后移行 arr[j+1] = arr[j] 反复报
+    // "插入到位置"。收紧为 `arr[j + 1] = key` 写回形态。
+    if line_lower.contains("key")
+        && (source_line.contains("[j + 1]") || source_line.contains("[j+1]"))
         && source_line.contains('=')
-        && !line_lower.starts_with("for ")
-        && !line_lower.starts_with("while ")
+        && !source_line.contains("= arr")
     {
-        let pos = if j >= 0 { (j + 1).to_string() } else { "?".to_string() };
-        return Some(build_step(
-            algorithm,
-            "insert",
-            &format!("将 key={} 插入到正确位置 {}", key, pos),
-        ));
+        // j 在内层 while 退出后可能已不可得（作用域收回）——取不到时
+        // 文案不带位置数字，避免"位置 ?"（用户审阅 P1-60 家族）。
+        if j >= 0 {
+            return Some(build_step(
+                algorithm,
+                "insert",
+                &format!("将 key={} 插入到正确位置 {}", key, j + 1),
+            ));
+        }
+        return Some(build_step(algorithm, "insert", &format!("将 key={} 插入", key)));
     }
 
     if line_lower.starts_with("return") {
@@ -215,6 +232,8 @@ pub(crate) fn infer_quick_sort(
 
     // 递归调用自身
     if source_line.contains(&format!("{}(", func_name)) {
+        // side 默认空串：旧默认 "子" 与文案 "…处理{}子数组" 拼出
+        // "子子数组"（用户审阅 P1-79 错字实锤——不是文案字面量能 replace 的）。
         let side = if i >= 0 && pivot >= 0 {
             if i < pivot {
                 "左"
@@ -222,13 +241,18 @@ pub(crate) fn infer_quick_sort(
                 "右"
             }
         } else {
-            "子"
+            ""
         };
-        return Some(build_step(
-            algorithm,
-            "recursive",
-            &format!("递归调用 {}，处理{}子数组 [left={}, right={}]", func_name, side, left, right),
-        ));
+        // U1#1 P1-79（用户审阅）：空区间/反区间帧（left > right，递归基）
+        // 不产出 recursive——实测家族含 [left=0, right=-1] 等形态。
+        if left >= 0 && right >= 0 && left <= right {
+            return Some(build_step(
+                algorithm,
+                "recursive",
+                &format!("递归调用 {}，处理{}子数组 [left={}, right={}]", func_name, side, left, right),
+            ));
+        }
+        return None;
     }
 
     if line_lower.contains("pivot") && line_lower.contains('=') && !line_lower.starts_with("for ") {
@@ -272,11 +296,24 @@ pub(crate) fn infer_merge_sort(
     let right = vars.get_int_any(&["right", "high", "r", "end"]).unwrap_or(-1);
 
     if source_line.contains(&format!("{}(", func_name)) {
-        return Some(build_step(
-            algorithm,
-            "recursive_split",
-            &format!("将数组区间 [{}, {}] 递归分成两半", left, right),
-        ));
+        // U1#1 P1-79：main 顶层调用称"递归分成两半"错位（它是启动调用）；
+        // 空区间（left > right，递归基）不产出。
+        let in_main = func_name != "main" && source_line.contains("main");
+        if in_main {
+            return Some(build_step(
+                algorithm,
+                "recursive_split",
+                &format!("启动归并：处理区间 [{}, {}]", left, right),
+            ));
+        }
+        if left >= 0 && right >= 0 && left < right {
+            return Some(build_step(
+                algorithm,
+                "recursive_split",
+                &format!("将数组区间 [{}, {}] 递归分成两半", left, right),
+            ));
+        }
+        return None;
     }
 
     if line_lower.contains("merge") && line_lower.contains('(') {
@@ -383,13 +420,17 @@ pub(crate) fn infer_counting_sort(
         return Some(build_step(algorithm, "count", "统计每个数值的出现次数"));
     }
 
+    // U1#1 P1-21 顺带：`int index = 0;` 声明行不得判 place（真实写入是
+    // arr[index++] = i;）。place 判据收紧为 index++ 形态。
+    if line_lower.contains("index++") {
+        return Some(build_step(algorithm, "place", "将数值放回原数组的正确位置"));
+    }
+
     if line_lower.starts_with("for ") && line_lower.contains("i") && line_lower.contains("10") {
         return Some(build_step(algorithm, "collect", "按数值从小到大收集元素"));
     }
 
-    if line_lower.contains("index") && line_lower.contains('=') {
-        return Some(build_step(algorithm, "place", "将数值放回原数组的正确位置"));
-    }
+
 
     if line_lower.starts_with("return") {
         return Some(build_step(algorithm, "finish", "计数排序完成"));
@@ -415,7 +456,14 @@ pub(crate) fn infer_radix_sort(
     let exp = vars.get_int_any(&["exp"]).unwrap_or(-1);
 
     if line_lower.contains("exp") && line_lower.contains("max") && line_lower.contains("/") {
-        return Some(build_step(algorithm, "digit_loop", &format!("按第 {} 位进行分配-收集", exp)));
+        // U1#1 P1-81（用户审阅）：exp 是位权（1/10/100）非位序——文案当
+        // "第几位"打印会出现"按第 10 位"。改为位序（log10(exp)+1）。
+        let digit = if exp > 0 {
+            (exp as f64).log10() as i32 + 1
+        } else {
+            0
+        };
+        return Some(build_step(algorithm, "digit_loop", &format!("按第 {} 位进行分配-收集", digit)));
     }
 
     if line_lower.contains("count[") && line_lower.contains("++") && !line_lower.contains("+=") {

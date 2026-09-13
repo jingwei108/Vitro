@@ -55,7 +55,8 @@ pub(crate) fn infer_seq_list(
         return Some(build_step(algorithm, "place", "在目标位置放入元素"));
     }
 
-    if line_lower.contains("length") && line_lower.contains("++") {
+    // U1#1 P1-89（用户审阅）：旧判据命中后移循环，真值在 L->length--。
+    if source_line.contains("length--") || source_line.contains("length++") {
         return Some(build_step(algorithm, "update_len", "更新表长度"));
     }
 

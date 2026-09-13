@@ -23,6 +23,12 @@ pub(crate) fn infer_bfs(source_line: &str, vars: &VarMap, algorithm: &AlgorithmM
     }
 
     if line_lower.contains("queue[rear++]") || (line_lower.contains("rear") && line_lower.contains("++")) {
+        // U1#1 P1-6（用户审阅）：首帧常为起点入队（queue[rear++] = start），
+        // 文案区分起点与邻居。
+        if line_lower.contains("start") || line_lower.contains("source") || line_lower.contains("root")
+        {
+            return Some(build_step(algorithm, "enqueue", "起点入队"));
+        }
         return Some(build_step(algorithm, "enqueue", "邻居节点入队"));
     }
 
@@ -87,7 +93,10 @@ pub(crate) fn infer_prim_mst(
         return Some(build_step(algorithm, "select_min", &format!("选择最小边，顶点 k={}", k)));
     }
 
-    if line_lower.contains("lowcost")
+    // U1#1 P1-76（用户审阅）：旧条件命中初始化行 `lowcost[0] = 0;`（k 未
+    // 初始化 → "顶点 -1 加入生成树"）。收紧为 `lowcost[k] = 0` 形态——
+    // 与 dijkstra 的 visited[u] 同款修法。
+    if (line_lower.contains("lowcost[k]") || line_lower.contains("lowcost [k]"))
         && line_lower.contains('0')
         && line_lower.contains('=')
         && !line_lower.contains("!=")
@@ -142,7 +151,11 @@ pub(crate) fn infer_dijkstra(
         return Some(build_step(algorithm, "select", &format!("选择距离最小的未确定顶点 u={}", u)));
     }
 
-    if line_lower.contains("visited") && line_lower.contains('=') && line_lower.contains('1') {
+    // U1#1 P0-1 复审补充：旧条件 `contains("visited") && contains('=') &&
+    // contains('1')` 把初始化行 `visited[v0] = 1;` 误判"确认顶点"（u 取到
+    // 未初始化哨兵 -1，实测"顶点 -1 的最短距离已确定"）。收紧为
+    // `visited[u] = 1` 形态（u 作下标才是确认）。
+    if line_lower.contains("visited[u]") && line_lower.contains('=') {
         return Some(build_step(algorithm, "confirm", &format!("顶点 {} 的最短距离已确定", u)));
     }
 
@@ -199,4 +212,53 @@ pub(crate) fn infer_topological_sort(
     }
 
     None
+}
+
+#[cfg(test)]
+mod tests {
+    // 测试断言失败即 panic 是合理语义（同 crash_regression_tests 先例）
+    #![allow(clippy::unwrap_used, clippy::expect_used)]
+
+    use super::*;
+
+    fn algo() -> AlgorithmMatch {
+        AlgorithmMatch {
+            name: "dijkstra".to_string(),
+            display_name: "Dijkstra".to_string(),
+            func_name: "dijkstra".to_string(),
+            confidence: 90,
+            suggestion: String::new(),
+            line: 1,
+        }
+    }
+
+    /// U1#1 P0-1 复审：初始化行 `visited[v0] = 1;` 不得被判"确认顶点"
+    /// （u 未初始化哨兵 -1，实测输出"顶点 -1 的最短距离已确定"）。
+    #[test]
+    fn init_visited_line_not_confirmed_as_vertex() {
+        let v = vec![crate::VariableSnapshot {
+            name: "u".to_string(),
+            value: "-1".to_string(),
+        }];
+        let vars = VarMap::new(&v);
+        let r = infer_dijkstra("visited[v0] = 1;", &vars, &algo());
+        assert!(
+            r.is_none() || !r.expect("checked").description.contains("-1"),
+            "初始化行不应产出'顶点 -1 已确定'"
+        );
+    }
+
+    /// 反向锚：`visited[u] = 1;` 仍产出 confirm。
+    #[test]
+    fn visited_u_line_still_confirms() {
+        let v = vec![crate::VariableSnapshot {
+            name: "u".to_string(),
+            value: "1".to_string(),
+        }];
+        let vars = VarMap::new(&v);
+        let r = infer_dijkstra("visited[u] = 1;", &vars, &algo())
+            .expect("visited[u] 行应有标注");
+        assert_eq!(r.phase, "confirm");
+        assert!(r.description.contains("顶点 1"));
+    }
 }
