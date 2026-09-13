@@ -499,7 +499,13 @@ impl BytecodeGen {
                 }
             }
         } else {
-            let values = flatten_init_list(elements, &mut self.errors);
+            // U1#2（2026-09-13，评估 R1 实锤修复）：flatten 调用保留——其副作用
+            // 仍上报 designated initializer 的上下文错误——但**不再用它的值**。
+            // 此前 4 字节元素只对 Identifier/StringLiteral 走 gen_expr，其余
+            //（Call/算术等）落入 flatten 值（非字面量返回 None）→ unwrap_or(0)
+            // → PushConst 0：`int a[2]={f(),3}` 的 a[0] 静默变成 0。现在与
+            // 8 字节分支一致，全部走 gen_expr（通用表达式求值）。
+            flatten_init_list(elements, &mut self.errors);
             for i in 0..count as usize {
                 let addr_offset = (i as i32) * elem_size;
                 self.emit(OpCode::LoadLocal, base_temp, loc);
@@ -511,12 +517,8 @@ impl BytecodeGen {
                     if elem_size == 8 {
                         self.gen_expr(&mut elem.value);
                         self.emit(OpCode::StoreMemD, 0, loc);
-                    } else if matches!(&elem.value, Expr::Identifier { .. } | Expr::StringLiteral { .. }) {
-                        self.gen_expr(&mut elem.value);
-                        self.emit(OpCode::StoreMem, 0, loc);
                     } else {
-                        let val = values.get(i).copied().unwrap_or(0);
-                        self.emit(OpCode::PushConst, val, loc);
+                        self.gen_expr(&mut elem.value);
                         self.emit(OpCode::StoreMem, 0, loc);
                     }
                 } else {

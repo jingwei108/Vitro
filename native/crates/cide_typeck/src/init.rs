@@ -237,7 +237,11 @@ impl TypeChecker {
                 }
                 let total_elems = arr_type.total_elements();
                 if let Type::Array { dims, array_size, .. } = arr_type {
-                    if dims[0] <= 0 {
+                    // U1#12：仅"未指定尺寸"（哨兵 -1）可由初始化器推断——
+                    // 此前 `<= 0` 会把显式 `int c[0]={1,2}` 静默推断成 2 元素
+                    // 数组（clang 拒绝该写法）；显式 0/负尺寸由
+                    // check_array_dims_legality 报错，这里不再兜底吞掉。
+                    if dims[0] == -1 {
                         dims[0] = elements.len() as i32;
                         *array_size = total_elems;
                     }

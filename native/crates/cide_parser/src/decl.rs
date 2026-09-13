@@ -827,7 +827,9 @@ pub(crate) fn eval_enum_const(expr: &Expr) -> Option<i64> {
         Expr::Unary { op, operand, .. } => {
             let v = eval_enum_const(operand)?;
             match op {
-                UnaryOp::Neg => Some(-v),
+                // U1#9：取负改 checked——i64::MIN 取负在 debug panic / release
+                // wrapping 静默错值（"构建配置决定语义"），溢出返回 None
+                UnaryOp::Neg => v.checked_neg(),
                 UnaryOp::BitNot => Some(!v),
                 UnaryOp::Not => Some((v == 0) as i64),
                 _ => None,
@@ -842,8 +844,10 @@ pub(crate) fn eval_enum_const(expr: &Expr) -> Option<i64> {
                 BinaryOp::Mul => a.checked_mul(b),
                 BinaryOp::Div => a.checked_div(b),
                 BinaryOp::Mod => a.checked_rem(b),
-                BinaryOp::Shl => Some(a << b),
-                BinaryOp::Shr => Some(a >> b),
+                // U1#9：移位改 checked——b ≥ 64（如 static_assert(1<<1000)）
+                // 在 debug panic（decl.rs:845 实测）、release UB；负移位同样非法
+                BinaryOp::Shl => a.checked_shl(b.try_into().ok()?),
+                BinaryOp::Shr => a.checked_shr(b.try_into().ok()?),
                 BinaryOp::BitAnd => Some(a & b),
                 BinaryOp::BitOr => Some(a | b),
                 BinaryOp::BitXor => Some(a ^ b),

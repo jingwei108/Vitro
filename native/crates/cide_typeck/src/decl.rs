@@ -226,6 +226,16 @@ impl TypeChecker {
                 // 普通变量（尤其是数组）必须在初始化表达式处理完成后再声明，否则符号表中的类型
                 // 无法反映 check_array_initializer 推断出的数组大小。
                 let is_ctor_init = self.try_process_ctor_init(name, var_type, init, loc, *is_static);
+                // U1#12：数组尺寸合法性（负/零/缺尺寸且无初始化器）——
+                // has_init_list = true 时允许 `int t[]={...}` 推断尺寸
+                if var_type.is_array() {
+                    self.check_array_dims_legality(
+                        var_type,
+                        // StringLiteral（char s[]="..."）同样可推断尺寸，不得误拒
+                        matches!(init, Some(Expr::InitList { .. }) | Some(Expr::StringLiteral { .. })),
+                        loc,
+                    );
+                }
                 if let Some(ref mut init_expr) = init {
                     if var_type.is_array() {
                         self.check_array_initializer(var_type, init_expr, loc);

@@ -308,6 +308,14 @@ impl TypeChecker {
             }
         }
         for g in &mut program.globals {
+            // U1#12：全局数组尺寸合法性——extern 不完整声明（extern int g[];）
+            // 是合法的，跳过；无初始化器的 `int a[];` 全局定义必须报错
+            //（此前该路径完全无检查）
+            if g.ty.is_array() && !g.is_extern {
+                let has_init_list = matches!(g.init, Some(Expr::InitList { .. }) | Some(Expr::StringLiteral { .. }));
+                let ty_snapshot = g.ty.clone();
+                self.check_array_dims_legality(&ty_snapshot, has_init_list, &g.loc);
+            }
             if let Some(ref mut init) = g.init {
                 if g.ty.is_array() {
                     self.check_array_initializer(&mut g.ty, init, &g.loc);
@@ -495,6 +503,46 @@ impl TypeChecker {
             column: loc.column,
             code: code as i32,
         });
+    }
+
+    /// U1#12（2026-09-13）：数组声明尺寸合法性——此前三形状零诊断静默接受
+    /// （评估 C5/T6 实锤）：`int a[];`（无尺寸无初始化器，任何索引都是未知
+    /// 边界越界）、`int b[-5];`（负尺寸）、`int c[0]={1,2};`（显式零尺寸，
+    /// init.rs 曾把它静默推断成 2 元素数组）。clang 对三者均报错。
+    ///
+    /// 尺寸约定（parser `array_dim_info`）：`-1` = 未指定（哨兵）、`0` = VLA
+    /// 或显式零（靠 `is_vla` 区分）、负字面量原样传入。**不误伤**：初始化器
+    /// 推断（`int t[]={1,2}`，dims==-1 且有 InitList）、VLA（is_vla）、
+    /// 函数参数退化（不经过本检查）、`extern` 不完整声明（调用方跳过）。
+    pub(crate) fn check_array_dims_legality(&mut self, ty: &Type, has_init_list: bool, loc: &SourceLoc) {
+        let Type::Array { dims, is_vla, .. } = ty else {
+            return;
+        };
+        if *is_vla {
+            return; // VLA 维度运行时求值，另有边界检查
+        }
+        let first = dims.first().copied().unwrap_or(-1);
+        if first < -1 {
+            self.report_error(
+                &format!("数组大小不能为负数（{}）", first),
+                loc,
+                ErrorCode::E2002_ExpectedArraySize,
+            );
+        } else if first == -1 && !has_init_list {
+            self.report_error(
+                "数组缺少数组大小：需要显式大小或初始化器来推断（int a[N]; 或 int a[] = {...};）",
+                loc,
+                ErrorCode::E2002_ExpectedArraySize,
+            );
+        } else if first == 0 {
+            // 显式零尺寸（`int c[0]`，含带初始化器——此前 {1,2} 被静默推断成
+            // 2 元素数组）；零长度数组不是标准 C，教学子集不支持
+            self.report_error(
+                "数组大小不能为 0（零长度数组不在教学子集内）",
+                loc,
+                ErrorCode::E2002_ExpectedArraySize,
+            );
+        }
     }
 
     /// W0-4（R-2026-09-12）：int→char 初始化器是否确定无损。

@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (typeck/codegen/parser)：U1 第一批 P0 静默错值收口——#12 数组形状零诊断 + #2 初始化列表静默置 0 + #9 常量折叠 panic 家族
+
+- **#12 非法数组形状零诊断（评估 C5/T6 实锤，红→绿）**：`int a[];`（无尺寸
+  无初始化器——任何索引都是未知边界越界）、`int b[-5];`（负尺寸——此前
+  `Unary(Neg)` 不被 `array_dim_info` 识别，**静默变成 VLA**）、`int c[0]={1,2};`
+  （显式零尺寸——init.rs 的 `dims[0] <= 0` 推断分支把它**静默改成 2 元素
+  数组**）三者此前全部"编译成功"零诊断（clang 均拒绝）。修复：新增
+  `check_array_dims_legality`（typeck 局部 + 全局双接线；哨兵语义：
+  -1=未指定、0=显式零、负字面量原样；VLA/extern/参数退化不误伤）；
+  `array_dim_info` 折叠一元负字面量；init.rs 推断收紧为仅 `-1`。
+  **误伤教训**：首版 `has_init_list` 只认 InitList——`char s[]="hello"`
+  （StringLiteral）被误拒，shadow 6 例 compile_gap 当场抓回，补
+  StringLiteral 判定后 668 全绿。baseline `u1_array_dims_legality.c`
+  固化（双侧编译失败 = match）。
+- **#2 初始化列表静默置 0（评估 R1 动态实锤，红→绿）**：`int a[2]={f(),3}`
+  的 a[0] 输出 **0**（f() 的 7 被吞）——codegen 局部数组 4 字节元素只对
+  Identifier/StringLiteral 走 gen_expr，其余落入 flatten 值
+  （非字面量返回 None）→ `unwrap_or(0)` → PushConst 0。红锚实测
+  `0 3 | 0 0 0` vs clang `7 3 | 11 49 93`（五个非 Identifier 元素全静默）。
+  修复：与 8 字节分支一致无条件 gen_expr（flatten 调用保留——其
+  designated-initializer 诊断副作用仍在）；char 数组路径同分支自动同步
+  （`{f(),'B',0}` → "AB" 与 clang 一致）。shadow 668 门禁通过零回归。
+- **#9 常量折叠溢出 panic 家族（前端审查 #4，红→绿）**：求值器
+  `eval_enum_const`（原路线图引用的 cond.rs 已随 crate 化迁移至
+  parser/decl.rs）中取负与双移位是裸运算——`_Static_assert(1<<1000)` 在
+  debug 构建 **panic**（decl.rs:845 shift overflow，本机复现留痕）、release
+  UB 绕回静默错值（"构建配置决定语义"）；除/模已是 checked。修复：
+  `checked_neg` / `checked_shl` / `checked_shr`（负移位与 ≥64 一律 None，
+  走"非常量表达式"诊断）。红锚 debug 轮廓 panic → 修复后 debug/release
+  双轮廓绿。
+
 ### Changed (tests/tools)：U0 #1 + #6 收官——cide_better 16 → 0（J2 闭环）+ 红→绿规约成文
 
 - **cide_better 16 例逐例审计（J2 二择一：补头转真 golden / 移 gap 写明扩展）**：

@@ -445,6 +445,19 @@ impl Parser {
             Some(expr) => {
                 if let Expr::Literal { value, .. } = expr.as_ref() {
                     (*value, false, None)
+                } else if let Expr::Unary { op, operand, .. } = expr.as_ref() {
+                    // U1#12：`int b[-5]` 的尺寸是 Unary(Neg, Literal(5))——
+                    // 此前不识别被当 VLA（0, is_vla），负尺寸静默变成"运行时
+                    // 负维度"。折叠一元负字面量，让 typeck 报"负数组大小"。
+                    if matches!(op, UnaryOp::Neg) {
+                        if let Expr::Literal { value, .. } = operand.as_ref() {
+                            (-*value, false, None)
+                        } else {
+                            (0, true, Some(expr.clone()))
+                        }
+                    } else {
+                        (0, true, Some(expr.clone()))
+                    }
                 } else {
                     (0, true, Some(expr.clone()))
                 }
