@@ -22,7 +22,10 @@ use std::ptr;
 /// 追加 `cide_get_program_output_length` / `cide_get_program_output` /
 /// `cide_get_engine_notes_length` / `cide_get_engine_notes` / `cide_get_program_output_delta`
 /// —— 按"加函数 = minor"承诺升 minor。
-pub const CIDE_ABI_VERSION: &str = "1.1.0";
+///
+/// 1.2.0（2026-09-13，D5 收尾重构）：追加 `cide_get_compile_errors_length`，
+/// 供驱动侧定长缓冲精确读取编译错误，消除变长窗口扫描的越界读依赖。
+pub const CIDE_ABI_VERSION: &str = "1.2.0";
 
 /// 把 Rust 字符串的所有权交给调用方（rust-alloc）。
 fn owned_c_string(s: String) -> *mut c_char {

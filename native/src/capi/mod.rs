@@ -130,6 +130,23 @@ pub unsafe extern "C" fn cide_get_compile_errors(s: *mut Session) -> *const c_ch
 }
 
 #[no_mangle]
+/// cide_get_compile_errors_length 的 C API 封装（ABI 1.2.0，加函数 = minor）。
+///
+/// 返回编译错误 JSON 的字节长度（不含 NUL 终止符），无错误时返回 0。
+/// 与 `cide_get_compile_errors` 配套：驱动侧可先取长度再用定长缓冲精确读取，
+/// 不再依赖"NUL 终止字符串 + 变长窗口扫描"（对短于扫描窗口的分配是越界读）。
+///
+/// # Safety
+/// - `s` 必须是由 `cide_session_create` 返回的有效 `Session` 指针，且未被 `cide_session_destroy` 销毁。
+pub unsafe extern "C" fn cide_get_compile_errors_length(s: *mut Session) -> c_int {
+    if s.is_null() {
+        return 0;
+    }
+    let session = &mut *s;
+    session.compile.errors.len() as c_int
+}
+
+#[no_mangle]
 /// E2：引擎能力清单 JSON（机器可读真实能力；无状态，返回常量指针）。
 ///
 /// # Safety

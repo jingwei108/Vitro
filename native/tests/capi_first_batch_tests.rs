@@ -77,6 +77,29 @@ fn test_engine_version_non_empty() {
     }
 }
 
+// ─── compile_errors_length（ABI 1.2.0）───────────────────────────────────────
+
+#[test]
+fn test_compile_errors_length_matches_string() {
+    unsafe {
+        // 干净会话：无编译错误 → length 0 且指针为 null
+        let ok = compile_session("int main() { return 0; }");
+        assert_eq!(capi::cide_get_compile_errors_length(ok), 0, "无错误应返回 0");
+        assert!(capi::cide_get_compile_errors(ok).is_null(), "无错误应返回 null");
+        capi::cide_session_destroy(ok);
+
+        // 编译失败会话：length > 0 且与 NUL 终止串字节数一致（不含 NUL）
+        let bad = compile_session("int main() { int x = ; }");
+        let n = capi::cide_get_compile_errors_length(bad);
+        assert!(n > 0, "编译错误时 length 应 > 0");
+        let p = capi::cide_get_compile_errors(bad);
+        assert!(!p.is_null(), "编译错误时应返回非 null 指针");
+        let bytes = CStr::from_ptr(p).to_bytes();
+        assert_eq!(bytes.len(), n as usize, "length 应等于不含 NUL 的字节长度");
+        capi::cide_session_destroy(bad);
+    }
+}
+
 // ─── last_error ──────────────────────────────────────────────────────────────
 
 #[test]
