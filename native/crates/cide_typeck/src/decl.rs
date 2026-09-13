@@ -247,7 +247,17 @@ impl TypeChecker {
                             }
                         } else {
                             let init_type = self.resolve_expr_type(init_expr);
-                            if !self.check_assignable(var_type, &init_type, loc) {
+                            // W0-4：char 窄化豁免（同主路径）
+                            let suppress = var_type.kind() == TypeKind::Char
+                                && Self::is_char_safe_initializer(init_expr);
+                            if suppress {
+                                self.char_narrow_suppress = true;
+                            }
+                            let assignable_ctor = self.check_assignable(var_type, &init_type, loc);
+                            if suppress {
+                                self.char_narrow_suppress = false;
+                            }
+                            if !assignable_ctor {
                                 self.report_error(
                                     &format!("类型不匹配：无法将 '{}' 赋值给 '{}'", init_type, var_type),
                                     loc,
@@ -270,7 +280,17 @@ impl TypeChecker {
                         }
                     } else {
                         let init_type = self.resolve_expr_type(init_expr);
-                        if !self.check_assignable(var_type, &init_type, loc) {
+                        // W0-4：char 变量的字符常量/值域内整常量初始化是 C 惯用写法，豁免窄化警告
+                        let suppress = var_type.kind() == TypeKind::Char
+                            && Self::is_char_safe_initializer(init_expr);
+                        if suppress {
+                            self.char_narrow_suppress = true;
+                        }
+                        let assignable_var = self.check_assignable(var_type, &init_type, loc);
+                        if suppress {
+                            self.char_narrow_suppress = false;
+                        }
+                        if !assignable_var {
                             self.report_error(
                                 &format!("类型不匹配：无法将 '{}' 赋值给 '{}'", init_type, var_type),
                                 loc,
@@ -320,7 +340,17 @@ impl TypeChecker {
                                 }
                             } else {
                                 let init_type = self.resolve_expr_type(init_expr);
-                                if !self.check_assignable(ety, &init_type, loc) {
+                                // W0-4：char 窄化豁免（同主路径）
+                                let suppress = ety.kind() == TypeKind::Char
+                                    && Self::is_char_safe_initializer(init_expr);
+                                if suppress {
+                                    self.char_narrow_suppress = true;
+                                }
+                                let assignable_ctor = self.check_assignable(ety, &init_type, loc);
+                                if suppress {
+                                    self.char_narrow_suppress = false;
+                                }
+                                if !assignable_ctor {
                                     self.report_error(
                                         &format!("类型不匹配：无法将 '{}' 赋值给 '{}'", init_type, ety),
                                         loc,
@@ -342,7 +372,17 @@ impl TypeChecker {
                             }
                         } else {
                             let init_type = self.resolve_expr_type(init_expr);
-                            if !self.check_assignable(ety, &init_type, loc) {
+                            // W0-4：同主声明路径的 char 窄化豁免
+                            let suppress = ety.kind() == TypeKind::Char
+                                && Self::is_char_safe_initializer(init_expr);
+                            if suppress {
+                                self.char_narrow_suppress = true;
+                            }
+                            let assignable_ety = self.check_assignable(ety, &init_type, loc);
+                            if suppress {
+                                self.char_narrow_suppress = false;
+                            }
+                            if !assignable_ety {
                                 self.report_error(
                                     &format!("类型不匹配：无法将 '{}' 赋值给 '{}'", init_type, ety),
                                     loc,

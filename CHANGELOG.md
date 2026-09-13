@@ -7,6 +7,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (unified/serve)：W0-2 止血收口——seek/payload.get 参数域三处 panic 真修 + serve 主循环 panic 护栏
+
+- **R-2026-09-01/02（seek 越程 panic）本轮真修**：`finish_replay_window` 的
+  `split_off(discard)` 在 seek 目标远超已有步数时理论 discard 大于缓存长度
+  （10 步程序 + `seek(50000)` → split index 48001 > len 10）。此前工作区曾
+  以为"已修复"，实测 **8 个探针会话仍各 panic 一次**（stderr 日志实证）——
+  修复 = `discard.min(len)` 钳位 + 缓存起点按实际推进量记账。
+- **R-2026-09-03（payload.get 负 end panic）本轮真修**：`get_payloads` 的
+  `((-1).min(cache_end) as usize)` 绕回 `usize::MAX` 后切片 panic——旧"修复"
+  的 clamp 顺序有缺陷（`min` 对负数不封底，`as usize` 负数绕回）。
+  修复 = 先钳到 `[start_step, cache_end]` 再转 usize。
+- **R-2026-09-04（serve 主循环无护栏）**：`cmd_serve` 给 `serve_handle` 包
+  `catch_unwind`——panic 转错误帧（"内部错误（会话已重置）"）+ 保守重建会话，
+  一条畸形请求不再杀死整个会话进程。**埋雷验证（J9）**：注入 `panic!` 实测
+  错误帧返回、后续请求正常服务、进程存活。
+- 回归锚：`native/tests/serve_param_domain_regression.rs` 五条（远/中距越界
+  seek、越界后回 seek、多次远距 seek、负参 get_payloads 单元级）。
+- 验收：`interaction_probe`（Go，J9 有牙）**从红转绿**——1800 请求 0 死亡
+  0 非法响应 0 不变量违反、fuzz 30/30 响应进程存活、stderr 零 panic 记录。
+
+### Changed (capi)：W0-3 契约止血——`cide_get_capabilities_json` 所有权对齐书面契约（ABI 1.3.0）+ 头文件补齐 20 声明 + 入口护栏全覆盖
+
+- **所有权 P0 修复（红→绿）**：`cide_get_capabilities_json` 曾返回 `OnceLock`
+  静态指针（"无需释放"），与书面契约"全部 JSON 函数为 rust-alloc 所有权
+  （`cide_free_string` 释放）"矛盾——**下游按契约释放即 UAF**。改为
+  序列化进程级缓存一次、每次调用 clone 出独立 rust-alloc 缓冲；契约测试
+  `capi_string_ownership_contract_test` 先红（两次调用返回同一指针）后绿
+  （不同指针 + 各自 free + 会话级 JSON 出口全周期 free 存活）。ABI
+  1.2.0 → **1.3.0**（行为契约变更 = minor）。
+- **头文件补齐 20 个缺失声明**（实测更正：裁定原记 19）：含 `cide_free_string`
+  与整个 `*_json` 族、`cide_set_max_steps` / 断点 / 步进 / JIT 统计 / 隔离区
+  预算等——此前只存在于注释里，下游按头文件编程即缺声明。导出 41 = 声明 41
+  对账零缺失；新增**三种所有权分区总说明**（rust-alloc 必 free / 会话租借
+  勿 free / 调用方缓冲）逐函数标注；clang 纯 include 编译验收通过。
+- **入口护栏全覆盖**：`capi/mod.rs` 的 22 个入口统一补 `catch_unwind`
+  （此前仅 first_batch 16/19 有，文档承诺"全部入口"）；`guard` 提为
+  `pub(crate)` 共用。22/22 对账。
+- 删除 `native/src/shared/` 三个孤儿文件（func_meta/symbol/type_utils，无 mod
+  声明从未编译，实际类型已在 `cide_runtime`）。
+
+### Fixed (typeck)：W0-4——char 初始化器的 W3053 误报轰炸（R-2026-09-12）
+
+- **现象**：`char c='A'` + `char s[5]={72,101,...}` + `char t[]={'x','y',0}`
+  共 **9 条**"被隐式转换为 char，可能会丢失精度"轰炸完全合法代码
+  （clang 零警告）。根因：字符常量在 C 语义中是 int，char 特征在
+  `resolve_literal` 提升时丢失，`check_scalar_assignable` 只见 Int→Char。
+- **修复（两层）**：① 初始化路径豁免——`is_char_safe_initializer`
+  （字符常量 / char 值域内整常量）+ `char_narrow_suppress` 标志在
+  decl.rs 四处 / init.rs 两处调用点成对置位；② `report_warning` 对
+  W3053 做（行, 码）去重，列表轰炸最多 1 条。
+- **豁免不过度（反向锚定）**：超值域常量（`char c=300`）、int 变量赋值
+  （`char d=i`）、普通赋值语句（`c=i;`）**仍必须报警**——回归测试
+  `typeck_e3053_regression_test` 四条全覆盖（修复前主用例 9 条 → 0）。
+- baseline `char_init_no_false_positive.c` 固化运行时语义（clang golden）。
+
 ### Fixed (vm)：JIT trace 静默错值——fast path 在录制期间禁用（R-2026-09-13）
 
 - **现象**：嵌套纯计数循环（教科书 JIT 目标形状）在 `cide_cli run`（executor + JIT）

@@ -25,7 +25,13 @@ use std::ptr;
 ///
 /// 1.2.0（2026-09-13，D5 收尾重构）：追加 `cide_get_compile_errors_length`，
 /// 供驱动侧定长缓冲精确读取编译错误，消除变长窗口扫描的越界读依赖。
-pub const CIDE_ABI_VERSION: &str = "1.2.0";
+///
+/// 1.3.0（2026-09-13，W0-3 契约止血）：`cide_get_capabilities_json` 所有权
+/// 由"进程级静态指针、勿释放"改为"rust-alloc、`cide_free_string` 释放"，
+/// 对齐书面契约（全部 JSON 函数 rust-alloc 所有权）。旧实现下按契约释放
+/// 即 UAF；契约测试 `capi_string_ownership_contract_test` 锚定新语义
+/// （两次调用返回不同指针 + 各自 free）。行为契约变更 → minor。
+pub const CIDE_ABI_VERSION: &str = "1.3.0";
 
 /// 把 Rust 字符串的所有权交给调用方（rust-alloc）。
 fn owned_c_string(s: String) -> *mut c_char {
@@ -47,7 +53,9 @@ fn err_json(msg: impl Into<String>) -> *mut c_char {
 }
 
 /// 入口 panic 护栏：panic 不跨 C 边界，统一返回 fallback。
-fn guard<T>(fallback: T, f: impl FnOnce() -> T) -> T {
+/// `pub(crate)`：mod.rs 的第二批入口（W0-3 起）同样要求全覆盖
+/// （契约："所有入口经 catch_unwind"）。
+pub(crate) fn guard<T>(fallback: T, f: impl FnOnce() -> T) -> T {
     match catch_unwind(AssertUnwindSafe(f)) {
         Ok(v) => v,
         Err(_) => fallback,

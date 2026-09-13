@@ -17,6 +17,46 @@ extern "C" {
 // Opaque session handle
 typedef struct CideSession CideSession;
 
+// ========== 字符串所有权契约（ABI 1.3.0，2026-09-13 W0-3 补齐声明） ==========
+//
+// 本头文件的字符串出参分三种所有权，函数注释逐一标注：
+//
+//   [rust-alloc]   返回 rust 分配器分配的 NUL 结尾 UTF-8 缓冲，调用方必须用
+//                  cide_free_string 释放。两次调用返回不同指针；内容超过 ~2GB
+//                  或分配失败返回 NULL。全部 *_json 出口、cide_abi_version、
+//                  cide_engine_version、cide_last_error、cide_get_output_delta、
+//                  cide_get_program_output_delta 属于此类。
+//
+//   [session-loan] 返回会话内部缓冲的借用指针，勿 free、勿缓存——下一次同一
+//                  会话上的编译/运行/步进调用可能使其失效。cide_get_compile_errors、
+//                  cide_get_runtime_error 属于此类。
+//
+//   [caller-buffer] 调用方提供缓冲区 + 长度，引擎拷贝写入（len+buf 出参模式），
+//                  无所有权转移。cide_get_output* 族属于此类。
+//
+// 完整契约文档：docs/current/06-出口与协议/CAPI评审回复与实现状态.md
+
+// ========== 版本与能力 ==========
+
+/// ABI 版本串（语义化版本，如 "1.3.0"）。[rust-alloc]
+CIDE_API char* cide_abi_version(void);
+
+/// 引擎版本串：crate 版本 + 构建期 git hash（如 "0.1.0 (5955cb9)"）。
+/// 消费方据此做产物新鲜度自检。[rust-alloc]
+CIDE_API char* cide_engine_version(void);
+
+/// 引擎能力清单 JSON（语言锚点/预处理器能力/内存模型/schema 版本与 v0.2
+/// 台账/行为契约，机器可读）。[rust-alloc]
+/// ABI 1.3.0 起为 rust-alloc 所有权（此前为静态指针、勿释放——按旧注释
+/// 缓存指针的下游需改为每次取用即取即放）。
+CIDE_API char* cide_get_capabilities_json(void);
+
+/// 释放任何 [rust-alloc] 出参缓冲。null 安全。
+CIDE_API void cide_free_string(char* p);
+
+/// 最近一次错误 JSON：{"kind":"compile|runtime|none","message":"..."}。[rust-alloc]
+CIDE_API char* cide_last_error(CideSession* s);
+
 // ========== 会话管理 ==========
 
 CIDE_API CideSession* cide_session_create();
@@ -131,6 +171,15 @@ CIDE_API int cide_compile_all(CideSession* s);
 /// Note: The returned pointer may become invalid after the next compile call.
 CIDE_API const char* cide_get_compile_errors(CideSession* s);
 
+/// Byte length (excluding NUL) of the compile-errors JSON that
+/// cide_get_compile_errors would return; 0 when no errors. Companion of
+/// cide_get_compile_errors for exact-length buffer reads (ABI 1.2.0).
+CIDE_API int cide_get_compile_errors_length(CideSession* s);
+
+/// Compile diagnostics as a single JSON string (same payload as
+/// cide_get_compile_errors). [rust-alloc]
+CIDE_API char* cide_compile_json(CideSession* s);
+
 // ========== 命令行参数 ==========
 
 /// Set command-line arguments for `main(int argc, char *argv[])`.
@@ -141,9 +190,61 @@ CIDE_API void cide_set_argv(CideSession* s, int argc, const char** argv);
 /// Run the compiled program. Returns 0 on success, -1 on runtime error.
 CIDE_API int cide_run(CideSession* s);
 
+/// Run the compiled program; result + runtime error + output length summary
+/// as one JSON string. [rust-alloc]
+CIDE_API char* cide_run_json(CideSession* s);
+
 /// Get runtime error message. Returns nullptr if no error.
 /// Note: The returned pointer may become invalid after the next run/step call.
 CIDE_API const char* cide_get_runtime_error(CideSession* s);
+
+// ========== 步进调试（统一模式） ==========
+
+/// Initialize the unified (time-travel) engine for stepping. Returns 0 on
+/// success, non-zero on error. Required before step_next_json / seek /
+/// payloads / breakpoints.
+CIDE_API int cide_step_begin(CideSession* s);
+
+/// Execute one step and return the step payload as a JSON string.
+/// [rust-alloc] Returns {"status":"..."} frames including finished/trap.
+CIDE_API char* cide_step_next_json(CideSession* s);
+
+/// Collect step payloads for a step range as a JSON string (visible window
+/// only). Out-of-window / negative ranges yield an empty list, never panic.
+/// [rust-alloc]
+CIDE_API char* cide_get_step_payloads_json(CideSession* s, int start, int end);
+
+/// Replace the breakpoint line set. `lines_json` is a JSON array of line
+/// numbers, e.g. "[3,7]". Returns 0 on success.
+CIDE_API int cide_set_breakpoints(CideSession* s, const char* lines_json);
+
+// ========== 执行配置（会话级） ==========
+
+/// Cap total executed steps (teaching fuse against infinite loops).
+/// Returns the applied value (negative input is rejected with the old value).
+CIDE_API int cide_set_max_steps(CideSession* s, int max_steps);
+
+/// Cap call depth (V-P1-10; teaching fuse against runaway recursion).
+CIDE_API int cide_set_call_depth_limit(CideSession* s, int depth);
+
+/// Deterministic mode switch (rand sequence reset per run). 1 = on.
+CIDE_API int cide_set_deterministic(CideSession* s, int on);
+
+/// Query deterministic mode (1 = on, 0 = off).
+CIDE_API int cide_get_deterministic(CideSession* s);
+
+/// Heap quarantine budget in bytes (UAF detection window; see
+/// 堆有界隔离决议.md). Returns the applied value.
+CIDE_API int cide_set_quarantine_budget(CideSession* s, int budget_bytes);
+
+/// Query the heap quarantine budget in bytes.
+CIDE_API int cide_get_quarantine_budget(CideSession* s);
+
+// ========== JIT 统计 ==========
+
+/// Report JIT statistics: traces compiled and steps accelerated.
+/// Pure out-parameters; writes 0/0 when unavailable.
+CIDE_API void cide_get_jit_stats(CideSession* s, int* traces_compiled, int* steps_accelerated);
 
 // ========== 输入 ==========
 
@@ -187,6 +288,10 @@ CIDE_API void cide_get_engine_notes(CideSession* s, char* buf, int max_len);
 /// Incremental output since a byte cursor, as a JSON string (rust-alloc, free with
 /// cide_free_string). Returns {"delta":..,"cursor":..,"total":..,"stream":"stdout"}.
 CIDE_API char* cide_get_program_output_delta(CideSession* s, int cursor);
+
+/// Incremental display-view output since a byte cursor, as a JSON string.
+/// [rust-alloc] Same cursor protocol as cide_get_program_output_delta.
+CIDE_API char* cide_get_output_delta(CideSession* s, int cursor);
 
 #ifdef __cplusplus
 }

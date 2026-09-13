@@ -213,11 +213,15 @@ impl TypeChecker {
                 TypeKind::Int | TypeKind::Float | TypeKind::Double | TypeKind::LongLong
             )
         {
-            self.report_warning(
-                "被隐式转换为 char，可能会丢失精度。",
-                loc,
-                ErrorCode::W3053_ImplicitScalarConversion,
-            );
+            // W0-4：初始化器路径的 char 窄化由调用方判定无损时豁免
+            // （字符常量 / char 值域内整常量；见 `is_char_safe_initializer`）。
+            if !self.char_narrow_suppress {
+                self.report_warning(
+                    "被隐式转换为 char，可能会丢失精度。",
+                    loc,
+                    ErrorCode::W3053_ImplicitScalarConversion,
+                );
+            }
         }
         if matches!(target.kind(), TypeKind::Int)
             && matches!(value.kind(), TypeKind::Float | TypeKind::Double | TypeKind::LongLong)

@@ -53,6 +53,11 @@ pub struct TypeChecker {
     pub(crate) pending_class_instantiations: Vec<(String, ClassDecl)>,
     /// Lambdas discovered during type checking; lifted to ClassDecl + FuncDecl at the end.
     pub(crate) pending_lambdas: Vec<LambdaInfo>,
+    /// W0-4（R-2026-09-12）：初始化器 char 窄化警告豁免开关。
+    /// `'A'`（C 语义为 int 的字符常量）与值域在 char 内的整常量是 C 惯用写法，
+    /// `char s[5]={72,101,...}` 曾逐元素报"可能丢失精度"误报轰炸合法代码。
+    /// 由初始化检查路径（decl.rs / init.rs）在 `check_assignable` 前后成对置位/复位。
+    pub(crate) char_narrow_suppress: bool,
 }
 
 impl Default for TypeChecker {
@@ -83,6 +88,7 @@ impl Default for TypeChecker {
             pending_instantiations: Vec::new(),
             pending_class_instantiations: Vec::new(),
             pending_lambdas: Vec::new(),
+            char_narrow_suppress: false,
         }
     }
 }
@@ -473,12 +479,36 @@ impl TypeChecker {
     }
 
     pub(crate) fn report_warning(&mut self, msg: &str, loc: &SourceLoc, code: ErrorCode) {
+        // W0-4：隐式标量转换警告按（行, 码）去重——初始化列表逐元素报同一条
+        // "可能丢失精度"只会淹没真正有价值的诊断（同行第二条起丢弃）。
+        if code == ErrorCode::W3053_ImplicitScalarConversion
+            && self
+                .warnings
+                .iter()
+                .any(|w| w.code == code as i32 && w.line == loc.line)
+        {
+            return;
+        }
         self.warnings.push(TypeError {
             message: msg.to_string(),
             line: loc.line,
             column: loc.column,
             code: code as i32,
         });
+    }
+
+    /// W0-4（R-2026-09-12）：int→char 初始化器是否确定无损。
+    /// 字符常量（`'A'`，parser 记 `Literal{ty:char}`，C 语义提升为 int）与
+    /// 值域在 char（-128..=127）内的整常量，赋给 char 变量/数组元素是 C
+    /// 惯用写法，"可能丢失精度"属误报。
+    pub(crate) fn is_char_safe_initializer(expr: &Expr) -> bool {
+        match expr {
+            Expr::Literal { value, ty, .. } => {
+                ty.kind() == TypeKind::Char || (-128..=127).contains(value)
+            }
+            Expr::LongLiteral { value, .. } => (-128..=127).contains(value),
+            _ => false,
+        }
     }
 
     fn report_hint(&mut self, msg: &str, loc: &SourceLoc, code: ErrorCode) {

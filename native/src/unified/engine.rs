@@ -393,27 +393,36 @@ impl UnifiedEngine {
     /// 重放结束后仅保留目标步附近窗口内的帧。
     fn finish_replay_window(&mut self, target: i32) {
         let end_step = target;
-        let start_step = (end_step - self.frame_cache_window_size as i32 + 1).max(0);
-        if self.frame_cache_start_step < start_step {
-            let discard = (start_step - self.frame_cache_start_step) as usize;
-            self.frame_cache_start_step = start_step;
+        let want_start = (end_step - self.frame_cache_window_size as i32 + 1).max(0);
+        if self.frame_cache_start_step < want_start {
+            // R-2026-09-01/02：seek 目标远超已有步数时，理论 discard 大于缓存长度，
+            // 直接 split_off 会 panic——钳到实际长度（即清空缓存），并把缓存起点
+            // 按实际推进量记账（钳位后 want_start 可能超出真实数据范围）。
+            let discard = ((want_start - self.frame_cache_start_step) as usize)
+                .min(self.frame_cache.len());
+            self.frame_cache_start_step += discard as i32;
             self.frame_cache = self.frame_cache.split_off(discard);
         }
         // 截断 target 之后的多余帧
-        let expected_len = (end_step - self.frame_cache_start_step + 1) as usize;
+        let expected_len = (end_step - self.frame_cache_start_step + 1).max(0) as usize;
         self.frame_cache.truncate(expected_len);
     }
 
     /// 获取指定范围的 StepPayload（按实际步号）。
     /// 只返回当前窗口内存在的部分。
+    ///
+    /// 参数先钳到 `[start_step, cache_end]` 再转 usize——负 `end` 直接 `as usize`
+    /// 会绕回 `usize::MAX`（R-2026-09-03 复发根因：旧代码先 `min` 后 `as`，
+    /// `(-1).min(cache_end) = -1` 仍为负），导致切片 panic。
     pub fn get_payloads(&self, start: i32, end: i32) -> Vec<StepPayload> {
         let start_step = self.frame_cache_start_step;
         let cache_end = start_step + self.frame_cache.len() as i32;
-        let start = start.max(start_step) as usize;
-        let end = (end.min(cache_end) as usize).saturating_sub(start_step as usize);
-        let start = start.saturating_sub(start_step as usize);
-        if start < end {
-            self.frame_cache[start..end].to_vec()
+        let s = start.max(start_step).min(cache_end);
+        let e = end.max(start_step).min(cache_end);
+        if s < e {
+            let lo = (s - start_step) as usize;
+            let hi = (e - start_step) as usize;
+            self.frame_cache[lo..hi].to_vec()
         } else {
             Vec::new()
         }

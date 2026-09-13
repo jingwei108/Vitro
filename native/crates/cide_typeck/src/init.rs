@@ -282,7 +282,17 @@ impl TypeChecker {
                                 self.report_error("数组索引必须是 int 类型", loc, ErrorCode::E3039_ArrayIndexType);
                             }
                             let e_type = self.resolve_expr_type(&mut elem.value);
-                            if !self.check_assignable(&elem_type, &e_type, loc) {
+                            // W0-4：同普通列表路径的 char 窄化豁免
+                            let suppress = elem_type.kind() == TypeKind::Char
+                                && Self::is_char_safe_initializer(&elem.value);
+                            if suppress {
+                                self.char_narrow_suppress = true;
+                            }
+                            let ok = self.check_assignable(&elem_type, &e_type, loc);
+                            if suppress {
+                                self.char_narrow_suppress = false;
+                            }
+                            if !ok {
                                 self.report_error(
                                     &format!("数组初始化元素类型不匹配：期望 '{}'，实际 '{}'", elem_type, e_type),
                                     loc,
@@ -324,7 +334,17 @@ impl TypeChecker {
                     self.check_array_initializer(&mut sub_ty, &mut elem.value, loc);
                 } else {
                     let e_type = self.resolve_expr_type(&mut elem.value);
-                    if !self.check_assignable(&elem_type, &e_type, loc) {
+                    // W0-4：char 元素的字符常量/值域内整常量初始化是 C 惯用写法，豁免窄化警告
+                    let suppress = elem_type.kind() == TypeKind::Char
+                        && Self::is_char_safe_initializer(&elem.value);
+                    if suppress {
+                        self.char_narrow_suppress = true;
+                    }
+                    let ok = self.check_assignable(&elem_type, &e_type, loc);
+                    if suppress {
+                        self.char_narrow_suppress = false;
+                    }
+                    if !ok {
                         self.report_error(
                             &format!("数组初始化元素类型不匹配：期望 '{}'，实际 '{}'", elem_type, e_type),
                             loc,

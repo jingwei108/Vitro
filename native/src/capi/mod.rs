@@ -23,7 +23,7 @@ fn cstr_to_str(s: *const c_char) -> Option<String> {
 
 #[no_mangle]
 pub extern "C" fn cide_session_create() -> *mut Session {
-    Box::into_raw(Box::new(Session::default()))
+    guard(ptr::null_mut(), || Box::into_raw(Box::new(Session::default())))
 }
 
 #[no_mangle]
@@ -32,9 +32,11 @@ pub extern "C" fn cide_session_create() -> *mut Session {
 /// # Safety
 /// - `s` 必须是由 `cide_session_create` 返回的有效 `Session` 指针，且未被 `cide_session_destroy` 销毁。
 pub unsafe extern "C" fn cide_session_destroy(s: *mut Session) {
-    if !s.is_null() {
-        drop(Box::from_raw(s));
-    }
+    guard((), || {
+        if !s.is_null() {
+            drop(Box::from_raw(s));
+        }
+    })
 }
 
 #[no_mangle]
@@ -45,20 +47,22 @@ pub unsafe extern "C" fn cide_session_destroy(s: *mut Session) {
 /// - `source` 若非空，必须指向足够大的有效内存区域，供函数写入结果。
 /// - `source` 若非空，必须指向以 null 结尾的有效 UTF-8 字符串。
 pub unsafe extern "C" fn cide_compile(s: *mut Session, source: *const c_char) -> c_int {
-    if s.is_null() || source.is_null() {
-        return -1;
-    }
-    let session = &mut *s;
-    let src = match cstr_to_str(source) {
-        Some(v) => v,
-        None => return -1,
-    };
-    session.compile.compile_units.clear();
-    session.compile.compile_units.push(CompileUnit {
-        filename: "main.c".to_string(),
-        source: src.to_string(),
-    });
-    cide_compile_all(s)
+    guard(-1, || {
+        if s.is_null() || source.is_null() {
+            return -1;
+        }
+        let session = &mut *s;
+        let src = match cstr_to_str(source) {
+            Some(v) => v,
+            None => return -1,
+        };
+        session.compile.compile_units.clear();
+        session.compile.compile_units.push(CompileUnit {
+            filename: "main.c".to_string(),
+            source: src.to_string(),
+        });
+        cide_compile_all(s)
+    })
 }
 
 #[no_mangle]
@@ -69,23 +73,25 @@ pub unsafe extern "C" fn cide_compile(s: *mut Session, source: *const c_char) ->
 /// - `filename`, `source` 若非空，必须指向足够大的有效内存区域，供函数写入结果。
 /// - `filename`, `source` 若非空，必须指向以 null 结尾的有效 UTF-8 字符串。
 pub unsafe extern "C" fn cide_compile_unit(s: *mut Session, filename: *const c_char, source: *const c_char) -> c_int {
-    if s.is_null() || filename.is_null() || source.is_null() {
-        return -1;
-    }
-    let session = &mut *s;
-    let fname = match cstr_to_str(filename) {
-        Some(v) => v,
-        None => return -1,
-    };
-    let src = match cstr_to_str(source) {
-        Some(v) => v,
-        None => return -1,
-    };
-    session.compile.compile_units.push(CompileUnit {
-        filename: fname.to_string(),
-        source: src.to_string(),
-    });
-    0
+    guard(-1, || {
+        if s.is_null() || filename.is_null() || source.is_null() {
+            return -1;
+        }
+        let session = &mut *s;
+        let fname = match cstr_to_str(filename) {
+            Some(v) => v,
+            None => return -1,
+        };
+        let src = match cstr_to_str(source) {
+            Some(v) => v,
+            None => return -1,
+        };
+        session.compile.compile_units.push(CompileUnit {
+            filename: fname.to_string(),
+            source: src.to_string(),
+        });
+        0
+    })
 }
 
 #[no_mangle]
@@ -94,16 +100,18 @@ pub unsafe extern "C" fn cide_compile_unit(s: *mut Session, filename: *const c_c
 /// # Safety
 /// - `s` 必须是由 `cide_session_create` 返回的有效 `Session` 指针，且未被 `cide_session_destroy` 销毁。
 pub unsafe extern "C" fn cide_compile_all(s: *mut Session) -> c_int {
-    if s.is_null() {
-        return -1;
-    }
-    let session = &mut *s;
+    guard(-1, || {
+        if s.is_null() {
+            return -1;
+        }
+        let session = &mut *s;
 
-    let units = session.compile.compile_units.clone();
-    if run_multi_file_pipeline(session, units, false).is_err() {
-        return -1;
-    }
-    0
+        let units = session.compile.compile_units.clone();
+        if run_multi_file_pipeline(session, units, false).is_err() {
+            return -1;
+        }
+        0
+    })
 }
 
 #[no_mangle]
@@ -112,21 +120,23 @@ pub unsafe extern "C" fn cide_compile_all(s: *mut Session) -> c_int {
 /// # Safety
 /// - `s` 必须是由 `cide_session_create` 返回的有效 `Session` 指针，且未被 `cide_session_destroy` 销毁。
 pub unsafe extern "C" fn cide_get_compile_errors(s: *mut Session) -> *const c_char {
-    if s.is_null() {
-        return ptr::null();
-    }
-    let session = &mut *s;
-    if session.compile.errors.is_empty() {
-        return ptr::null();
-    }
-    match CString::new(session.compile.errors.clone()) {
-        Ok(cstring) => {
-            let ptr = cstring.as_ptr();
-            session.compile.last_errors_cstring = Some(cstring);
-            ptr
+    guard(ptr::null(), || {
+        if s.is_null() {
+            return ptr::null();
         }
-        Err(_) => ptr::null(),
-    }
+        let session = &mut *s;
+        if session.compile.errors.is_empty() {
+            return ptr::null();
+        }
+        match CString::new(session.compile.errors.clone()) {
+            Ok(cstring) => {
+                let ptr = cstring.as_ptr();
+                session.compile.last_errors_cstring = Some(cstring);
+                ptr
+            }
+            Err(_) => ptr::null(),
+        }
+    })
 }
 
 #[no_mangle]
@@ -139,27 +149,37 @@ pub unsafe extern "C" fn cide_get_compile_errors(s: *mut Session) -> *const c_ch
 /// # Safety
 /// - `s` 必须是由 `cide_session_create` 返回的有效 `Session` 指针，且未被 `cide_session_destroy` 销毁。
 pub unsafe extern "C" fn cide_get_compile_errors_length(s: *mut Session) -> c_int {
-    if s.is_null() {
-        return 0;
-    }
-    let session = &mut *s;
-    session.compile.errors.len() as c_int
+    guard(0, || {
+        if s.is_null() {
+            return 0;
+        }
+        let session = &mut *s;
+        session.compile.errors.len() as c_int
+    })
 }
 
 #[no_mangle]
-/// E2：引擎能力清单 JSON（机器可读真实能力；无状态，返回常量指针）。
+/// E2：引擎能力清单 JSON（机器可读真实能力；无状态）。
+///
+/// # 所有权（ABI 1.3.0 起对齐书面契约）
+/// 返回 **rust-alloc 所有权**缓冲，调用方必须以 `cide_free_string` 释放——
+/// 与全部 `*_json` 出口同一契约（`CAPI评审回复与实现状态.md` §横切契约落实：
+/// "全部 JSON 函数为 rust-alloc 所有权"）。历史上本函数曾返回 `OnceLock`
+/// 静态指针（"无需释放"），下游按书面契约 free 即 UAF——W0-3 修复为每次
+/// clone 出独立缓冲（序列化本身仍只做一次，进程级缓存）。
 ///
 /// # Safety
-/// 返回指针为进程级静态缓存，线程安全；无需释放。
-pub unsafe extern "C" fn cide_get_capabilities_json() -> *const c_char {
-    static CAPS: std::sync::OnceLock<CString> = std::sync::OnceLock::new();
-    CAPS
-        .get_or_init(|| {
-            let v = crate::session_api::capabilities();
-            CString::new(serde_json::to_string(&v).unwrap_or_default())
-                .unwrap_or_else(|_| CString::new("{}").unwrap_or_default())
-        })
-        .as_ptr()
+/// 返回指针指向本次调用独占的 NUL 结尾 UTF-8 串；两次调用返回不同指针；
+/// 释放后指针失效。返回 NULL 仅在分配失败时。
+pub unsafe extern "C" fn cide_get_capabilities_json() -> *mut c_char {
+    guard(ptr::null_mut(), || {
+        static CAPS: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+        let cached = CAPS
+            .get_or_init(|| serde_json::to_string(&crate::session_api::capabilities()).unwrap_or_default());
+        CString::new(cached.as_str())
+            .map(std::ffi::CString::into_raw)
+            .unwrap_or(std::ptr::null_mut())
+    })
 }
 
 #[no_mangle]
@@ -170,21 +190,23 @@ pub unsafe extern "C" fn cide_get_capabilities_json() -> *const c_char {
 /// - `argv` 必须是长度为 `argc` 的 C 字符串指针数组，每个指针指向有效的以 NUL 结尾的字符串。
 /// - 字符串内容在调用期间必须保持有效；本函数会复制其内容到 Session 中。
 pub unsafe extern "C" fn cide_set_argv(s: *mut Session, argc: c_int, argv: *const *const c_char) {
-    if s.is_null() || argv.is_null() {
-        return;
-    }
-    let session = &mut *s;
-    let mut args = Vec::with_capacity(argc as usize);
-    for i in 0..argc as isize {
-        let ptr = *argv.offset(i);
-        if ptr.is_null() {
-            args.push(String::new());
-        } else {
-            args.push(std::ffi::CStr::from_ptr(ptr).to_string_lossy().to_string());
+    guard((), || {
+        if s.is_null() || argv.is_null() {
+            return;
         }
-    }
-    session.runtime.argc = argc;
-    session.runtime.argv = args;
+        let session = &mut *s;
+        let mut args = Vec::with_capacity(argc as usize);
+        for i in 0..argc as isize {
+            let ptr = *argv.offset(i);
+            if ptr.is_null() {
+                args.push(String::new());
+            } else {
+                args.push(std::ffi::CStr::from_ptr(ptr).to_string_lossy().to_string());
+            }
+        }
+        session.runtime.argc = argc;
+        session.runtime.argv = args;
+    })
 }
 
 #[no_mangle]
@@ -194,15 +216,17 @@ pub unsafe extern "C" fn cide_set_argv(s: *mut Session, argc: c_int, argv: *cons
 /// # Safety
 /// - `s` 必须是由 `cide_session_create` 返回的有效 `Session` 指针，且未被 `cide_session_destroy` 销毁。
 pub unsafe extern "C" fn cide_set_input_mode(s: *mut Session, is_batch: c_int) {
-    if s.is_null() {
-        return;
-    }
-    let session = &mut *s;
-    session.runtime.input_mode = if is_batch != 0 {
-        crate::session::InputMode::Batch
-    } else {
-        crate::session::InputMode::Interactive
-    };
+    guard((), || {
+        if s.is_null() {
+            return;
+        }
+        let session = &mut *s;
+        session.runtime.input_mode = if is_batch != 0 {
+            crate::session::InputMode::Batch
+        } else {
+            crate::session::InputMode::Interactive
+        };
+    })
 }
 
 #[no_mangle]
@@ -211,18 +235,20 @@ pub unsafe extern "C" fn cide_set_input_mode(s: *mut Session, is_batch: c_int) {
 /// # Safety
 /// - `s` 必须是由 `cide_session_create` 返回的有效 `Session` 指针，且未被 `cide_session_destroy` 销毁。
 pub unsafe extern "C" fn cide_run(s: *mut Session) -> c_int {
-    if s.is_null() || !(*s).compile.compiled {
-        if !s.is_null() {
-            (*s).runtime.error = "程序尚未编译。请先编译代码。".to_string();
+    guard(-1, || {
+        if s.is_null() || !(*s).compile.compiled {
+            if !s.is_null() {
+                (*s).runtime.error = "程序尚未编译。请先编译代码。".to_string();
+            }
+            return -1;
         }
-        return -1;
-    }
-    let session = &mut *s;
-    match execute_run(session) {
-        Ok((_, true)) => 2,
-        Ok((_, false)) => 0,
-        Err(_) => -1,
-    }
+        let session = &mut *s;
+        match execute_run(session) {
+            Ok((_, true)) => 2,
+            Ok((_, false)) => 0,
+            Err(_) => -1,
+        }
+    })
 }
 
 #[no_mangle]
@@ -231,21 +257,23 @@ pub unsafe extern "C" fn cide_run(s: *mut Session) -> c_int {
 /// # Safety
 /// - `s` 必须是由 `cide_session_create` 返回的有效 `Session` 指针，且未被 `cide_session_destroy` 销毁。
 pub unsafe extern "C" fn cide_get_runtime_error(s: *mut Session) -> *const c_char {
-    if s.is_null() {
-        return ptr::null();
-    }
-    let session = &mut *s;
-    if session.runtime.error.is_empty() {
-        return ptr::null();
-    }
-    match CString::new(session.runtime.error.clone()) {
-        Ok(cstring) => {
-            let ptr = cstring.as_ptr();
-            session.runtime.last_error_cstring = Some(cstring);
-            ptr
+    guard(ptr::null(), || {
+        if s.is_null() {
+            return ptr::null();
         }
-        Err(_) => ptr::null(),
-    }
+        let session = &mut *s;
+        if session.runtime.error.is_empty() {
+            return ptr::null();
+        }
+        match CString::new(session.runtime.error.clone()) {
+            Ok(cstring) => {
+                let ptr = cstring.as_ptr();
+                session.runtime.last_error_cstring = Some(cstring);
+                ptr
+            }
+            Err(_) => ptr::null(),
+        }
+    })
 }
 
 #[no_mangle]
@@ -259,20 +287,22 @@ pub unsafe extern "C" fn cide_get_runtime_error(s: *mut Session) -> *const c_cha
 /// - `input` 若非空，必须指向足够大的有效内存区域，供函数写入结果。
 /// - `input` 若非空，必须指向以 null 结尾的有效 UTF-8 字符串。
 pub unsafe extern "C" fn cide_set_input(s: *mut Session, input: *const c_char) {
-    if s.is_null() {
-        return;
-    }
-    let session = &mut *s;
-    let input_str = match cstr_to_str(input) {
-        Some(v) => v,
-        None => {
-            session.runtime.input_lines.clear();
-            session.runtime.input_index = 0;
-            session.runtime.input_char_offset = 0;
+    guard((), || {
+        if s.is_null() {
             return;
         }
-    };
-    session.runtime.set_stdin(&input_str);
+        let session = &mut *s;
+        let input_str = match cstr_to_str(input) {
+            Some(v) => v,
+            None => {
+                session.runtime.input_lines.clear();
+                session.runtime.input_index = 0;
+                session.runtime.input_char_offset = 0;
+                return;
+            }
+        };
+        session.runtime.set_stdin(&input_str);
+    })
 }
 
 #[no_mangle]
@@ -281,14 +311,16 @@ pub unsafe extern "C" fn cide_set_input(s: *mut Session, input: *const c_char) {
 /// # Safety
 /// - `s` 必须是由 `cide_session_create` 返回的有效 `Session` 指针，且未被 `cide_session_destroy` 销毁。
 pub unsafe extern "C" fn cide_is_waiting_input(s: *mut Session) -> c_int {
-    if s.is_null() {
-        return 0;
-    }
-    if (*s).runtime.waiting_input {
-        1
-    } else {
-        0
-    }
+    guard(0, || {
+        if s.is_null() {
+            return 0;
+        }
+        if (*s).runtime.waiting_input {
+            1
+        } else {
+            0
+        }
+    })
 }
 
 #[no_mangle]
@@ -299,25 +331,27 @@ pub unsafe extern "C" fn cide_is_waiting_input(s: *mut Session) -> c_int {
 /// - `line` 若非空，必须指向足够大的有效内存区域，供函数写入结果。
 /// - `line` 若非空，必须指向以 null 结尾的有效 UTF-8 字符串。
 pub unsafe extern "C" fn cide_provide_input_line(s: *mut Session, line: *const c_char) -> c_int {
-    if s.is_null() {
-        return -1;
-    }
-    let session = &mut *s;
-    let line_str = match cstr_to_str(line) {
-        Some(v) => v,
-        None => return -1,
-    };
-    session.runtime.push_stdin_text(&line_str);
-    // 关键顺序：**保留 `waiting_input=true`**，让后续 `cide_run` → `execute_run` 走
-    // resume 分支（`is_resume = session.runtime.waiting_input`）。此前在此清位会让
-    // execute_run 误判为新一次运行 → `reset_runtime` + `setup_vm` 从 main 重跑，
-    // 已产生的输出被重复打印、且首个 scanf 会读到本次新喂入的文本（而非上次遗留）。
-    // 仅恢复 VM 暂停位：WaitingInput 时 host call 执行前 `ip -= 1` 且 VM 处于 paused，
-    // 不 resume 则 vm.run 立即返回 paused、无法续跑。与 `session_api::input_feed` 同源。
-    if let Some(ref mut vm) = session.vm {
-        vm.resume();
-    }
-    0
+    guard(-1, || {
+        if s.is_null() {
+            return -1;
+        }
+        let session = &mut *s;
+        let line_str = match cstr_to_str(line) {
+            Some(v) => v,
+            None => return -1,
+        };
+        session.runtime.push_stdin_text(&line_str);
+        // 关键顺序：**保留 `waiting_input=true`**，让后续 `cide_run` → `execute_run` 走
+        // resume 分支（`is_resume = session.runtime.waiting_input`）。此前在此清位会让
+        // execute_run 误判为新一次运行 → `reset_runtime` + `setup_vm` 从 main 重跑，
+        // 已产生的输出被重复打印、且首个 scanf 会读到本次新喂入的文本（而非上次遗留）。
+        // 仅恢复 VM 暂停位：WaitingInput 时 host call 执行前 `ip -= 1` 且 VM 处于 paused，
+        // 不 resume 则 vm.run 立即返回 paused、无法续跑。与 `session_api::input_feed` 同源。
+        if let Some(ref mut vm) = session.vm {
+            vm.resume();
+        }
+        0
+    })
 }
 
 /// 把 Rust 字符串写入调用方缓冲区（按字节截断，末尾补 NUL）。
@@ -343,10 +377,12 @@ unsafe fn write_c_buf(text: &str, buf: *mut c_char, max_len: c_int) {
 /// # Safety
 /// - `s` 必须是由 `cide_session_create` 返回的有效 `Session` 指针，且未被 `cide_session_destroy` 销毁。
 pub unsafe extern "C" fn cide_get_output_length(s: *mut Session) -> c_int {
-    if s.is_null() {
-        return 0;
-    }
-    (*s).runtime.display().len() as c_int
+    guard(0, || {
+        if s.is_null() {
+            return 0;
+        }
+        (*s).runtime.display().len() as c_int
+    })
 }
 
 #[no_mangle]
@@ -358,10 +394,12 @@ pub unsafe extern "C" fn cide_get_output_length(s: *mut Session) -> c_int {
 /// # Safety
 /// - `s` 必须是由 `cide_session_create` 返回的有效 `Session` 指针，且未被 `cide_session_destroy` 销毁。
 pub unsafe extern "C" fn cide_get_program_output_length(s: *mut Session) -> c_int {
-    if s.is_null() {
-        return 0;
-    }
-    (*s).runtime.stdout().len() as c_int
+    guard(0, || {
+        if s.is_null() {
+            return 0;
+        }
+        (*s).runtime.stdout().len() as c_int
+    })
 }
 
 #[no_mangle]
@@ -370,10 +408,12 @@ pub unsafe extern "C" fn cide_get_program_output_length(s: *mut Session) -> c_in
 /// # Safety
 /// - `s` 必须是由 `cide_session_create` 返回的有效 `Session` 指针，且未被 `cide_session_destroy` 销毁。
 pub unsafe extern "C" fn cide_get_engine_notes_length(s: *mut Session) -> c_int {
-    if s.is_null() {
-        return 0;
-    }
-    (*s).runtime.notes().len() as c_int
+    guard(0, || {
+        if s.is_null() {
+            return 0;
+        }
+        (*s).runtime.notes().len() as c_int
+    })
 }
 
 #[no_mangle]
@@ -383,10 +423,12 @@ pub unsafe extern "C" fn cide_get_engine_notes_length(s: *mut Session) -> c_int 
 /// - `s` 必须是由 `cide_session_create` 返回的有效 `Session` 指针，且未被 `cide_session_destroy` 销毁。
 /// - `buf` 若非空，必须指向足够大的有效内存区域，供函数写入结果。
 pub unsafe extern "C" fn cide_get_output(s: *mut Session, buf: *mut c_char, max_len: c_int) {
-    if s.is_null() {
-        return;
-    }
-    write_c_buf(&(*s).runtime.display(), buf, max_len);
+    guard((), || {
+        if s.is_null() {
+            return;
+        }
+        write_c_buf(&(*s).runtime.display(), buf, max_len);
+    })
 }
 
 #[no_mangle]
@@ -396,10 +438,12 @@ pub unsafe extern "C" fn cide_get_output(s: *mut Session, buf: *mut c_char, max_
 /// - `s` 必须是由 `cide_session_create` 返回的有效 `Session` 指针，且未被 `cide_session_destroy` 销毁。
 /// - `buf` 若非空，必须指向足够大的有效内存区域，供函数写入结果。
 pub unsafe extern "C" fn cide_get_program_output(s: *mut Session, buf: *mut c_char, max_len: c_int) {
-    if s.is_null() {
-        return;
-    }
-    write_c_buf(&(*s).runtime.stdout(), buf, max_len);
+    guard((), || {
+        if s.is_null() {
+            return;
+        }
+        write_c_buf(&(*s).runtime.stdout(), buf, max_len);
+    })
 }
 
 #[no_mangle]
@@ -409,10 +453,12 @@ pub unsafe extern "C" fn cide_get_program_output(s: *mut Session, buf: *mut c_ch
 /// - `s` 必须是由 `cide_session_create` 返回的有效 `Session` 指针，且未被 `cide_session_destroy` 销毁。
 /// - `buf` 若非空，必须指向足够大的有效内存区域，供函数写入结果。
 pub unsafe extern "C" fn cide_get_engine_notes(s: *mut Session, buf: *mut c_char, max_len: c_int) {
-    if s.is_null() {
-        return;
-    }
-    write_c_buf(&(*s).runtime.notes(), buf, max_len);
+    guard((), || {
+        if s.is_null() {
+            return;
+        }
+        write_c_buf(&(*s).runtime.notes(), buf, max_len);
+    })
 }
 
 #[no_mangle]
@@ -426,15 +472,17 @@ pub unsafe extern "C" fn cide_get_jit_stats(
     traces_compiled: *mut c_int,
     steps_accelerated: *mut c_int,
 ) {
-    if s.is_null() {
-        return;
-    }
-    let session = &*s;
-    let stats = session.vm.as_ref().map(|vm| vm.jit_stats()).cloned().unwrap_or_default();
-    if !traces_compiled.is_null() {
-        *traces_compiled = stats.traces_compiled as c_int;
-    }
-    if !steps_accelerated.is_null() {
-        *steps_accelerated = stats.steps_accelerated as c_int;
-    }
+    guard((), || {
+        if s.is_null() {
+            return;
+        }
+        let session = &*s;
+        let stats = session.vm.as_ref().map(|vm| vm.jit_stats()).cloned().unwrap_or_default();
+        if !traces_compiled.is_null() {
+            *traces_compiled = stats.traces_compiled as c_int;
+        }
+        if !steps_accelerated.is_null() {
+            *steps_accelerated = stats.steps_accelerated as c_int;
+        }
+    })
 }

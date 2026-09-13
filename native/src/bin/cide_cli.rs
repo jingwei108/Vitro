@@ -787,7 +787,33 @@ fn cmd_serve() {
         if line.trim().is_empty() {
             continue;
         }
-        let (response, shutdown) = serve_handle(&mut session, &line);
+        // R-2026-09-04：一条畸形请求不得杀死整个会话进程（W0-2 止血项）。
+        // panic 时保守重建会话并返回错误帧——panic 可能留下半破坏状态
+        // （如 unified 引擎 take-后-panic，U2 #12 深水区），静默复用半状态
+        // 是更深的缺陷；显式"会话已重置"让消费方拿到确定信号。
+        let (response, shutdown) = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            serve_handle(&mut session, &line)
+        })) {
+            Ok(r) => r,
+            Err(payload) => {
+                let msg = if let Some(s) = payload.downcast_ref::<&str>() {
+                    (*s).to_string()
+                } else if let Some(s) = payload.downcast_ref::<String>() {
+                    s.clone()
+                } else {
+                    "未知 panic".to_string()
+                };
+                session = Session::default();
+                (
+                    serve_err(
+                        serde_json::Value::Null,
+                        "internal",
+                        format!("内部错误（会话已重置）：{}", msg),
+                    ),
+                    false,
+                )
+            }
+        };
         let text = match serde_json::to_string(&response) {
             Ok(t) => t,
             Err(e) => format!(
