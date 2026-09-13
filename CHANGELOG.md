@@ -46,6 +46,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   补充分支在模板集上零新命中。门禁：cargo test 962/0、clippy 零警告、
   serve_smoke 54/54。
 
+### Fixed (教学标注)：U1#1 第四批（二审 P0-C + P1 批，含两处如实登记未修）
+
+- **P0-C**：gcd mod 判据 `contains('%')` 过宽（printf 格式符命中，首现
+  漂 main 打印行）——排除 IO 行 + 要求 `%` 出现在表达式语境（` % ` /
+  `%=`）。首现回真语句 L6。
+- **P1-2**：radixSort count 的 `++` 曾被 for 头 i++ 满足（清零行误命中）
+  ——收紧为 `]++` 自增形态。首现回 L13 统计行。
+- **P1-5**：函数签名行统一排除（infer_algorithm_step 总入口：类型关键
+  词开头 + `{` 结尾；`int mid = ...;` 以分号结尾不受影响）——hanoi L3
+  七条、getNext L4 的 next[-1]=-1、isValidBST L19 签名帧标注全部消除。
+- **P1-1（部分）**：dp outer_loop 排除"循环体为 dp[..] = 纯字面量"的
+  初始化循环——单行 for 形态修复 2/4（dpCoinChange/dpLIS 离开初始化位）；
+  dpLCS/matrixChain 的多行 for 体不在 for 行内、单行判定不可达——
+  **登记边界**（跨行上下文需 collector 管道）。
+- **§7.5**：hanoi 零盘递归（n=1 的 hanoi(n-1)）不再产出"递归移动 0 个
+  盘子"。
+- **§7.3**：step_next 发布缓冲改 append 语义（insert 替代 vec![pending]
+  整体替换）——run_batch 恒 batch=1 时等价，batch 调大时防静默丢帧。
+- **P1-3/P1-4（如实登记未修）**：顶层调用与递归的区分——实测带标注帧
+  是 **callee entry**（func_name 已是被调函数、code_line 仍是 main 调用
+  行），`func_name=="main"` 判定不触发（本批首版尝试即因此回退）；
+  merge 的旧 `contains("main")` 死代码已删。正解需 at_callee_entry 传入
+  inferrer——与 P0-4 prev_vars 同批的管道改动（collector→infer 上下文
+  扩容），登记下一批。
+- **P1-6**：零标注缺口登记进清单头注（activitySelection/externalSort/
+  mergeSortedLists 转零是误判消除的代价；huffmanTree select 零触发）。
+- 验收：cargo 69 套件 / clippy 零警告 / serve_smoke 54/54；七项修复
+  逐一模板实测（gcd L6 / radix L13 / 签名行 0 条 / 零盘 0 条）。
+
 ### Fixed (教学标注)：U1#1 第三批（用户机器复核驱动）——has_word 缩写漏报 + 四算法误判 + dp 判据 + P1 判据批
 
 用户以 100 行逐行判定复核 v2 清单（62 ✅ / 25 ✗ / 13 ⛔，见

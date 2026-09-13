@@ -17,7 +17,14 @@ pub(crate) fn infer_gcd(source_line: &str, vars: &VarMap, algorithm: &AlgorithmM
     // 被本语句赋值，用当前 a/b 拼算式会得到 48 % 12 = 0（真值 48 % 18 = 12）。
     // 正解需要 prev_vars 快照（语句执行前操作数），管道改动登记下一批；
     // 本批安全降级为不展示操作数的文案，避免锚定错误算式。
-    if line_lower.contains('%') {
+    // 二审 P0-C：`contains('%')` 过宽——printf 格式串的百分号命中，
+    // 命中，mod 首现漂到 main 的打印行。排除 IO 行 + 要求 % 出现在表达式
+    // 语境（a % b / %= / x % y 形态，而非 "..." 字符串内）。
+    let is_io_line = line_lower.contains("printf") || line_lower.contains("scanf")
+        || line_lower.contains("sprintf") || line_lower.contains("fprintf")
+        || line_lower.contains("snprintf");
+    let has_mod_expr = line_lower.contains(" % ") || line_lower.contains("%=");
+    if has_mod_expr && !is_io_line {
         return Some(build_step(algorithm, "mod", "求余并更新 b（辗转相除一步）"));
     }
 
@@ -90,7 +97,12 @@ pub(crate) fn infer_hanoi(
         // 递归实参含 n-1 形态才是函数体内的自递归（减一正确）；
         // main 顶层的 hanoi(3, …) 原值表述。
         if line_lower.contains("n - 1") || line_lower.contains("n-1") {
-            return Some(build_step(algorithm, "recursive", &format!("递归移动 {} 个盘子", n - 1)));
+            // 二审 §7.5：n=1 时 hanoi(n-1) 是 0 盘递归（基准分支前的形态），
+            // 不产出"递归移动 0 个盘子"。
+            if n > 1 {
+                return Some(build_step(algorithm, "recursive", &format!("递归移动 {} 个盘子", n - 1)));
+            }
+            return None;
         }
         return Some(build_step(algorithm, "recursive", &format!("移动 {} 个盘子的汉诺塔问题", n)));
     }

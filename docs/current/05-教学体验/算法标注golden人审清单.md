@@ -5,7 +5,20 @@
 > 62✅/25✗/13⛔）驱动的第三批修复已落地：P0-1 has_word 缩写、P0-2 四算法
 > 误判、P0-3 dp 判据、P1 判据批 10 项（详见 CHANGELOG [Unreleased]）。
 > **主表待重提取对账后方可勾选**；P0-4（运算过程类 phase 的 prev 操作数
-> 管道）登记下一批。清单 §3/§4 的数量口径以审阅意见 §4.4-4.6 修正为准
+> 管道）登记下一批。
+>
+> **三审修复批头注（2026-09-13 同日，二审 P0-C/P1 批）**：P0-C gcd mod
+> 排除 IO 行（首现回真语句 L6）；P1-1 dp 初始化循环排除（单行 for 形态
+> 修复 2/4——dpLCS/matrixChain 的多行 for 体不在行内、单行判定不可达，
+> 登记边界）；P1-2 radix count 收紧 `]++` 自增形态；P1-5 签名行统一排除
+> （infer_algorithm_step 总入口，类型关键字开头 + `{` 结尾）；§7.5 hanoi
+> 零盘递归不产出；§7.3 step_next 改 append 语义防 batch>1 丢帧。
+> **登记未修**：P1-3/P1-4 顶层调用区分——带标注帧是 callee entry
+>（func_name 已是被调函数、code_line 仍是 main 调用行），需
+> at_callee_entry 传入 inferrer（与 P0-4 prev_vars 同批管道改动）。
+> **P1-6 缺口登记**：activitySelection / externalSort / mergeSortedLists
+> 三模板因误判消除转零标注（外部排序/置换选择/链表归并是真实教学内容，
+> 属代价非成果）；huffmanTree 的 select 分支零触发。清单 §3/§4 的数量口径以审阅意见 §4.4-4.6 修正为准
 > （实测 36+46；bTree/criticalPath 归档 C 非"截断"；stringBasicOps 与
 > binarySearchTreeValidation 归收紧漏检——后者已随 has_word 修复复亮）。
 

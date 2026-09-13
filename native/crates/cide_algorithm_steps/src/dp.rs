@@ -20,7 +20,10 @@ pub(crate) fn infer_dp(source_line: &str, vars: &VarMap, algorithm: &AlgorithmMa
             || line_lower.contains(" i <=")
             || line_lower.contains("(i <")
             || line_lower.contains("(i <=");
-        if i_head {
+        // 二审 P1-1：4/6 模板的 outer_loop 首现挂在初始化循环
+        //（for (…) dp[i] = 1000; / dp[i] = 1; / dp[i][0] = 0; 等）——
+        // 循环体为 dp[..] = 纯字面量时不算子问题遍历。
+        if i_head && !dp_loop_body_is_init(&line_lower) {
             return Some(build_step(algorithm, "outer_loop", &format!("遍历子问题 i={}", i)));
         }
         if line_lower.contains("int j") || line_lower.contains(" j <") || line_lower.contains("(j <") {
@@ -41,4 +44,18 @@ pub(crate) fn infer_dp(source_line: &str, vars: &VarMap, algorithm: &AlgorithmMa
     }
 
     None
+}
+
+/// 二审 P1-1：循环行是否为 dp 状态表初始化（体为 `dp[..] = <纯字面量>`）。
+/// 真正的子问题遍历循环体要么为空（`{`），要么引用其他变量/dp 依赖。
+fn dp_loop_body_is_init(line_lower: &str) -> bool {
+    if !line_lower.contains("dp[") || !line_lower.contains('=') {
+        return false;
+    }
+    // 取最后一个 '=' 的右侧，trim 后是纯整数字面量即初始化
+    if let Some(eq) = line_lower.rfind('=') {
+        let rhs = line_lower[eq + 1..].trim().trim_end_matches(';').trim();
+        return !rhs.is_empty() && rhs.chars().all(|c| c.is_ascii_digit());
+    }
+    false
 }

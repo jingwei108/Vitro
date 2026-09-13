@@ -56,6 +56,14 @@ pub fn infer_algorithm_step(
     }
 
     let source_line = get_source_line(ctx, code_line).unwrap_or_default();
+    // 二审 P1-5：函数签名/定义行不产出算法步骤——函数入口帧的 code_line
+    // 归因到定义行（实测 hanoi L3 七条、getNext L4 的 next[-1]=-1、
+    // isValidBST L19），彼时局部变量尚未初始化，数值是哨兵值。
+    // 判定：行以类型关键字开头且以 '{' 结尾（`int mid = ...;` 以分号
+    // 结尾不受影响）。
+    if is_signature_line(&source_line) {
+        return None;
+    }
     let algorithm = find_algorithm_for_func(ctx, func_name)?;
     let vars = VarMap::new(local_vars);
 
@@ -160,4 +168,15 @@ pub(crate) fn build_step(algorithm: &AlgorithmMatch, phase: &str, description: &
         phase: phase.to_string(),
         description: description.to_string(),
     }
+}
+
+/// 二审 P1-5：是否为函数签名/定义行——以类型关键字开头且以 `{` 结尾。
+/// `int mid = (left + right) / 2;` 以分号结尾不受影响。
+fn is_signature_line(source_line: &str) -> bool {
+    let t = source_line.trim_start();
+    let type_kw = ["void ", "int ", "char ", "long ", "double ", "float ", "unsigned ", "static ", "struct ", "bool ", "_Bool "];
+    if !type_kw.iter().any(|k| t.starts_with(k)) {
+        return false;
+    }
+    t.trim_end().ends_with('{')
 }

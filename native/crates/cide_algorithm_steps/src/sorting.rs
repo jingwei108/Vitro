@@ -232,6 +232,11 @@ pub(crate) fn infer_quick_sort(
 
     // 递归调用自身
     if source_line.contains(&format!("{}(", func_name)) {
+        // 二审 P1-3（登记未修）：顶层调用（quickSort(arr,0,n-1);）仍自称
+        // "递归调用"——带标注的帧是 callee entry（func_name 已是 quickSort、
+        // code_line 仍是 main 调用行），func_name=="main" 判定不触发。
+        // 正解需 at_callee_entry 传入 inferrer（与 P0-4 prev_vars 同批的
+        // 管道改动），本批不硬凑。
         // side 默认空串：旧默认 "子" 与文案 "…处理{}子数组" 拼出
         // "子子数组"（用户审阅 P1-79 错字实锤——不是文案字面量能 replace 的）。
         let side = if i >= 0 && pivot >= 0 {
@@ -296,16 +301,10 @@ pub(crate) fn infer_merge_sort(
     let right = vars.get_int_any(&["right", "high", "r", "end"]).unwrap_or(-1);
 
     if source_line.contains(&format!("{}(", func_name)) {
-        // U1#1 P1-79：main 顶层调用称"递归分成两半"错位（它是启动调用）；
-        // 空区间（left > right，递归基）不产出。
-        let in_main = func_name != "main" && source_line.contains("main");
-        if in_main {
-            return Some(build_step(
-                algorithm,
-                "recursive_split",
-                &format!("启动归并：处理区间 [{}, {}]", left, right),
-            ));
-        }
+        // 二审 P1-4（登记未修）：顶层调用与递归的区分——带标注帧是
+        // callee entry（func_name 已是 mergeSort、code_line 是 main 调用行），
+        // func_name=="main" 判定不触发；旧 contains("main") 是死代码已删。
+        // 正解同 P1-3：at_callee_entry 管道（与 P0-4 prev_vars 同批）。
         if left >= 0 && right >= 0 && left < right {
             return Some(build_step(
                 algorithm,
@@ -466,7 +465,9 @@ pub(crate) fn infer_radix_sort(
         return Some(build_step(algorithm, "digit_loop", &format!("按第 {} 位进行分配-收集", digit)));
     }
 
-    if line_lower.contains("count[") && line_lower.contains("++") && !line_lower.contains("+=") {
+    // 二审 P1-2：旧判据的 `++` 被 for 头的 i++ 满足——清零行
+    // `for (…) count[i] = 0;` 误命中。收紧为 `]++`（count[…]++ 自增形态）。
+    if line_lower.contains("count[") && line_lower.contains("]++") && !line_lower.contains("+=") {
         return Some(build_step(algorithm, "count", "统计当前位各数字出现次数"));
     }
 
