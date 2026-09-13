@@ -29,10 +29,32 @@ pub(crate) struct FuncFeatures {
     pub cfg_has_unreachable: bool,
     /// U1#1 P1-a：函数体含 `dp[` 数组访问（动态规划状态表特征）。
     pub has_dp_array: bool,
+    /// 二审 P0-B（2026-09-13）：BST 语境特征——任一参数或返回类型的
+    /// pointee 为 `TreeNode` 结构（整名匹配）。bstInsert/bstSearch/bstDelete
+    /// 模板的裸命名 `insert`/`search`/`deleteNode` 靠它与 hashTable 的
+    /// 同形裸命名（`HashEntry[]`）、redBlackTree 的 `insert(RBNode*)`、
+    /// bTree 的 `search(BTreeNode*)` 区分（人审清单档 A 漏检的补齐路径）。
+    pub is_treenode_ctx: bool,
     pub compare_lines: Vec<(i32, i32, String)>, // (line, type, context)
 }
 
 const MAX_WALK_DEPTH: i32 = 512;
+
+/// 类型是否指向 `TreeNode` 结构（穿透 Pointer/Array/Reference/Function 包装层）。
+fn type_is_treenode(ty: &crate::compiler::ast::Type) -> bool {
+    use crate::compiler::ast::Type;
+    match ty {
+        Type::Struct { name, .. } | Type::Class { name, .. } => name.eq_ignore_ascii_case("treenode"),
+        Type::Pointer { pointee, .. }
+        | Type::Array { element: pointee, .. }
+        | Type::Reference { base: pointee, .. }
+        | Type::RValueRef { base: pointee, .. } => type_is_treenode(pointee),
+        Type::Function { return_type, param_types, .. } => {
+            type_is_treenode(return_type) || param_types.iter().any(type_is_treenode)
+        }
+        _ => false,
+    }
+}
 
 /// 词边界 + 驼峰感知的整词匹配（大小写不敏感）。
 ///
@@ -80,9 +102,18 @@ pub(crate) fn has_word(name: &str, word: &str) -> bool {
 
 pub(crate) fn extract_features(func: &crate::compiler::ast::FuncDecl, body: &Stmt) -> FuncFeatures {
     let mut f = FuncFeatures::default();
-    walk_stmt(body, &mut f, 0, "", 0);
+    // 二审 P0-B 修复中实锤的既有缺陷：此处曾传空串，`is_recursive`
+    // （Expr::Call 自调用 `name == func_name`）从未真实生效——bstSearch
+    // 模板的递归 search 在真实管线里拿不到 is_recursive，判据永远不命中
+    // （检测器单测全部手工构造 features，故未暴露）。
+    walk_stmt(body, &mut f, 0, &func.name, 0);
     f.has_nested_loops = f.max_loop_depth >= 2;
     f.has_single_loop = f.max_loop_depth >= 1;
+
+    // 二审 P0-B：TreeNode 语境（穿透指针/数组/引用层，整名匹配结构名）。
+    // 整名而非 contains：`BTreeNode` 含子串 "treenode" 但不是二叉树节点。
+    f.is_treenode_ctx = func.params.iter().any(|p| type_is_treenode(&p.ty))
+        || type_is_treenode(&func.return_type);
 
     // P3: augment with CFG features
     if let Some(cfg) = ControlFlowGraph::from_func(func) {
@@ -210,6 +241,28 @@ fn walk_expr(expr: &Expr, f: &mut FuncFeatures, loop_depth: i32, func_name: &str
             }
             if n.contains("merge") {
                 f.has_merge_pattern = true;
+            }
+        }
+        // 二审 P0-B 修复中实锤的既有缺陷：本前端把函数调用统一表示为
+        // `CallPtr { callee: Identifier }`（诊断实测 bstSearch 的
+        // `return search(...)` 即此形态），而 walk 只匹配 `Expr::Call`——
+        // 真实管线上 `is_recursive` 自调用检测从未触发（单测手工构造
+        // features，未暴露）。补 CallPtr 分支，语义与 Call 完全一致。
+        Expr::CallPtr { callee, args, .. } => {
+            for a in args {
+                walk_expr(a, f, loop_depth, func_name, depth + 1);
+            }
+            if let Expr::Identifier { name, .. } = callee.as_ref() {
+                if name == func_name {
+                    f.is_recursive = true;
+                }
+                let n = name.to_lowercase();
+                if n.contains("partition") {
+                    f.has_partition_pattern = true;
+                }
+                if n.contains("merge") {
+                    f.has_merge_pattern = true;
+                }
             }
         }
         Expr::Index { array, index, .. } => {
@@ -626,6 +679,13 @@ pub(crate) fn build_match(
         }
         "linked_list_delete" => "链表删除：遍历链表找到目标节点，调整指针并释放内存。".to_string(),
         "bst_insert" => "BST 插入：利用二叉搜索树性质，递归找到正确位置插入新节点。".to_string(),
+        "bst_search" => "BST 查找：利用二叉搜索树性质，每次比较可排除一半子树，平均时间复杂度 O(log n)。".to_string(),
+        "bst_delete" => {
+            "BST 删除：定位目标节点后按叶子/单孩子/双孩子三种情况重构子树，双孩子时用中序后继替换。".to_string()
+        }
+        "bst_validate" => {
+            "BST 合法性校验：为每个节点维护 (min, max) 开区间，递归校验节点值不越界，区间随下钻逐层收窄。".to_string()
+        }
         "string_reverse" => "字符串反转：利用双指针从两端向中间交换字符。".to_string(),
         "gcd" => "辗转相除法：gcd(a,b) = gcd(b, a mod b)，直到余数为 0。".to_string(),
         "is_prime" => "素数判断：试除法，只需检查 2 到 sqrt(n) 是否能整除。".to_string(),
@@ -638,7 +698,6 @@ pub(crate) fn build_match(
         "linked_stack" => "链栈：用单链表实现栈，top 指针指向栈顶，没有固定容量限制。".to_string(),
         "linked_queue" => "链队列：用链表实现队列，front 指向队头，rear 指向队尾。".to_string(),
         "level_order" => "层序遍历：利用队列按从上到下、从左到右的顺序访问二叉树节点。".to_string(),
-        "bst_search" => "BST 查找：利用二叉搜索树性质，每次比较可排除一半子树，平均时间复杂度 O(log n)。".to_string(),
         "hash_table" => "哈希表：通过哈希函数直接定位存储位置，理想情况下查找时间复杂度 O(1)。".to_string(),
         "josephus" => "约瑟夫环：经典的循环报数淘汰问题，可用数组模拟圆圈解决。".to_string(),
         "circular_linked_list" => "循环链表：尾节点 next 回指头节点，遍历时需用 do-while 判断终止。".to_string(),

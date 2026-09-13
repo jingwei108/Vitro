@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (教学标注)：二审 P0-B——bst 家族判据定清（名字+语义双条件）+ bst_validate/bst_delete 新算法 + is_recursive 真实管线激活
+
+二审（`05-教学体验/算法标注golden审阅意见二审20260913.md` §2 P0-B）实锤
+`isValidBST` 被按"BST 插入"教学（三条文案全部与所挂语句语义不符），采用
+**方案②** 处置，并顺带定清 bst 家族判据（同文档"同一判据的两侧"）：
+
+- **bst 家族判据重写**（`algorithm_detector/tree.rs`）：`has_word("bst")`
+  单条件改为**名字 + 语义词双条件**（bst 命名语境 + insert/add、search/find、
+  delete/remove、valid/validate 任一整词）；bst_validate 判据优先于
+  bst_insert（isValidBST 不得落插入）；bstHeight/bstTraverse 等无语义词
+  名字不再被讲成插入。红→绿：`isvalidbst_detected_as_bst_validate_not_insert`
+  / `bst_names_without_semantic_word_not_insert`（修复前实测 FAIL 留痕）。
+- **人审档 A 裸命名漏检补齐**（bstInsert/bstSearch/bstDelete 模板函数名为
+  裸 insert/search/deleteNode）：新增 `FuncFeatures::is_treenode_ctx`
+  （任一参数/返回类型 pointee 为 `TreeNode` 结构，穿透指针层**整名**匹配
+  ——BTreeNode/AVLNode/RBNode/HashEntry 均不命中），裸命名判据 =
+  语义词 + TreeNode 语境；bst_search 额外要求递归（迭代 findMin 不算）。
+  三个模板从零标注复亮：bstInsert 4 条、bstSearch 7 条（bst_insert +
+  bst_search）、bstDelete 11 条（bst_insert + bst_delete）。
+- **新增 bst_validate 步骤模板**（`cide_algorithm_steps/src/tree.rs`）：
+  empty_valid（空树合法）/ range_check（(min,max) 开区间校验）/ recursive
+  （区间收窄递归）三 phase，挂载点即二审表格的 L20/L21/L32——实测
+  binarySearchTreeValidation 三条错误插入文案全部替换为正确校验文案。
+- **新增 bst_delete 步骤模板**：not_found / compare / recursive /
+  single_child / free / find_successor / replace 七 phase。
+- **is_recursive 真实管线激活（两处既有缺陷，检测器单测因手工构造
+  features 未暴露）**：① `extract_features` 曾给 walk 传空 func_name，
+  自调用比较永假；② 本前端函数调用统一为 `Expr::CallPtr { callee }`
+  形态，walk 只匹配 `Expr::Call`——`is_recursive` 在真实管线上恒 false
+  （bstSearch 的 search 函数 47 帧零标注即此两叠加）。补 CallPtr 分支 +
+  传真实函数名；管线级回归锚落在
+  `native/tests/algorithm_detector_pipeline_test.rs`（Lexer→Parser→
+  detect_algorithms 全链路，修复前 search 零 match）。
+- **影响面精确性对账**（82 模板 × 4000 步提取，25s）：受影响模板集合
+  恰好 = {binarySearchTreeValidation, bstInsert, bstSearch, bstDelete}，
+  总首现条数 303 → 325；sorting 侧依赖 is_recursive 的 quick/merge/heap
+  补充分支在模板集上零新命中。门禁：cargo test 962/0、clippy 零警告、
+  serve_smoke 54/54。
+
 ### Fixed (教学标注)：U1#1 第三批（用户机器复核驱动）——has_word 缩写漏报 + 四算法误判 + dp 判据 + P1 判据批
 
 用户以 100 行逐行判定复核 v2 清单（62 ✅ / 25 ✗ / 13 ⛔，见
