@@ -341,8 +341,11 @@ var reScriptRef = regexp.MustCompile(
 // 规划中"时，路径出现是历史叙述而非失效指引（实测 16 处坏引用中 12 处
 // 属此类——前端切割/D5 退役的脚本在文档里留有说明性记载）。行级豁免，
 // 与数字对账的 freeze 行级判定同一粒度。
+// "取代/接替"刻意不在词表（U1 复审受控实验实锤误豁免："已用
+// nonexistent.py 取代旧流程"——取代标记的是新路径存活）；接替句的旧
+// 路径由"同句活路径"规则豁免（见 scanBrokenRefs 注释）。
 var reNarrativeRef = regexp.MustCompile(
-	`不存在|已迁出|已移除|已失效|未恢复|仍缺|删除|退役|取代|接替|规划中`)
+	`不存在|已迁出|已移除|已失效|未恢复|仍缺|删除|退役|规划中`)
 
 type BrokenRef struct {
 	File   string
@@ -351,9 +354,24 @@ type BrokenRef struct {
 	Text   string
 }
 
-// scanBrokenRefs 检查 CURRENT 文档中引用的脚本路径是否真实存在。
-// 只扫 CURRENT 层：as-of/归档文档里的退役路径是有意的历史叙述
-// （spec 勘误注记本身就会引用旧路径名），不是坏引用。
+// scanBrokenRefs 检查文档中引用的脚本路径是否真实存在。
+//
+// 判据是**行级语境**而非文件层级（U1 复审修正）：
+//   - 命令语境（路径紧跟 python / go run / cargo 等命令动词）= 祈使指引，
+//     **任何文件层级都扫**——AS-OF 文件里的活步骤恰恰是最需要抓的
+//     （实测：工程债务维护方案的"执行步骤"第 1 步已更新 Go 版、第 2 步
+//     还是退役的 shadow_verify_cpp.py——同段半更新，文件级豁免整体放过）；
+//   - 非命令语境的路径提及：只扫 CURRENT 层——历史文档的叙述性旧路径
+//     （spec 勘误注记、埋雷台账、迁出记载）是有意保留的。
+//
+// 两道行级豁免：
+//   - 豁免词（不存在|已迁出|已移除|已失效|未恢复|仍缺|删除|退役|规划中）——
+//     行本身在说明"此脚本已死"。"取代/接替"**不在**词表（方向性错误：
+//     它们标记的是新路径存活——受控实验实锤"已用 nonexistent.py 取代
+//     旧流程"被误豁免）；接替句改由下行"同句活路径"规则豁免被接替方；
+//   - 同句活路径：一行内既有活路径又有死路径（"A 接替 B"形态）→ 死路径
+//     是被接替方，豁免；全死才参与判定。
+//
 // 存在性按三级判定：①字面路径存在；②去扩展名后是含 .go 文件的目录
 // （包路径引用——文档写 `scripts/shadow_verify.go` 而磁盘是
 // `scripts/shadow_verify/main.go`，Go 程序按目录组织的合法形态）；
@@ -361,22 +379,49 @@ type BrokenRef struct {
 func scanBrokenRefs(root string, files []string) []BrokenRef {
 	var out []BrokenRef
 	for _, rel := range files {
-		if classifyFile(rel) != "CURRENT" {
-			continue
+		if strings.Contains(rel, "/archive/") || strings.HasPrefix(filepath.Base(rel), "ARCHIVE_") {
+			continue // 归档目录整体跳过（含 ARCHIVE_ 前缀的明确归档件）
 		}
+		asof := classifyFile(rel) != "CURRENT"
 		lines, err := splitLinesKeep(filepath.Join(root, filepath.FromSlash(rel)))
 		if err != nil {
 			continue
 		}
 		for i, raw := range lines {
 			line := strings.TrimSuffix(raw, "\r")
-			if reNarrativeRef.MatchString(line) {
+			refs := reScriptRef.FindAllString(line, -1)
+			if len(refs) == 0 {
 				continue
 			}
-			for _, m := range reScriptRef.FindAllString(line, -1) {
+			var dead []string
+			alive := false
+			for _, m := range refs {
 				if scriptRefAlive(root, m) {
-					continue
+					alive = true
+				} else {
+					dead = append(dead, m)
 				}
+			}
+			if len(dead) == 0 {
+				continue
+			}
+			if alive {
+				continue // 接替句：同句有活路径，死路径是被接替方
+			}
+			isCmd := false
+			for _, m := range dead {
+				if inCommandContext(line, m) {
+					isCmd = true
+					break
+				}
+			}
+			if asof && !isCmd {
+				continue // 历史文档的非命令叙述：有意保留的旧路径
+			}
+			if reNarrativeRef.MatchString(line) {
+				continue // 行自身说明该脚本已死（"原命令 xxx 已失效"等）
+			}
+			for _, m := range dead {
 				out = append(out, BrokenRef{File: rel, LineNo: i + 1, Path: m,
 					Text: strings.TrimSpace(line)})
 			}
@@ -389,6 +434,24 @@ func scanBrokenRefs(root string, files []string) []BrokenRef {
 		return out[a].LineNo < out[b].LineNo
 	})
 	return out
+}
+
+// 命令动词前缀：路径紧跟其后即视为祈使指引（可复现命令形态）。
+var reCmdVerb = regexp.MustCompile(
+	`(?i)(?:python3?|py|go\s+run|cargo|bash|sh|pwsh|powershell)\s+(?:\.\/|\.\\)?$`)
+
+// inCommandContext 判定路径 ref 在行内是否处于命令语境
+// （其前方紧邻窗口内以命令动词结尾）。
+func inCommandContext(line, ref string) bool {
+	idx := strings.Index(line, ref)
+	if idx <= 0 {
+		return false
+	}
+	start := idx - 24
+	if start < 0 {
+		start = 0
+	}
+	return reCmdVerb.MatchString(line[start:idx])
 }
 
 func scriptRefAlive(root, ref string) bool {

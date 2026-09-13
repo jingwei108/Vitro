@@ -445,10 +445,10 @@ v0.1 **字段集合未变**（本次为值语义增强与出口扩容），按 �
 | 字段冻结（含新增断言） | `cargo test --test step_payload_schema_v0_1_test` | ✅ 10 passed：预留位缺省（tripwire）/ 预留位字段名冻结 / 词汇闭合 / 展开粒度契约 / 文档↔代码单源 |
 | 内存地图与跨帧解析 | `cargo test --test memory_map_segments_test` | ✅ 3 passed：三段式 `kind` / 跨帧 `target_name` / 堆统计护栏 |
 | Rust 全量 + 静态检查 | `cargo test --workspace` / `cargo clippy … -- -D warnings` | ✅ 全绿 / 零警告 |
-| C Shadow | `python native/tests/shadow_verification/shadow_verify.py` | ✅ 662 用例（`known_issue` 3，无非预期差异） |
-| C++ Shadow | `python scripts/shadow_verify_cpp.py` | ✅ 94 用例（92 一致 + 2 已记录 `CLANG_COMPILE_FAIL`） |
+| C Shadow | `python native/tests/shadow_verification/shadow_verify.py`（已退役，现行命令见下方勘误） | ✅ 662 用例（`known_issue` 3，无非预期差异） |
+| C++ Shadow | `python scripts/shadow_verify_cpp.py`（已退役，现行命令见下方勘误） | ✅ 94 用例（92 一致 + 2 已记录 `CLANG_COMPILE_FAIL`） |
 | serve 出口一致性 | `python scripts/serve_smoke.py` | ✅ 40 项断言（新增三段式内存地图 / schema 轨道 / 词汇表 / 会话语义） |
-| 签字回放 S1–S5 | `python scripts/replay/replay_s1_s5.py`（锚点自动取） | ✅ **61/61 PASS** |
+| 签字回放 S1–S5 | `python scripts/replay/replay_s1_s5.py`（已退役，现行命令见下方勘误） | ✅ **61/61 PASS** |
 
 > **执行路径勘误（2026-09-13 注；上表验收数字仍为 v0.1 签字时快照）**：上表
 > 引用的 `native/tests/shadow_verification/shadow_verify.py`、
