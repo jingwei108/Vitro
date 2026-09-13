@@ -17,22 +17,6 @@ use crate::Lexer;
 use cide_shared::ErrorCode;
 
 pub(crate) fn expand_tokens(ctx: &mut ExpandCtx, tokens: &[Token], depth: usize) -> Vec<Token> {
-    if budget_hit(ctx, tokens) {
-        return Vec::new();
-    }
-    if depth >= EXPAND_DEPTH_FUSE {
-        // 保险丝只报一次的语义由调用链保证：命中后返回未展开 token，不再递归。
-        ctx.errors.push(lex_error(
-            format!(
-                "宏展开深度超过保险丝（{} 层）。请检查是否存在自引用/互引用宏（如 #define A A）",
-                EXPAND_DEPTH_FUSE
-            ),
-            tokens.first().map(|t| t.line).unwrap_or(0),
-            0,
-            ErrorCode::E1017_ExpandDepthExceeded,
-        ));
-        return tokens.to_vec();
-    }
     expand_inner(ctx, tokens, depth, &mut std::collections::HashSet::new())
 }
 
@@ -44,6 +28,24 @@ fn expand_inner(
 ) -> Vec<Token> {
     if budget_hit(ctx, tokens) {
         return Vec::new();
+    }
+    // U1#6：深度保险丝移入每层递归入口。此前只在 depth=0 的公开入口检查
+    // = 死代码：自引用/互引用靠 expanding 集合停止，但**不同名**对象宏链
+    // `A0→A1→…→A5000` 不触发查重，逐层递归直至栈溢出（实测 5000 层崩）。
+    if depth >= EXPAND_DEPTH_FUSE {
+        if !ctx.depth_exceeded {
+            ctx.depth_exceeded = true;
+            ctx.errors.push(lex_error(
+                format!(
+                    "宏展开深度超过保险丝（{} 层）。请检查是否存在过长的宏展开链（如 #define A0 A1、#define A1 A2 依次接力）",
+                    EXPAND_DEPTH_FUSE
+                ),
+                tokens.first().map(|t| t.line).unwrap_or(0),
+                0,
+                ErrorCode::E1017_ExpandDepthExceeded,
+            ));
+        }
+        return tokens.to_vec();
     }
     let mut result: Vec<Token> = Vec::new();
     let mut i = 0;
@@ -174,22 +176,26 @@ fn expand_inner(
         i = j + 1;
         continue;
     }
-    ctx.emitted = ctx.emitted.saturating_add(result.len());
+    // U1#6：按累计字节计费（token 文本长度 +1 分隔），token 个数口径下
+    // 4KB 字面量 × 2^14 = 16384 个 token 不触预算但实际产出 67MB。
+    ctx.emitted = ctx
+        .emitted
+        .saturating_add(result.iter().map(|t| t.text.len() + 1).sum::<usize>());
     result
 }
 
-/// 规模保险丝：深度限深不限宽（`REP(x) x x` 每层产出翻倍），累计产出 token
-/// 超预算即熔断——错误只报一次。
+/// 规模保险丝：深度限深不限宽（`REP(x) x x` 每层产出翻倍），累计产出
+/// 字节数超预算即熔断——错误只报一次。
 fn budget_hit(ctx: &mut ExpandCtx, tokens: &[Token]) -> bool {
-    if ctx.emitted <= super::EXPAND_TOKEN_BUDGET {
+    if ctx.emitted <= super::EXPAND_BYTE_BUDGET {
         return false;
     }
     if !ctx.budget_exhausted {
         ctx.budget_exhausted = true;
         ctx.errors.push(lex_error(
             format!(
-                "宏展开规模超过预算（累计产出超过 {} 个 token）。请检查是否存在指数级展开的宏（如 #define REP(x) x x 的深层嵌套）",
-                super::EXPAND_TOKEN_BUDGET
+                "宏展开规模超过预算（累计产出超过 {} 字节）。请检查是否存在指数级展开的宏（如 #define REP(x) x x 的深层嵌套，或大字面量被反复复制）",
+                super::EXPAND_BYTE_BUDGET
             ),
             tokens.first().map(|t| t.line).unwrap_or(0),
             0,
@@ -216,7 +222,14 @@ fn record_trace(ctx: &mut ExpandCtx, name: &str, args: Option<&[Vec<Token>]>, re
 }
 
 fn spelling(toks: &[Token]) -> String {
-    toks.iter().map(|t| t.text.as_str()).collect::<Vec<_>>().join(" ")
+    let mut s = toks.iter().map(|t| t.text.as_str()).collect::<Vec<_>>().join(" ");
+    // U1#6：单条 trace 长度封顶——条数封顶（TEACHING_TRACE_CAP）不防单条，
+    // 病态展开的结果拼写拼进一条 trace 同样是病态内存。
+    if s.len() > super::TRACE_ENTRY_MAX_CHARS {
+        s.truncate(super::TRACE_ENTRY_MAX_CHARS);
+        s.push_str(" …(截断)");
+    }
+    s
 }
 
 /// W1019：参数在宏体出现 ≥2 次且实参含副作用运算符。
@@ -275,6 +288,7 @@ impl Lexer {
             expr_mode: false,
             emitted: 0,
             budget_exhausted: false,
+            depth_exceeded: false,
         };
         expand_tokens(&mut ctx, &tokens, 0)
     }

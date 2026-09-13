@@ -89,7 +89,10 @@ impl TraceRecorder {
 
         if self.instructions.len() >= MAX_TRACE_LEN {
             self.recording = false;
-            return RecordResult::Finish;
+            // U1#5：录满上限时循环体尚未闭合（backward jump 未回到起点），
+            // 半截 trace 的栈效应不平衡，编译重放会导致值栈溢出
+            // （`for(...){int a[12];...}` × 300 实锤 TRAP）。丢弃而非注册。
+            return RecordResult::Abort;
         }
 
         self.instructions.push(inst);

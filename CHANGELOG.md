@@ -7,6 +7,91 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (lexer 预处理器)：U1 第五批 #6——宏展开双保险丝修复（死代码复活 + 字节口径，红→绿）
+
+- **缺陷 ①（深度保险丝死代码）**：深度检查只在 `expand_tokens`（depth=0
+  公开入口）而递归全部走无检查的 `expand_inner`——自引用/互引用靠
+  expanding 集合停止，但**不同名对象宏链** `#define M0 M1`、`M1 M2`、…
+  不触发查重，逐层递归直至栈溢出（实测 5000 层 `thread 'main' has
+  overflowed its stack` 崩溃）。既有测试 `test_preprocessor_depth_fuse`
+  在旧代码下通过是**被 token 预算的同码 E1017 掩盖**（REP 嵌套先撞
+  26 万 token 预算），并未覆盖深度路径——"防线照不到"的又一实证。
+- **缺陷 ②（预算口径错——数 token 不数字节）**：`S(x) x x` + 4KB 字面量
+  × 14 层 = 16384 个 token（远低于 26 万预算）但实际产出 **67MB**
+  （诊断暴露 `char[67108865]`），零 E1017，67MB token 流全程进入
+  parser/typeck。
+- **修复**：① 深度检查移入 `expand_inner` 每层递归入口（错误只报一次，
+  新增 `depth_exceeded` 标志）；② `emitted` 计费改**累计字节**（token
+  文本长度 +1 分隔），常量 `EXPAND_TOKEN_BUDGET`(26 万) →
+  `EXPAND_BYTE_BUDGET`(16MB)；③ trace 单条长度封顶
+  `TRACE_ENTRY_MAX_CHARS`(2KB 截断)——条数封顶不防单条，67MB 展开的
+  结果拼写拼进一条 trace 同样是病态内存。
+- 红→绿锚（lexer 单测 ×3）：`test_preprocessor_depth_fuse_object_macro_chain`
+  （5000 层链：旧代码栈溢出崩溃 → E1017）、
+  `test_preprocessor_byte_budget_large_literal_amplification`
+  （67MB 放大：旧代码零诊断 → E1017）、
+  `test_preprocessor_normal_nesting_not_affected_by_fuses`
+  （反向锚：正常 4 层嵌套零误伤）。
+
+### Fixed (codegen)：U1 第四批 #3——初始化基址槽被嵌套调用覆盖（止血版，红→绿）
+
+- **根因（外部审查 P0-1 复现确认）**：数组/结构体初始化的写入基址存
+  `temp_slot0`，但初始化列表元素的 `gen_expr` 内部同样消费 slot0——两个
+  实测触发分支：① 变参调用的 double/long long 实参走 `StoreLocalD/Q slot0`
+  （8 字节写入同时踩 slot0/slot1）；② 按值传 struct 的 Call 实参地址临时。
+  基址被覆盖后，后续元素写内存变野地址（实测 trap"向 NULL 指针区域写入
+  （地址 0x0010）"——数组越界假错/内存写坏）。
+- **修复（触发面止血）**：初始化三路径（string_array / array / struct init）
+  的基址改专用槽 `get_init_base_slot()`（惰性分配、enter_function 重置，
+  与 `temp_slot_64` 同模式）。初始化表达式内不会再进入声明初始化（C 语法
+  不允许表达式内声明），单槽安全。作用域化槽位分配器的根治在 U3。
+- 红→绿锚（baseline，golden 由 clang 生成）：`init_base_slot_variadic.c`
+  （变参 double 实参形状：修复前 NULL 区写入 trap → `1.0 2.5 3.0 4.0`）+
+  `init_base_slot_struct_call.c`（外部审查原始形状 `take(mk(4))`：
+  `1.0 9.0 3.0` 两侧一致）。
+
+### Fixed (codegen C++ RAII)：U1 第三批 #4——RAII break/continue 析构作用域差一（假 Double-Free，红→绿）
+
+- **根因**：`emit_dtors_for_scope_exit` 的 `start_frame_idx = target_depth.saturating_sub(1)`
+  把调用方传入的"循环体 frame 索引"再减一（长度 vs 索引错位；函数注释描述的
+  "参数层 frame 0"实际不存在——`enter_function` 即 `clear()`，索引 0 是函数
+  最外层 block）。后果按循环形态分两支：
+  - **while/do-while 的 break/continue**：析构起点多退一层——循环外层 scope
+    的栈对象被提前析构，正常退出时再析构一次（红锚 `cpp_raii_break_while` /
+    `cpp_raii_break_dowhile`：`dtor 1` 在 `after loop` 前出现、结尾再出现，
+    clang++ 各只一次；持资源类即假 E3061 Double-Free，路线图抽验实锤形状）。
+  - **for 的 continue**：起点恰为 for-init frame——每轮 continue 重复析构
+    for-init 对象（红锚 `cpp_raii_continue_for`：`dtor 9` 出现两次，clang++
+    仅 for 结束时一次）。
+- **修复**：`emit_dtors_for_scope_exit` 改为直接接收帧索引（语义单源，调用方
+  负责起点）；新增平行栈 `loop_break_has_init_frame`（for/range-for 为 true）
+  区分语义——break 跳出整个循环语句时 for-init/临时 frame 随之销毁（多退一层），
+  continue 跳回 step/cond 时 init frame 仍存活（从循环体 frame 起析构）。
+  while/do-while 两者都从循环体 frame 起。`gen_return` 的 `emit_dtors_for_scope_exit(0)`
+  语义不变（析构全部）。range-for 同步接入。
+- 红→绿锚：`native/tests/cases/cpp/cpp_raii_{break_while,continue_for,break_dowhile}.cpp`
+  ×3（golden 由 clang++ 生成；修复前 `test_cide_e2e_cpp` 3/81 FAIL 留痕，
+  修复后输出与 clang++ 逐行一致）。
+
+### Fixed (codegen/VM JIT)：U1 第三批 #5——emit_zero_init 指令爆炸 × trace 录满注册半截 trace（合法循环程序被判错，红→绿）
+
+- **复合缺陷（路线图抽验实锤：`for(...){int a[12];...}` × 300 值栈溢出）**，
+  两半一并修复：
+  - **codegen 侧**：`emit_zero_init` 的 sz>4 分支逐字节 StoreMemByte（5 指令/
+    字节，`int a[12]` = 240 条）——改 `Memset` 单指令（designated-init 同文件
+    已有先例；其 push 回的返回值补 `Pop` 平衡）。顺带消除该路径对
+    `temp_slot0` 的占用（基址直接在值栈上消费，不再跨嵌套存活）。
+  - **VM JIT 侧**：`jit_trace.rs` 录满 `MAX_TRACE_LEN=256` 时返回 `Finish`
+    ——半截循环体（backward jump 未闭合）的栈效应不平衡 trace 被注册编译，
+    重放值栈溢出。改 `Abort`（丢弃不注册）。
+- 红→绿锚（baseline，golden 由 clang 生成）：`jit_zero_init_trace_boundary.c`
+  （`int a[12]` + unrolled 赋值：修复前"值栈溢出"运行错误 → 修复后
+  `total=89700` 与 clang 一致）；`jit_trace_overflow_abort.c`（**修复 2 独立
+  锚**：60 个 unrolled 赋值使循环体指令数仍超 256——Memset 修复不改变该
+  事实，录满必须 Abort 而非注册半截 trace，`total=107400` 两侧一致）。
+- 附带影响：循环体内大零初始化数组不再膨胀指令数（教学常见形状
+  `int a[10000]` 的 zero-init 从 5 万条指令降为 7 条）。
+
 ### Fixed (lexer/parser)：U1 第二批——#7 词法保真四点 + #10 回滚 anonymous_structs 缺口（红→绿）
 
 - **#7 词法保真（前端审查 #12 + 评估 R3，四点全实测复现后修复）**：

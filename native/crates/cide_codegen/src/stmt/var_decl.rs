@@ -371,7 +371,7 @@ impl BytecodeGen {
 
     pub(crate) fn emit_local_string_array_init(&mut self, vty: &Type, init: &Expr, local_offset: i32, loc: &SourceLoc) {
         if let Expr::StringLiteral { value, .. } = init {
-            let base_temp = self.get_temp_slot(0);
+            let base_temp = self.get_init_base_slot();
             self.emit(OpCode::GetFrameBase, 0, loc);
             self.emit(OpCode::PushConst, local_offset, loc);
             self.emit(OpCode::Add, 0, loc);
@@ -390,7 +390,7 @@ impl BytecodeGen {
 
     pub(crate) fn emit_local_array_init(&mut self, vty: &Type, init: &mut Expr, local_offset: i32, loc: &SourceLoc) {
         if let Expr::InitList { ref mut elements, .. } = init {
-            let base_temp = self.get_temp_slot(0);
+            let base_temp = self.get_init_base_slot();
             self.emit(OpCode::GetFrameBase, 0, loc);
             self.emit(OpCode::PushConst, local_offset, loc);
             self.emit(OpCode::Add, 0, loc);
@@ -541,7 +541,7 @@ impl BytecodeGen {
 
     pub(crate) fn emit_local_struct_init(&mut self, vty: &Type, init: &mut Expr, local_offset: i32, loc: &SourceLoc) {
         if let Expr::InitList { ref mut elements, .. } = init {
-            let base_temp = self.get_temp_slot(0);
+            let base_temp = self.get_init_base_slot();
             self.emit(OpCode::GetFrameBase, 0, loc);
             self.emit(OpCode::PushConst, local_offset, loc);
             self.emit(OpCode::Add, 0, loc);
@@ -621,18 +621,17 @@ impl BytecodeGen {
             self.emit(OpCode::PushConst, 0, loc);
             self.emit(OpCode::StoreLocal, local_offset, loc);
         } else {
-            let base_temp = self.get_temp_slot(0);
+            // U1#5：旧实现逐字节 StoreMemByte（5 指令/字节，int a[12] = 240 条），
+            // 循环体指令数轻易超过 JIT MAX_TRACE_LEN=256，半截 trace 被注册后
+            // 重放值栈溢出（合法教学代码被判错）。改 Memset 单指令
+            // （designated-init 路径同文件已有先例）；其 push 回的返回值需 Pop 平衡。
+            self.emit(OpCode::PushConst, sz, loc);
+            self.emit(OpCode::PushConst, 0, loc);
             self.emit(OpCode::GetFrameBase, 0, loc);
             self.emit(OpCode::PushConst, local_offset, loc);
             self.emit(OpCode::Add, 0, loc);
-            self.emit(OpCode::StoreLocal, base_temp, loc);
-            for i in 0..sz {
-                self.emit(OpCode::LoadLocal, base_temp, loc);
-                self.emit(OpCode::PushConst, i, loc);
-                self.emit(OpCode::Add, 0, loc);
-                self.emit(OpCode::PushConst, 0, loc);
-                self.emit(OpCode::StoreMemByte, 0, loc);
-            }
+            self.emit(OpCode::Memset, 0, loc);
+            self.emit(OpCode::Pop, 0, loc);
         }
     }
 }

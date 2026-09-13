@@ -37,6 +37,7 @@ impl BytecodeGen {
         self.emit(OpCode::JumpIfZero, 0, loc);
         self.loop_start_ips.push(start_ip);
         self.loop_scope_depths.push(self.local_scope_stack.len());
+        self.loop_break_has_init_frame.push(false);
         let break_base = self.break_patches.len();
         let continue_base = self.continue_patches.len();
         self.gen_stmt(body);
@@ -46,12 +47,14 @@ impl BytecodeGen {
         self.patch_loop_patches(end_ip, start_ip, break_base, continue_base);
         self.loop_start_ips.pop();
         self.loop_scope_depths.pop();
+        self.loop_break_has_init_frame.pop();
     }
 
     pub(crate) fn gen_do_while(&mut self, body: &mut Stmt, cond: &mut Expr, loc: &SourceLoc) {
         let start_ip = self.current_ip();
         self.loop_start_ips.push(start_ip);
         self.loop_scope_depths.push(self.local_scope_stack.len());
+        self.loop_break_has_init_frame.push(false);
         let break_base = self.break_patches.len();
         let continue_base = self.continue_patches.len();
         self.gen_stmt(body);
@@ -62,6 +65,7 @@ impl BytecodeGen {
         self.patch_loop_patches(end_ip, cond_ip, break_base, continue_base);
         self.loop_start_ips.pop();
         self.loop_scope_depths.pop();
+        self.loop_break_has_init_frame.pop();
     }
 
     pub(crate) fn gen_for(
@@ -85,6 +89,7 @@ impl BytecodeGen {
         }
         self.loop_start_ips.push(start_ip);
         self.loop_scope_depths.push(self.local_scope_stack.len());
+        self.loop_break_has_init_frame.push(true);
         let break_base = self.break_patches.len();
         let continue_base = self.continue_patches.len();
         self.gen_stmt(body);
@@ -102,6 +107,7 @@ impl BytecodeGen {
         self.patch_loop_patches(end_ip, continue_ip, break_base, continue_base);
         self.loop_start_ips.pop();
         self.loop_scope_depths.pop();
+        self.loop_break_has_init_frame.pop();
     }
 
     pub(crate) fn gen_return(&mut self, value: &mut Option<Expr>, loc: &SourceLoc) {
@@ -189,16 +195,24 @@ impl BytecodeGen {
     }
 
     pub(crate) fn gen_break(&mut self, loc: &SourceLoc) {
-        let target_depth = self.loop_scope_depths.last().copied().unwrap_or(1);
-        self.emit_dtors_for_scope_exit(target_depth, loc);
+        // break 跳出整个循环语句：while/do-while 从循环体 frame 起析构；
+        // for/range-for 的 init/临时 frame 也随循环销毁，多退一层。
+        let body_frame = self.loop_scope_depths.last().copied().unwrap_or(0);
+        let start = match self.loop_break_has_init_frame.last().copied() {
+            Some(true) => body_frame.saturating_sub(1),
+            _ => body_frame,
+        };
+        self.emit_dtors_for_scope_exit(start, loc);
         let ip = self.current_ip();
         self.emit(OpCode::Jump, 0, loc);
         self.break_patches.push(ip);
     }
 
     pub(crate) fn gen_continue(&mut self, loc: &SourceLoc) {
-        let target_depth = self.loop_scope_depths.last().copied().unwrap_or(1);
-        self.emit_dtors_for_scope_exit(target_depth, loc);
+        // continue 跳回 step/cond，循环体外的 init/临时 frame 仍存活，
+        // 一律从循环体自身 frame 起析构。
+        let start = self.loop_scope_depths.last().copied().unwrap_or(0);
+        self.emit_dtors_for_scope_exit(start, loc);
         let ip = self.current_ip();
         self.emit(OpCode::Jump, 0, loc);
         self.continue_patches.push(ip);

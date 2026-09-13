@@ -75,6 +75,7 @@ fn evaluate_inner(
         expr_mode: true,
         emitted: 0,
         budget_exhausted: false,
+        depth_exceeded: false,
     };
     let expanded = expander::expand_tokens(&mut ctx, &defd, 0);
     // 表达式展开也可能触发保险丝/拼接错误——warnings 弃用（非致命，且 #if

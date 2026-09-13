@@ -1,0 +1,12 @@
+ctor 9
+ctor 0
+iter 0
+dtor 0
+ctor 100
+iter 1
+dtor 100
+ctor 200
+iter 2
+dtor 200
+dtor 9
+after for

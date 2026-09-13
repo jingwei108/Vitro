@@ -52,8 +52,14 @@ pub struct BytecodeGen {
     next_local_offset: i32,
     local_scope_stack: Vec<ScopeFrame>,
     /// 当前 loop 对应的 scope 深度栈，与 loop_start_ips 同步 push/pop。
-    /// 用于 break/continue 时计算需要析构的 scope 层数。
+    /// 存的是 push 时刻的 `local_scope_stack.len()`，数值上等于循环体
+    /// 自身 frame 的索引（body block 在 push 之后才 enter_scope）。
+    /// 用于 break/continue 时计算需要析构的 scope 范围。
     loop_scope_depths: Vec<usize>,
+    /// 与 loop_scope_depths 同步 push/pop：true 表示该循环在 body 之前
+    /// 先 enter_scope（for-init / range-for 临时变量 frame）。此时
+    /// break 跳出整个循环语句，析构起点比 continue 多退一层（含 init frame）。
+    loop_break_has_init_frame: Vec<bool>,
     temp_slot0: i32,
     temp_slot1: i32,
     temp_slot2: i32,
@@ -61,6 +67,13 @@ pub struct BytecodeGen {
     /// 8 字节临时槽（double/long long 的读-改-写中间值）。
     /// 普通槽位只有 4 字节空间，64 位位模式写入会踩踏相邻槽/局部变量。
     temp_slot_64: i32,
+    /// 初始化路径专用基址槽（U1#3 止血）。此前数组/结构体初始化的基址
+    /// 存 temp_slot0，初始化列表元素的 gen_expr 内部（变参调用的 double
+    /// 实参 StoreLocalD、按值传 struct 的 Call 实参地址临时等）会写
+    /// slot0，基址被覆盖后后续元素写内存变野地址（NULL 区写入 trap /
+    /// 内存写坏）。初始化表达式内不会再进入声明初始化（C 语法不允许
+    /// 表达式内声明），单槽安全；根治（作用域化槽位分配器）在 U3。
+    init_base_slot: i32,
     /// T-P0-6：赋值目标地址槽的嵌套深度计数（gen_assign 入口递增）。
     /// 嵌套赋值（a[0] += (b[0] = 5)）内外层此前复用 temp_slot0 互相覆盖。
     assign_nest_depth: i32,
@@ -149,11 +162,13 @@ impl BytecodeGen {
             next_local_offset: 0,
             local_scope_stack: Vec::new(),
             loop_scope_depths: Vec::new(),
+            loop_break_has_init_frame: Vec::new(),
             temp_slot0: -1,
             temp_slot1: -1,
             temp_slot2: -1,
             temp_slot3: -1,
             temp_slot_64: -1,
+            init_base_slot: -1,
             assign_nest_depth: 0,
             assign_addr_slots: Vec::new(),
             globals_init_32: Vec::new(),
@@ -692,6 +707,17 @@ impl BytecodeGen {
             self.next_local_offset += 8;
         }
         self.temp_slot_64
+    }
+
+    /// 初始化路径专用基址槽（U1#3 止血）：数组/结构体初始化的写入基址
+    /// 独占此槽，初始化列表元素的 gen_expr 不会覆盖它。惰性分配，
+    /// enter_function 时重置（与 temp_slot0~3 同生命周期）。
+    fn get_init_base_slot(&mut self) -> i32 {
+        if self.init_base_slot < 0 {
+            self.init_base_slot = self.next_local_offset;
+            self.next_local_offset += 4;
+        }
+        self.init_base_slot
     }
 
     /// T-P0-6：按当前赋值嵌套深度分配"赋值目标地址"槽。

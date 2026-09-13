@@ -68,6 +68,7 @@ impl BytecodeGen {
         // 与 temp_slot0~3 同理：按函数重新惰性分配，跨函数复用 offset
         // 会在小帧函数越界踩踏（曾致链表/队列类 baseline 用例回归）
         self.temp_slot_64 = -1;
+        self.init_base_slot = -1;
         self.assign_addr_slots.clear();
         if let Some(meta) = self.func_table.get_mut(name) {
             meta.param_sizes = param_sizes;

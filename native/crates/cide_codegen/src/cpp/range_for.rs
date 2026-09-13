@@ -42,6 +42,7 @@ impl BytecodeGen {
         let start_ip = self.current_ip();
         self.loop_start_ips.push(start_ip);
         self.loop_scope_depths.push(self.local_scope_stack.len());
+        self.loop_break_has_init_frame.push(true);
         let break_base = self.break_patches.len();
         let continue_base = self.continue_patches.len();
 
@@ -181,5 +182,6 @@ impl BytecodeGen {
         self.continue_patches.resize(continue_base, 0);
         self.loop_start_ips.pop();
         self.loop_scope_depths.pop();
+        self.loop_break_has_init_frame.pop();
     }
 }

@@ -1,0 +1,7 @@
+ctor 1
+ctor 10
+dtor 10
+ctor 11
+dtor 11
+after loop
+dtor 1

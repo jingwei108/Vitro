@@ -36,19 +36,19 @@ impl BytecodeGen {
         }
     }
 
-    /// 按从内到外的顺序，生成从当前 scope 向下退到 target_depth（包含 target_depth）之间
-    /// 所有 scope 的析构函数调用。
-    /// target_depth 是目标 scope 在 `local_scope_stack` 中的索引：
-    /// - 0 表示函数最外层 block 之前的 scope（函数参数）
-    /// - 1 表示函数最外层 block
-    pub(crate) fn emit_dtors_for_scope_exit(&mut self, target_depth: usize, loc: &SourceLoc) {
+    /// 按从内到外的顺序，析构 `start_frame_idx ..=` 当前最外层之间的所有 scope 的类变量。
+    ///
+    /// `start_frame_idx` 是 `local_scope_stack` 的**帧索引**（0 = 函数最外层 block；
+    /// 函数参数不进 scope 栈）。调用方负责按控制流语义给出起点：
+    /// - `return`：0（全部析构）
+    /// - `continue`：循环体自身 frame（for-init/range-for 临时 frame 仍存活）
+    /// - `break`：while/do-while 为循环体 frame；for/range-for 为 for-init frame
+    ///   （跳过整个 for 语句，init 对象随循环一起销毁）
+    pub(crate) fn emit_dtors_for_scope_exit(&mut self, start_frame_idx: usize, loc: &SourceLoc) {
         let current_depth = self.local_scope_stack.len();
-        if current_depth == 0 || current_depth < target_depth {
+        if current_depth == 0 || current_depth < start_frame_idx {
             return;
         }
-        // target_depth 是目标 scope 深度（0 表示函数参数层，不含在 local_scope_stack 中）。
-        // 实际 frame 索引为 depth-1，因此有效的 frame 索引范围是 max(target_depth, 1)-1 ..= current_depth-1。
-        let start_frame_idx = target_depth.saturating_sub(1);
         // 先收集所有需要析构的类变量信息，避免 borrow 冲突
         let mut dtors: Vec<(String, i32)> = Vec::new();
         for frame_idx in (start_frame_idx..current_depth).rev() {

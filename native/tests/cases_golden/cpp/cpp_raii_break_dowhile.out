@@ -1,0 +1,9 @@
+ctor 1
+ctor 20
+dtor 20
+ctor 21
+ctor 31
+dtor 31
+dtor 21
+after do-while
+dtor 1

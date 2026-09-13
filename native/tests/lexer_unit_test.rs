@@ -506,6 +506,64 @@ fn test_preprocessor_depth_fuse() {
     );
 }
 
+/// U1#6 红锚①：不同名对象宏链不触发自引用查重（每个名字只出现一次），
+/// token 数（5000）与字节数都远低于规模预算——**只有深度保险丝能拦**。
+/// 修复前深度检查只在 depth=0 入口（死代码），实测该形状 5000 层栈溢出
+/// 崩溃；既有 test_preprocessor_depth_fuse 旧代码下被 token 预算的同码
+/// E1017 掩盖（先撞 26 万 token），并未真正覆盖深度路径。
+#[test]
+fn test_preprocessor_depth_fuse_object_macro_chain() {
+    let n = 5000;
+    let mut src = String::new();
+    for i in 0..n {
+        src.push_str(&format!("#define M{} M{}\n", i, i + 1));
+    }
+    src.push_str("#define M5 123\nint v = M0;\n");
+    let (_, errs, _, _) = preprocess(&src);
+    assert!(
+        errs.iter().any(|e| e.code == cide_shared::ErrorCode::E1017_ExpandDepthExceeded as i32),
+        "不同名对象宏链 5000 层应触发深度保险丝 E1017（而非栈溢出崩溃），实际 {:?}",
+        errs
+    );
+}
+
+/// U1#6 红锚②：4KB 字面量 × S(x) x x 嵌套 14 层 = 16384 个 token（远低于
+/// 旧 token 预算 26 万）但实际产出 67MB——**只有字节口径预算能拦**。
+/// 修复前该形状零诊断，67MB token 流全程进入 parser/typeck（实测诊断里
+/// 暴露 char[67108865]）。
+#[test]
+fn test_preprocessor_byte_budget_large_literal_amplification() {
+    let lit = "A".repeat(4096);
+    let mut body = format!("\"{}\"", lit);
+    for _ in 0..14 {
+        body = format!("S({})", body);
+    }
+    let src = format!("#define S(x) x x\nconst char* big = {};\n", body);
+    let (_, errs, _, _) = preprocess(&src);
+    assert!(
+        errs.iter().any(|e| e.code == cide_shared::ErrorCode::E1017_ExpandDepthExceeded as i32),
+        "4KB 字面量 × 2^14 放大（67MB）应触发字节预算熔断 E1017（而非零诊断），实际 {:?}",
+        errs
+    );
+}
+
+/// U1#6 反向锚：正常嵌套宏（4 层、产出 16 个 token）不受双保险丝误伤。
+#[test]
+fn test_preprocessor_normal_nesting_not_affected_by_fuses() {
+    let (toks, errs, _, _) = preprocess(
+        "#define MAX(a, b) ((a) > (b) ? (a) : (b))\n\
+         #define SQ(x) ((x) * (x))\n\
+         #define FOUR(x) ((x) + (x) + (x) + (x))\n\
+         #define WRAP(x) FOUR(FOUR(x))\n\
+         int v = MAX(MAX(1, 5), 3) + SQ(MAX(2, 3)) + WRAP(1);\n",
+    );
+    assert!(errs.is_empty(), "正常嵌套宏不应报错，实际 {:?}", errs);
+    assert!(
+        !token_texts(&toks).contains(&"WRAP".to_string()),
+        "WRAP 应被展开"
+    );
+}
+
 #[test]
 fn test_preprocessor_shadowing_warning() {
     let (_, errs, warnings, _) = preprocess("#define W 1\n#define W 2\nint x = W;\n");
