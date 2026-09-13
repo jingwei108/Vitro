@@ -90,7 +90,7 @@ docs/archive/           历史归档（ARCHIVE_ 前缀 + 归档横幅；仅供�
 | Phase 22 | 认知推理 P2：`KnowledgeGraph` 24 概念节点 + 30+ 关系边、`ConceptGraphView` | ✅ 完成 |
 | Phase 23 | 认知推理 P3：`ControlFlowGraph` + `DataFlow` + `IntentInference` 代码意图推断 | ✅ 完成 |
 | Phase 24 | 语义智能补全 v2：`CompletionEngine` 五种上下文感知补全 | ✅ 完成 |
-| Phase 25 | 模板 JIT（Trace-based Loop Accelerator）：热点循环 trace 录制 + 预优化函数指针序列 | ✅ 完成 |
+| Phase 25 | 模板 JIT（Trace-based Loop Accelerator）：热点循环 trace 录制 + 预优化函数指针序列 | 🚧 **有 P0 正确性缺陷**（JIT fast path 在录制期间未禁用 → 外层 trace 穿透内层循环 → 静默错值；2026-09-13 定位）+ **加速比声明未经验证**（`vm_bench.rs` 两处方法学缺陷）。详见 [`07-质量与裁定/核心资产重构裁定.md`](docs/current/07-质量与裁定/核心资产重构裁定.md) §14 |
 | Phase 26 | Flutter Bridge 通信优化：Stream 模式、差分编码 `StepPayloadDelta`、符号表 dedup | ✅ 完成 |
 | Phase 27 | 数据结构语法拓展 P0+P1：数组退化、`unsigned` 全链路、`const`、`extern`、VLA 全管线 | ✅ 完成 |
 | Phase 28 | CLI 调试工具 `cide_cli`：`compile`/`run`/`step`/`unified`，支持 stdin 管道快速测试 | ✅ 完成 |
@@ -301,6 +301,19 @@ Cide 采用**五条分层协作的测试防线**，核心哲学：*测试不是�
   - ⚠️ **与 Clang 的行为差异**：复合字面量生命周期简化为当前块结束，教学场景不跨块/函数使用；`int[]` 等未指定大小数组的复合字面量通过初始化列表长度推断大小；复杂嵌套/多级 designated initializer 暂按教学子集处理。
 - ~~**全局/静态数据段与堆区共享线性内存（潜在静默损坏）**~~ — **已修复（2026-09-11，重构批次 R1：动态堆起点）**。全局变量、静态变量与字符串字面量仍自 `GLOBAL_START`（`0x1000`）向上分配，但堆起点不再写死 `HEAP_START`（`0x5000` = 20 KB）：运行入口按 `heap_base = max(HEAP_START, align4(global_data_end))` 动态计算（codegen 导出全局数据末端绝对地址）；程序带命令行参数时，argv 改自全局区上界 `GLOBAL_REGION_LIMIT`（`0x10000` = 64 KB，取代 `gen_string_literal` 的 `MEM_SIZE/16` 魔数）向下分配，堆起点相应上移至 64 KB。全局区所有 bump（全局变量 / extern 占位 / vtable / 字符串字面量 / 静态局部变量）统一走 codegen `bump_global_offset` 单一入口，越过 `GLOBAL_REGION_LIMIT` 编译期报错（fail loud，不再静默放行）；全局数据越过 `HEAP_START` 时产生编译 warning 提示堆起点上移与剩余堆空间。`lc_22` / `lc_977` 等"全局区越过 20 KB 但不用堆"的存量用例行为不变。回归：`native/tests/r1_memory_boundary_test.rs`（大全局+malloc 数据完好 / malloc 耗尽明确返回 NULL / 深递归明确 trap / argv 不与全局数据重叠 / 容量上限编译失败 / 大全局 warning）。
   - 历史背景：该风险与 2026-09-11 修复的 `BYTECODE_LIBC_GLOBALS_RESERVED` 自我递增漂移**同源**（都是"全局区边界无单源判据"的结构病）：漂移曾把用户全局区压缩到不足 1 KB，使 `lc_67` 的 `static char res[1000]` 直接溢出到堆区并打印出错乱内容（详见 `CHANGELOG.md [Unreleased] Fixed`）；本批修复后布局判据单源化到 `cide_runtime`（`GLOBAL_REGION_LIMIT` / `compute_heap_base`）。
+
+- **JIT trace 路径的静默错值（2026-09-13 定位，**尚未修复**）** — **P0 正确性缺陷**（与本引擎"解释器路径"不一致，非 C 标准问题）。最小复现（嵌套纯计数循环）：
+  ```c
+  int main(){int i,j,inner=0;
+  for(i=0;i<200;i++){for(j=0;j<200;j++){inner=inner+1;}}
+  printf("inner=%d i=%d j=%d\n",inner,i,j);return 0;}
+  ```
+  `cide_cli run`（走 executor + JIT）→ `inner=20200 i=200 j=0`；`cide_cli unified`（不经 executor JIT）与 clang → `inner=40000 i=200 j=200`。**静默错值、零诊断**。
+  - ⚠️ **归因注意**：**与 `long long` 无关**（`sum` 改 `int` 的纯整数版本同样出错；"循环体内写 long long"的初判实测不成立）。
+  - **触发条件**：外层循环回边达 `JIT_THRESHOLD=100` **且**内层循环已被 JIT 化 **且**外层循环体不含条件分支（含条件分支时录制 Abort、退回解释、结果正确）。触发点 = 外层第 **102** 轮。
+  - **根因**：`cide_vm` 的 JIT fast path（`core/executor/mod.rs:14-16`）在 trace 录制期间**仍然生效**——录制推进到内层循环头时命中内层 trace，一次跑完整个内层循环，使外层 trace **缺失内层指令**却被 `Finish` 注册；此后每轮外层由该不完整 trace 执行 → 内层被完全跳过。
+  - **防线盲区（为什么 663 用例全绿）**：教学用例循环 <100 次（不触发）、排序类带条件交换（录制 Abort）、单层循环（无穿透）——三者互补地漏掉了"嵌套纯计数循环"这一教科书形状。**新增该形状用例前，门禁不会为此变红。**
+  - 完整复核（复现、四组双向验证实验、修复方向、`vm_bench` 方法学缺陷）见 [`07-质量与裁定/核心资产重构裁定.md`](docs/current/07-质量与裁定/核心资产重构裁定.md) §14。
 
 > 历史特性详情和 Bug 修复记录见 [`CHANGELOG.md`](CHANGELOG.md) 和 [`C-语言子集/C语言子集规范.md`](C-语言子集/C语言子集规范.md)。
 
