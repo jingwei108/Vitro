@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 256" role="img" aria-label="vitro">
+  <title>vitro — 教学 C/C++ 子集参考执行引擎（白箱）</title>
+  <!-- dark 版：用于深色背景（冷白墨 + 冰蓝），背景透明 -->
+
+  <!-- 图标「观察皿」：圆环 = in vitro（玻璃观察窗 / 培养皿 / 镜片）——
+       把程序怎么跑这件事，放进一个能被看见、被解释、被回放的窗口。
+       圆内基准虚线 = 诚实对照的行为基线（Clang 基线 / 可回放的标尺）。
+       左上高光弧 + 圆头端点 = 全部玻璃感（禁止投影 / 内阴影 / 反光堆叠）。
+       品牌纪律：主 Logo 只用 玻璃蓝 + 基准灰 + 墨 三色。 -->
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <!-- 器壁（冰蓝，内填充 10% 玻璃体量感） -->
+    <circle cx="237" cy="128" r="76" stroke="#4FB3E8" stroke-width="14"/>
+    <circle cx="237" cy="128" r="69" fill="#4FB3E8" fill-opacity=".1" stroke="none"/>
+    <!-- 左上高光弧（叠在器壁上） -->
+    <path d="M171.2 90A76 76 0 0 1 223.8 53.2" stroke="#ffffff" stroke-opacity=".6" stroke-width="6"/>
+    <!-- 基准虚线（缩进悬浮的标尺，不触器壁） -->
+    <path d="M183 128h108" stroke="#5A6B75" stroke-width="12" stroke-dasharray="16.5 14"/>
+  </g>
+
+  <!-- 字标：单线几何小写 vitro（Inter 的中性气质 / 路径保持可编辑），
+       i 点 = 冰蓝（观察的瞳孔 / 指令指针），全字标唯一品牌色。 -->
+  <g fill="none" stroke="#E9F1F7" stroke-linecap="round" stroke-linejoin="round" stroke-width="28">
+    <path d="M412 106L456 194L500 106"/>
+    <path d="M532 106v88"/>
+    <path d="M612 66v104a24 24 0 0 0 24 24"/>
+    <path d="M590 106h44"/>
+    <path d="M692 106v88"/>
+    <path d="M692 150a46 46 0 0 1 46 -44"/>
+    <circle cx="828" cy="150" r="44"/>
+  </g>
+  <circle cx="532" cy="76" r="16" fill="#4FB3E8"/>
+</svg>

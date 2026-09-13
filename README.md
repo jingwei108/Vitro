@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo/vitro-logo.svg" alt="vitro" width="640">
+</p>
+
 # Cide
 
 > 教学 C/C++ 子集参考执行引擎（白箱后端）

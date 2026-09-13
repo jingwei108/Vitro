@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 256" role="img" aria-label="vitro">
+  <title>vitro — 教学 C/C++ 子集参考执行引擎（白箱）</title>
+  <!-- default 版：纯 CSS @media 自动适配深浅背景，无脚本 -->
+  <style>
+    .ring  { stroke: #155E86; }
+    .bench { stroke: #94A3AD; }
+    .ink   { stroke: #0D1B24; }
+    .dot   { fill: #155E86; }
+    .glass { fill: #155E86; fill-opacity: .06; }
+    .shine { stroke: #ffffff; stroke-opacity: .55; }
+    @media (prefers-color-scheme: dark) {
+      .ring  { stroke: #4FB3E8; }
+      .bench { stroke: #5A6B75; }
+      .ink   { stroke: #E9F1F7; }
+      .dot   { fill: #4FB3E8; }
+      .glass { fill: #4FB3E8; fill-opacity: .1; }
+      .shine { stroke-opacity: .6; }
+    }
+  </style>
+
+  <!-- 图标「观察皿」：圆环 = in vitro（玻璃观察窗 / 培养皿 / 镜片）——
+       把程序怎么跑这件事，放进一个能被看见、被解释、被回放的窗口。
+       圆内基准虚线 = 诚实对照的行为基线（Clang 基线 / 可回放的标尺），
+       居中过轴，缩到 16px 退化为实线仍成立（圆 + 一线 = 可识别）。
+       左上高光弧 + 圆头端点 = 全部玻璃感（禁止投影 / 内阴影 / 反光堆叠）。
+       品牌纪律：主 Logo 只用 玻璃蓝 + 基准灰 + 墨 三色。 -->
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <!-- 器壁（玻璃蓝，内填充 6%~10% 玻璃体量感） -->
+    <circle class="ring" cx="237" cy="128" r="76" stroke-width="14"/>
+    <circle class="glass" cx="237" cy="128" r="69" stroke="none"/>
+    <!-- 左上高光弧（叠在器壁上，浅底深底均可见） -->
+    <path class="shine" d="M171.2 90A76 76 0 0 1 223.8 53.2" stroke-width="6"/>
+    <!-- 基准虚线（缩进悬浮的标尺，不触器壁） -->
+    <path class="bench" d="M183 128h108" stroke-width="12" stroke-dasharray="16.5 14"/>
+  </g>
+
+  <!-- 字标：单线几何小写 vitro（Inter 的中性气质 / 路径保持可编辑），
+       i 点 = 玻璃蓝（观察的瞳孔 / 指令指针），全字标唯一品牌色。 -->
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="28">
+    <path class="ink" d="M412 106L456 194L500 106"/>
+    <path class="ink" d="M532 106v88"/>
+    <path class="ink" d="M612 66v104a24 24 0 0 0 24 24"/>
+    <path class="ink" d="M590 106h44"/>
+    <path class="ink" d="M692 106v88"/>
+    <path class="ink" d="M692 150a46 46 0 0 1 46 -44"/>
+    <circle class="ink" cx="828" cy="150" r="44"/>
+  </g>
+  <circle class="dot" cx="532" cy="76" r="16"/>
+</svg>
