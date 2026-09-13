@@ -12,34 +12,39 @@ impl CideVM {
     pub fn run(&mut self, session: &mut VmContext<'_>) -> i32 {
         loop {
             // --- JIT fast path ---
-            if let Some(trace) = self.jit_traces.get(&self.ip).cloned() {
-                let (result, steps) = execute_trace_bulk(self, session, &trace);
-                self.jit_stats.steps_accelerated += steps;
-                if let Some(r) = result {
-                    match r {
-                        StepResult::Finished => {
-                            return if self.finished {
-                                self.exit_code
-                            } else {
-                                self.stack.last().copied().unwrap_or(0) as i32
-                            };
+            // 录制期间必须禁用：否则外层 trace 推进到已 JIT 化的内层循环头时，
+            // bulk 一次跑完内层，外层 trace 缺失内层指令却被注册（R-2026-09-13 静默错值）。
+            // 录制期间逐条 step，遇内层回边由 `record()` Abort，与解释路径等价。
+            if self.jit_enabled && !self.trace_recorder.is_recording() {
+                if let Some(trace) = self.jit_traces.get(&self.ip).cloned() {
+                    let (result, steps) = execute_trace_bulk(self, session, &trace);
+                    self.jit_stats.steps_accelerated += steps;
+                    if let Some(r) = result {
+                        match r {
+                            StepResult::Finished => {
+                                return if self.finished {
+                                    self.exit_code
+                                } else {
+                                    self.stack.last().copied().unwrap_or(0) as i32
+                                };
+                            }
+                            StepResult::Trap => {
+                                self.rollback_pending_array_construction(session);
+                                return 0;
+                            }
+                            StepResult::Paused => {
+                                self.trap("完整运行模式下遇到暂停状态（可能是断点配置不一致）", &SourceLoc::default());
+                                return 0;
+                            }
+                            StepResult::WaitingInput => {
+                                return 0;
+                            }
+                            StepResult::Ok => {}
                         }
-                        StepResult::Trap => {
-                            self.rollback_pending_array_construction(session);
-                            return 0;
-                        }
-                        StepResult::Paused => {
-                            self.trap("完整运行模式下遇到暂停状态（可能是断点配置不一致）", &SourceLoc::default());
-                            return 0;
-                        }
-                        StepResult::WaitingInput => {
-                            return 0;
-                        }
-                        StepResult::Ok => {}
                     }
+                    // trace 正常退出（ip 已离开循环），继续外层调度
+                    continue;
                 }
-                // trace 正常退出（ip 已离开循环），继续外层调度
-                continue;
             }
 
             let result = self.step(session);
@@ -295,7 +300,8 @@ impl CideVM {
         self.last_accessed_vars.clear();
 
         // --- JIT: 热点检测（backward jump 目标计数） ---
-        if matches!(inst.op, OpCode::Jump | OpCode::JumpIfZero | OpCode::JumpIfNotZero) {
+        if self.jit_enabled && matches!(inst.op, OpCode::Jump | OpCode::JumpIfZero | OpCode::JumpIfNotZero)
+        {
             let target = inst.operand as usize;
             if target < self.ip {
                 *self.ip_hits.entry(target).or_insert(0) += 1;
@@ -303,7 +309,10 @@ impl CideVM {
         }
 
         // --- JIT: trace 录制触发 ---
-        if !self.trace_recorder.is_recording() && !self.jit_traces.contains_key(&ip_before) {
+        if self.jit_enabled
+            && !self.trace_recorder.is_recording()
+            && !self.jit_traces.contains_key(&ip_before)
+        {
             if let Some(&hits) = self.ip_hits.get(&ip_before) {
                 if hits >= JIT_THRESHOLD {
                     self.trace_recorder.start(ip_before);

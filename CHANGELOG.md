@@ -7,6 +7,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (vm)：JIT trace 静默错值——fast path 在录制期间禁用（R-2026-09-13）
+
+- **现象**：嵌套纯计数循环（教科书 JIT 目标形状）在 `cide_cli run`（executor + JIT）
+  下静默错值（`inner=20200 j=0`，正确值 `inner=40000 j=200`），零诊断；`unified`
+  路径与 clang 均正确。debug/release 同输出（纯逻辑缺陷）。
+- **根因**：`CideVM::run` 的 JIT fast path 在 trace 录制期间仍然生效——外层录制
+  推进到已 JIT 化的内层循环头时命中内层 trace 被 bulk 一次跑完，外层 trace
+  **缺失内层指令**却被注册；此后每轮外层由该不完整 trace 执行，内层被完全跳过。
+  触发三层条件：外层回边 ≥ `JIT_THRESHOLD=100` + 内层已 JIT 化 + 外层循环体无
+  条件分支（有分支则录制 Abort 退回解释、结果正确）。
+- **修复**：fast path 加 `!trace_recorder.is_recording()` 判断（`executor/mod.rs`）。
+  行为等价于复现实验中验证正确的"录制逐条 step → 遇内层回边 Abort"路径；由此
+  JIT 作用域**天然收缩为最内层循环**（任何含内层循环的 trace 录制必然 Abort）。
+- **红线留痕（红→绿）**：修复前 shadow 实测 665 用例 / match 644 / output_gap 2
+  （`jit_nested_counting_loop.c` + `_longlong.c`，2026-09-13 落案）；修复后
+  665→666 / match 646 / 门禁通过（两条 JIT 用例转绿 + 新增单层热循环用例）。
+- 归因修正记录在案：与 `long long` 无关（纯 int 版同样出错）。
+
+### Changed (tests)：`vm_bench.rs` 方学校正——"JIT 不赚反亏"结论撤销，实测 9x+
+
+裁定 §14.8 认定的两处方法学缺陷修复：
+
+- **① 真禁用开关**：`jit_traces_mut().clear()` 只清表，`ip_hits` 仍累积并重新
+  录制，"纯解释"轮实为混合。新增 `CideVM::jit_enabled` 结构性开关（fast path
+  不命中、热点检测与录制均不触发，`set_jit_enabled`/`jit_enabled` 访问器）。
+- **② 统一入口**：两分支同走 `execute_run`（旧版 JIT 走 `execute_run`、解释走
+  裸 `vm.run`，双变量无归因）。
+- **③ best-of-5 计时 + fail-loud 自检**：解释分支断言零 JIT 步、JIT 分支断言
+  加速步 > 0，对照前提失效即拒给数字；程序改 `return sum` 使返回码直接锚定
+  计算值（旧版只断言 ret==0，**错值程序照样绿**——旧 nested "JIT 时间"实际建立
+  在穿透 bug 跳过内层的错值执行上，且曾以 0.66x 的表面数据参与"不赚反亏"结论）。
+- **重测结果（release，best-of-5）**：嵌套纯计数 **9.16x**、单层热循环
+  **9.43x~9.7x**、递归（JIT 无效形状）0.97x（开关开销噪声级）。Phase 25
+  加速比声明由"未验证"更新为实测。
+- 附带发现：修复后嵌套 1k×1k 撞默认 10M 步上限——修复前内层被穿透跳过、
+  步数虚低。基准显式放宽至 50M。
+
+### Added (tests)：J10 落地——JIT 生效区间独立防线（margin=20）
+
+裁定 §14.9/§14.11.4：JIT 路径正确性不得由"解释器正确"推断。
+
+- **`native/tests/jit_path_parity.rs`（8 条）**：双路径差分三锚——同程序 JIT
+  开/关各跑一次（parity 锚）+ 手算期望值（期望值锚，不依赖引擎自证）+ JIT
+  生效性断言（J9 锚：`steps_accelerated>0` / 禁用分支恒 0，等价性断言不测空气）。
+  覆盖：嵌套 200×200 穿透形状、单层算术+位运算、数组读写、long long 累加
+  100k、双变量循环携带、返回码通道、短循环阈值下不触发（fib46）。
+- **baseline `jit_single_hot_loop.c`**：JIT bulk 主战场（单层热循环）的 clang
+  golden 覆盖；既有两条嵌套用例注释由"保持红"更新为"保持绿"（红→绿完成）。
+- **弱断言升级**：`jit_unit_test.rs` 两处 `contains("200"/"400")` 对错值
+  "-200"/"-400" 同样为真，改 `starts_with`（`cide_get_output` 为展示视图无法
+  整体 eq，该通道上可用最强断言）。
+- **突变验证留痕（J9 先证会红）**：注入 `tpl_add` 加→减突变，实测 **cargo 侧
+  11 红 + shadow 侧 9 红（3 条 JIT 专项 + 6 例热循环 LeetCode 连带），margin=20
+  ≥ 3**；未生效形状（fib46/factorial）正确保持绿。还原后全防线复绿。
+- 诚实记录：`bTree_default` 在 CLI 与 DLL 两入口间 match/FAIL 漂移——模板程序
+  自身 UB（读未初始化 children，堆残留决定 NULL 与否），E2E_FAILURES 既有条目
+  已登记"表现非确定性"，FAIL 态命中 shadow 白名单，非本轮引入的回归。
+
 ### Added (capi)：`cide_get_compile_errors_length`（ABI 1.2.0）
 
 - 新增编译错误 JSON 的字节长度出口（不含 NUL；无错误返回 0），与 `cide_get_compile_errors`

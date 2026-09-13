@@ -1,22 +1,22 @@
-/* JIT trace regression case #2 (2026-09-13) -- EXPECTED FAIL (red) until fixed.
+/* JIT trace regression case #2 (2026-09-13) -- FIXED, kept green.
  *
  * Purpose: pin the ATTRIBUTION. The original field report blamed "writing a
- * `long long` local inside the loop body". That attribution is WRONG -- the
- * pure-int case (jit_nested_counting_loop.c) fails identically. This case
- * exists so that the "long long is not the trigger" fact stays anchored in the
- * corpus even after the bug is fixed.
+ * `long long` local inside the loop body". That attribution was WRONG -- the
+ * pure-int case (jit_nested_counting_loop.c) failed identically. This case
+ * keeps the "long long is not the trigger" fact anchored in the corpus.
  *
  * Expected  (clang + `cide_cli unified`): outer=200 inner=40000 sum=40000 i=200 j=200
- * Observed  (`cide_cli run`, executor + JIT): outer=200 inner=20200 sum=20200 i=200 j=0
+ * Bug (before fix, `cide_cli run` executor + JIT): outer=200 inner=20200 sum=20200 i=200 j=0
  *
- * Trigger conditions (all three required):
+ * Trigger conditions (all three were required):
  *   1. outer-loop back-edge count reaches JIT_THRESHOLD(100);
  *   2. the inner loop has already been JIT-compiled;
  *   3. the outer loop body contains no conditional branch (otherwise recording
  *      Aborts and the interpreter produces correct results).
  *
- * Discipline: keep this RED; do NOT mark it known_issue.
- * Analysis: docs/current/07-质量与裁定/核心资产重构裁定.md section 14.
+ * Discipline: this case must STAY GREEN (red->green trail: shadow before fix
+ * = output_gap, after fix = match). Analysis:
+ * docs/current/07-质量与裁定/核心资产重构裁定.md section 14.
  */
 #include <stdio.h>
 

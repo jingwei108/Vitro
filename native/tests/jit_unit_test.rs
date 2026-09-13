@@ -76,7 +76,10 @@ int main() {
     let (ret, outputs, jit_stats) = compile_and_run(source).expect("Should compile and run");
     assert_eq!(ret, 0);
     let output = outputs.join("\n");
-    assert!(output.contains("200"), "Output should contain 200, got: {}", output);
+    // cide_get_output 是展示视图（程序 stdout + 引擎附注拼接），无法整体 eq；
+    // starts_with 是该通道上可用的最强断言——contains("200") 对错值 "-200"
+    // 同样为真（弱断言曾放过 JIT 错值），而 "-200..." 不以 "200" 开头。
+    assert!(output.starts_with("200"), "Program stdout should start with 200, got: {:?}", output);
     assert!(jit_stats.0 > 0, "JIT should have triggered, stats: {:?}", jit_stats);
 }
 
@@ -142,7 +145,8 @@ int main() {
     let (ret, outputs, jit_stats) = compile_and_run(source).expect("Should compile and run");
     assert_eq!(ret, 0);
     let output = outputs.join("\n");
-    assert!(output.contains("400"), "Output should contain 400, got: {}", output);
+    // 同 test_jit_simple_loop：展示视图通道用 starts_with（"-400" 不以 "400" 开头）
+    assert!(output.starts_with("400"), "Program stdout should start with 400, got: {:?}", output);
     // 内层循环 backward jump 目标被命中 400 次（>阈值 100），JIT 应触发并正确加速
     assert!(jit_stats.0 > 0, "JIT should trigger for nested loops, stats: {:?}", jit_stats);
 }

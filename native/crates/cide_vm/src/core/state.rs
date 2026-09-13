@@ -118,6 +118,10 @@ pub struct CideVM {
     pub(crate) trace_recorder: TraceRecorder,
     pub(crate) jit_traces: HashMap<usize, Arc<CompiledTrace>>,
     pub(crate) jit_stats: JitStats,
+    /// JIT 总开关（默认开启）。关闭时 fast path 不命中、热点检测与 trace 录制
+    /// 均不触发——这是结构性禁用，供基准对照（vm_bench）与诊断隔离使用；
+    /// 与 `jit_traces_mut().clear()` 不同，后者清表后 `ip_hits` 仍会累积并重新录制。
+    pub(crate) jit_enabled: bool,
 }
 
 impl Default for CideVM {
@@ -169,6 +173,7 @@ impl CideVM {
             trace_recorder: TraceRecorder::new(),
             jit_traces: HashMap::new(),
             jit_stats: JitStats::default(),
+            jit_enabled: true,
         }
     }
 
@@ -526,6 +531,14 @@ impl CideVM {
 
     pub fn jit_stats(&self) -> &crate::jit_trace::JitStats {
         &self.jit_stats
+    }
+
+    pub fn set_jit_enabled(&mut self, enabled: bool) {
+        self.jit_enabled = enabled;
+    }
+
+    pub fn jit_enabled(&self) -> bool {
+        self.jit_enabled
     }
 
     pub fn jit_traces_mut(

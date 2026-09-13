@@ -90,7 +90,7 @@ docs/archive/           历史归档（ARCHIVE_ 前缀 + 归档横幅；仅供�
 | Phase 22 | 认知推理 P2：`KnowledgeGraph` 24 概念节点 + 30+ 关系边、`ConceptGraphView` | ✅ 完成 |
 | Phase 23 | 认知推理 P3：`ControlFlowGraph` + `DataFlow` + `IntentInference` 代码意图推断 | ✅ 完成 |
 | Phase 24 | 语义智能补全 v2：`CompletionEngine` 五种上下文感知补全 | ✅ 完成 |
-| Phase 25 | 模板 JIT（Trace-based Loop Accelerator）：热点循环 trace 录制 + 预优化函数指针序列 | 🚧 **有 P0 正确性缺陷**（JIT fast path 在录制期间未禁用 → 外层 trace 穿透内层循环 → 静默错值；2026-09-13 定位）+ **加速比声明未经验证**（`vm_bench.rs` 两处方法学缺陷）。详见 [`07-质量与裁定/核心资产重构裁定.md`](docs/current/07-质量与裁定/核心资产重构裁定.md) §14 |
+| Phase 25 | 模板 JIT（Trace-based Loop Accelerator）：热点循环 trace 录制 + 预优化函数指针序列 | ✅ P0 缺陷已修复 + 加速比实测（2026-09-13）：fast path 录制期禁用（红→绿闭环，`jit_nested_counting_loop*.c` 两条用例锚定）；`vm_bench` 方学校正（真禁用开关 `jit_enabled` + 统一入口）后实测 **9.16x（嵌套）/ 9.43~9.72x（单层热循环）**——旧"0.66x~0.86x 不赚反亏"为方法学假象已撤销；JIT 作用域收缩为"只 JIT 最内层循环"（含内层循环的 trace 录制必然 Abort）；J10 防线落地（`jit_path_parity.rs` 八条三锚差分，突变实测 margin=20）。详见 [`07-质量与裁定/核心资产重构裁定.md`](docs/current/07-质量与裁定/核心资产重构裁定.md) §14 |
 | Phase 26 | Flutter Bridge 通信优化：Stream 模式、差分编码 `StepPayloadDelta`、符号表 dedup | ✅ 完成 |
 | Phase 27 | 数据结构语法拓展 P0+P1：数组退化、`unsigned` 全链路、`const`、`extern`、VLA 全管线 | ✅ 完成 |
 | Phase 28 | CLI 调试工具 `cide_cli`：`compile`/`run`/`step`/`unified`，支持 stdin 管道快速测试 | ✅ 完成 |
@@ -139,7 +139,7 @@ Cide 采用**五条分层协作的测试防线**，核心哲学：*测试不是�
 将同一 C 源码同时交给 **Clang** 与 **Cide** 编译执行，对比 stdout 输出是否完全一致。Golden 只能来自 Clang，不能来自 Cide 自己。
 
 - **门禁**：自 2026-09-06 起为 CI 硬门禁——Clang 预检缺失时 fail fast（exit 2）；存在非预期差异（compile_gap / runtime_gap / output_gap）时 exit 1；match / known_issue / cide_better 视为通过。`KNOWN_FAILURE_CASES` 与 E2E 防线的 `KNOWN_TEMPLATE_FAILURES` 常量对齐（双向监控：任一防线转绿需同步移除）。
-- **覆盖**：321 个 Baseline 用例 + 82 个模板生成用例 + 81 个 K&R 用例 + 138 个 LeetCode 题 + 14 个 gap 用例（C Shadow Verification 合计 636 个用例，完全匹配 617、cide_better 16、known_issue 3（`function_pointer_sizeof` / `sizeof_array_param` 存量 "bug" 分类 + `spfa_default` 模板已知偏差；`bTree_default` 已转为 match，见 `E2E_FAILURES.md`）；统计口径含 match + cide_better + known_issue；2026-09-11 复测）；100 个 C++ 用例（C++ Shadow Verification，98 个一致 + 2 个已记录的 `clang_compile_fail`：`cpp_cide_vec_class` / `cpp_cide_list_class` 使用 Cide 内置容器无法被 Clang++ 直接编译；2026-06-28 实测，2026-09-11 复测仍一致）
+- **覆盖**：321 个 Baseline 用例 + 82 个模板生成用例 + 81 个 K&R 用例 + 138 个 LeetCode 题 + 14 个 gap 用例 + 3 个 JIT 专项用例（`jit_nested_counting_loop` / `_longlong` / `jit_single_hot_loop`，2026-09-13）（C Shadow Verification 合计 666 个用例：match 646、cide_better 16、known_issue 4（`function_pointer_sizeof` / `sizeof_array_param` 存量 "bug" 分类 + `spfa_default` 模板已知偏差 + `bTree_default`——模板程序自身 UB，CLI/DLL 两入口间 match/FAIL 漂移，FAIL 态即 E2E_FAILURES 登记的 NULL 指针症状）；统计口径含 match + cide_better + known_issue；2026-09-13 复测）；100 个 C++ 用例（C++ Shadow Verification，98 个一致 + 2 个已记录的 `clang_compile_fail`：`cpp_cide_vec_class` / `cpp_cide_list_class` 使用 Cide 内置容器无法被 Clang++ 直接编译；2026-06-28 实测，2026-09-11 复测仍一致）
 - **标准输入（2026-09-11 新增能力）**：用例可自带同名 `.in` 文件，Clang 与 Cide 喂**同一份字节**（缓存 key 纳入真实 stdin）。此前防线一律批量运行且不喂 stdin —— K&R 目录里 29 个 `.in` 从未被使用，两侧"都无输入"造成的**虚假 match**；启用后立即暴露"输入注入丢换行"缺陷（`getchar()` 读不到 `'\n'`，19 例 `output_gap`），已随 `RuntimeState::split_stdin` 统一修复
 - **输出口径（E-P1-5，2026-09-11）**：比对读的是引擎的**纯程序 stdout 通道**（capi `cide_get_program_output*`，ABI 1.1.0）——引擎附注（"程序运行完成，返回值：N"、内存泄漏报告、教学警告）与 stderr 各有独立通道。**驱动侧不得再对输出做正则清洗**：此前十余处清洗规则语义互不一致，且在教学程序自己打印同类文本时会误删真实输出（假阳性 `output_gap`），现全部废除。读取入口统一在驱动内置的结构化通道封装（共享包 `scripts/internal/capi` 的 `ReadChannel`/`PtrToGoString`；原 Python 伴生模块 `cide_output.py` 已随主驱动退役）；DLL 缺新符号时 fail fast，不退回旧清洗。回归用例 `baseline/engine_note_lookalike.c` 固化该口径
 - **驱动**：`go run ./scripts/shadow_verify`（C 侧主驱动，2026-09-13 起 D5 语言迁移**最后一站**：与 Python 版双轨对账全维度一致后接管 CI，`shadow_verify.py` 退役删除。形态：两段流水线——Clang 侧并发（`--jobs N`，0=自动 min(CPU,16)），Cide 侧互斥串行（DLL 非线程安全实证）；实测冷启动全量重算 663 用例 ~26s、缓存热跑 ~5s。`--refresh-clang` 强制全量重算（CI 夜间防漂移）；`--rebuild` 在 release DLL 比引擎源码旧时自动重建；Clang 结果缓存为 Go 自有 schema（`go1`），与历史 Python 缓存同目录共存、key 空间不相交；瞬态环境异常（超时/启动失败/0xC0000005 映像崩溃）自动重试且**不落缓存**）、`go run ./scripts/shadow_verify_cpp`（C++ 侧驱动，2026-09-12 起 D5 第一站：Clang 并发 16 路，**24.75s → 5.2s**；工作目录自管 `.shadow_cpp_tmp/`，已 gitignore）
@@ -302,18 +302,16 @@ Cide 采用**五条分层协作的测试防线**，核心哲学：*测试不是�
 - ~~**全局/静态数据段与堆区共享线性内存（潜在静默损坏）**~~ — **已修复（2026-09-11，重构批次 R1：动态堆起点）**。全局变量、静态变量与字符串字面量仍自 `GLOBAL_START`（`0x1000`）向上分配，但堆起点不再写死 `HEAP_START`（`0x5000` = 20 KB）：运行入口按 `heap_base = max(HEAP_START, align4(global_data_end))` 动态计算（codegen 导出全局数据末端绝对地址）；程序带命令行参数时，argv 改自全局区上界 `GLOBAL_REGION_LIMIT`（`0x10000` = 64 KB，取代 `gen_string_literal` 的 `MEM_SIZE/16` 魔数）向下分配，堆起点相应上移至 64 KB。全局区所有 bump（全局变量 / extern 占位 / vtable / 字符串字面量 / 静态局部变量）统一走 codegen `bump_global_offset` 单一入口，越过 `GLOBAL_REGION_LIMIT` 编译期报错（fail loud，不再静默放行）；全局数据越过 `HEAP_START` 时产生编译 warning 提示堆起点上移与剩余堆空间。`lc_22` / `lc_977` 等"全局区越过 20 KB 但不用堆"的存量用例行为不变。回归：`native/tests/r1_memory_boundary_test.rs`（大全局+malloc 数据完好 / malloc 耗尽明确返回 NULL / 深递归明确 trap / argv 不与全局数据重叠 / 容量上限编译失败 / 大全局 warning）。
   - 历史背景：该风险与 2026-09-11 修复的 `BYTECODE_LIBC_GLOBALS_RESERVED` 自我递增漂移**同源**（都是"全局区边界无单源判据"的结构病）：漂移曾把用户全局区压缩到不足 1 KB，使 `lc_67` 的 `static char res[1000]` 直接溢出到堆区并打印出错乱内容（详见 `CHANGELOG.md [Unreleased] Fixed`）；本批修复后布局判据单源化到 `cide_runtime`（`GLOBAL_REGION_LIMIT` / `compute_heap_base`）。
 
-- **JIT trace 路径的静默错值（2026-09-13 定位，**尚未修复**）** — **P0 正确性缺陷**（与本引擎"解释器路径"不一致，非 C 标准问题）。最小复现（嵌套纯计数循环）：
+- ~~**JIT trace 路径的静默错值（2026-09-13 定位）**~~ — **已修复（2026-09-13 同日，红→绿闭环）**。历史缺陷（与本引擎"解释器路径"不一致，非 C 标准问题）：嵌套纯计数循环下
   ```c
   int main(){int i,j,inner=0;
   for(i=0;i<200;i++){for(j=0;j<200;j++){inner=inner+1;}}
   printf("inner=%d i=%d j=%d\n",inner,i,j);return 0;}
   ```
-  `cide_cli run`（走 executor + JIT）→ `inner=20200 i=200 j=0`；`cide_cli unified`（不经 executor JIT）与 clang → `inner=40000 i=200 j=200`。**静默错值、零诊断**。
-  - ⚠️ **归因注意**：**与 `long long` 无关**（`sum` 改 `int` 的纯整数版本同样出错；"循环体内写 long long"的初判实测不成立）。
-  - **触发条件**：外层循环回边达 `JIT_THRESHOLD=100` **且**内层循环已被 JIT 化 **且**外层循环体不含条件分支（含条件分支时录制 Abort、退回解释、结果正确）。触发点 = 外层第 **102** 轮。
-  - **根因**：`cide_vm` 的 JIT fast path（`core/executor/mod.rs:14-16`）在 trace 录制期间**仍然生效**——录制推进到内层循环头时命中内层 trace，一次跑完整个内层循环，使外层 trace **缺失内层指令**却被 `Finish` 注册；此后每轮外层由该不完整 trace 执行 → 内层被完全跳过。
-  - **防线盲区（为什么 663 用例全绿）**：教学用例循环 <100 次（不触发）、排序类带条件交换（录制 Abort）、单层循环（无穿透）——三者互补地漏掉了"嵌套纯计数循环"这一教科书形状。**新增该形状用例前，门禁不会为此变红。**
-  - 完整复核（复现、四组双向验证实验、修复方向、`vm_bench` 方法学缺陷）见 [`07-质量与裁定/核心资产重构裁定.md`](docs/current/07-质量与裁定/核心资产重构裁定.md) §14。
+  `cide_cli run`（走 executor + JIT）曾输出 `inner=20200 i=200 j=0`（正确：`inner=40000 i=200 j=200`），**静默错值、零诊断**。
+  - **归因**：与 `long long` 无关（纯 int 版同样出错）。触发条件：外层回边达 `JIT_THRESHOLD=100` 且内层已 JIT 化 且外层循环体无分支。根因：JIT fast path（`core/executor/mod.rs`）在 trace 录制期间仍生效——外层录制命中内层 trace 被 bulk 跑完，外层 trace 缺失内层指令却被注册。
+  - **修复**：fast path 加 `!trace_recorder.is_recording()` 判断。副作用即"作用域收缩"：含内层循环的 trace 录制必然于内层回边 Abort，**JIT 只作用于最内层循环**。回归锚定：baseline `jit_nested_counting_loop.c` / `_longlong.c`（先红后绿）+ `jit_single_hot_loop.c` + `native/tests/jit_path_parity.rs`（八条三锚差分）。
+  - **顺带撤销的结论**：`vm_bench.rs` 两处方法学缺陷（`clear()` 不禁用 / 双分支入口不同）曾得出"JIT 0.66x~0.86x 不赚反亏"——校正后实测 **9.16x（嵌套）/ 9.43~9.72x（单层）**，Phase 25 加速比声明更新为实测值。完整复核与 D6 存废裁定见 [`07-质量与裁定/核心资产重构裁定.md`](docs/current/07-质量与裁定/核心资产重构裁定.md) §14。
 
 > 历史特性详情和 Bug 修复记录见 [`CHANGELOG.md`](CHANGELOG.md) 和 [`C-语言子集/C语言子集规范.md`](C-语言子集/C语言子集规范.md)。
 
