@@ -18,6 +18,11 @@ unexpected_cfgs = { level = "allow", check-cfg = ['cfg(frb_expand)'] }
 # 测试代码与 FRB 生成代码通过 lib.rs 与模块级 #[allow] 豁免。
 unwrap_used = "deny"
 expect_used = "warn"
+# U0#5（2026-09-13）：手写值域钳制必须用 try_from 表达（14 处已清零后 deny）。
+# 注：cast_possible_wrap 实测命中 246 处，暂不 deny——按"算术→索引/容量"
+# 子类定向清理推进（负 argc 实锤已修；memory.rs with_capacity 守卫在前；
+# len→i32 类受上游有界结构约束），见路线图 U0#5 判据实测修正。
+checked_conversions = "deny"
 # 教学项目，文档负担不宜过重。
 missing_panics_doc = "allow"
 # 提示超大函数，辅助后续拆分。

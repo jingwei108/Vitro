@@ -51,7 +51,7 @@ impl Parser {
                 column: prev.column,
                 file_id: 0,
             };
-            if uv <= i32::MAX as u64 {
+            if i32::try_from(uv).is_ok() {
                 return Expr::Literal {
                     value: uv as i32,
                     loc,

@@ -194,6 +194,12 @@ pub unsafe extern "C" fn cide_set_argv(s: *mut Session, argc: c_int, argv: *cons
         if s.is_null() || argv.is_null() {
             return;
         }
+        // U0#5 实锤：负 argc 曾直接 `argc as usize` 进 with_capacity——负数绕回
+        // usize::MAX，分配器 capacity overflow panic（被入口 guard 吞成静默）。
+        // 参数域契约：argc < 0 属调用方错误，忽略本次调用（会话 argc/argv 不动）。
+        if argc < 0 {
+            return;
+        }
         let session = &mut *s;
         let mut args = Vec::with_capacity(argc as usize);
         for i in 0..argc as isize {

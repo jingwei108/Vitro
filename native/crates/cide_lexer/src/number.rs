@@ -193,27 +193,27 @@ impl Lexer {
             // i64 内 → long long（此前 >u32::MAX 直接报"不支持"，8000000000ULL 被误拒）；
             // (i64::MAX, u64::MAX]（如 ULLONG_MAX）以 64 位位模式承载为 unsigned long long
             //（E1 B 档：u64 坑修复；有符号解释在此值域无意义，已在 spec 记录）
-            if val <= u32::MAX as u64 {
+            if u32::try_from(val).is_ok() {
                 return self.make_token(TokenType::UnsignedLiteral, &val.to_string());
             }
-            if val <= i64::MAX as u64 {
+            if i64::try_from(val).is_ok() {
                 return self.make_token(TokenType::LongLiteral, &val.to_string());
             }
             return self.make_token(TokenType::UnsignedLiteral, &val.to_string());
         }
 
         if has_u {
-            if val <= u32::MAX as u64 {
+            if u32::try_from(val).is_ok() {
                 return self.make_token(TokenType::UnsignedLiteral, &val.to_string());
             }
-            if val <= i64::MAX as u64 {
+            if i64::try_from(val).is_ok() {
                 return self.make_token(TokenType::LongLiteral, &val.to_string());
             }
             return self.make_token(TokenType::UnsignedLiteral, &val.to_string());
         }
 
         if has_l {
-            if val > i64::MAX as u64 {
+            if i64::try_from(val).is_err() {
                 // C 标准十进制常量溢出有符号域时转 unsigned long long（如 LLONG_MIN 的
                 // 量值 9223372036854775808LL）；配合一元负号即得 LLONG_MIN 位模式
                 return self.make_token(TokenType::UnsignedLiteral, &val.to_string());
@@ -223,11 +223,11 @@ impl Lexer {
 
         // No suffix: apply C standard type promotion rules
         if has_integer_prefix {
-            if val <= i32::MAX as u64 {
+            if i32::try_from(val).is_ok() {
                 self.make_token(TokenType::Number, &val.to_string())
-            } else if val <= u32::MAX as u64 {
+            } else if u32::try_from(val).is_ok() {
                 self.make_token(TokenType::UnsignedLiteral, &val.to_string())
-            } else if val <= i64::MAX as u64 {
+            } else if i64::try_from(val).is_ok() {
                 self.make_token(TokenType::LongLiteral, &val.to_string())
             } else {
                 self.errors.push(LexerError {
@@ -240,9 +240,9 @@ impl Lexer {
             }
         } else {
             // Decimal: no automatic unsigned promotion
-            if val <= i32::MAX as u64 {
+            if i32::try_from(val).is_ok() {
                 self.make_token(TokenType::Number, &val.to_string())
-            } else if val <= i64::MAX as u64 {
+            } else if i64::try_from(val).is_ok() {
                 self.make_token(TokenType::LongLiteral, &val.to_string())
             } else {
                 self.errors.push(LexerError {

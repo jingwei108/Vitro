@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (capi/tools)：U0#5 `as` 无防御转换收口（第一批）——负 argc 实锤 + `checked_conversions` 清零 deny
+
+- **负 argc 修复（红→绿）**：`cide_set_argv` 的 `Vec::with_capacity(argc as usize)`
+  把负 argc 绕回 `usize::MAX` → 分配器 capacity overflow panic（被入口 guard
+  吞成静默无操作）。修复：argc < 0 忽略本次调用（会话 argc/argv 不动）。
+  回归锚 `capi_negative_argc_test`——观测手段为 **panic hook 计数**（guard
+  吞掉的 panic 也过 hook，可精确断言"零 panic"）；红留痕：撤修复实测计数
+  非 0 断言失败。U0#5 点名的负参三处至此全部闭环（`payload.get` 负 end /
+  `get_payloads` 负参随 W0-2、负 argc 随本批）。
+- **`checked_conversions` 14 处清零后 deny**（workspace lints）：手写值域
+  钳制（`val <= u32::MAX as u64` / `next_value >= i32::MIN as i64 && ...`）
+  全部改 `try_from(..).is_ok()` 表达（语义严格等价，lexer 10 处 /
+  parser decl 4 处 / primary 1 处）。
+- **判据实测修正（记录进路线图）**：`cast_possible_wrap` 全量命中 **246 处**
+  ——"转 deny + 其余登记豁免"不可一步到位（246 条豁免是噪音淹没信号），
+  改为按 U0#5 本意做**"算术→索引/容量"子类定向清理**：本批已修 capi
+  `with_capacity(argc as usize)`（负参实锤）；`memory.rs:400`
+  `with_capacity(array_size as usize)` 守卫在前（`array_size <= 0` 提前
+  拦截，安全）；`len() as i32` 类 5 处（jit_templates / collector / engine）
+  受上游有界结构约束（frame_cache 窗口 / MAX_TRACE_LEN / 循环变量表），
+  现实不可能溢出——登记豁免，待 U2 有界化后该类风险面进一步收缩。
+
 ### Fixed (unified/serve)：W0-2 止血收口——seek/payload.get 参数域三处 panic 真修 + serve 主循环 panic 护栏
 
 - **R-2026-09-01/02（seek 越程 panic）本轮真修**：`finish_replay_window` 的

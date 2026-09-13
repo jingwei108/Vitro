@@ -582,13 +582,13 @@ impl Parser {
                     file_id: 0,
                 },
                 // E1：成员常量超 i32（enum Big : long long）按 LongLiteral 存储
-                ty: if next_value >= i32::MIN as i64 && next_value <= i32::MAX as i64 {
+                ty: if i32::try_from(next_value).is_ok() {
                     Type::int()
                 } else {
                     underlying.clone()
                 },
                 name: member_tok.text,
-                init: Some(if next_value >= i32::MIN as i64 && next_value <= i32::MAX as i64 {
+                init: Some(if i32::try_from(next_value).is_ok() {
                     Expr::Literal {
                         value: next_value as i32,
                         loc: SourceLoc {
@@ -762,13 +762,13 @@ impl Parser {
                     file_id: 0,
                 },
                 // E1：成员常量超 i32（enum Big : long long）按 LongLiteral 存储
-                ty: if next_value >= i32::MIN as i64 && next_value <= i32::MAX as i64 {
+                ty: if i32::try_from(next_value).is_ok() {
                     Type::int()
                 } else {
                     underlying.clone()
                 },
                 name: member_tok.text,
-                init: Some(if next_value >= i32::MIN as i64 && next_value <= i32::MAX as i64 {
+                init: Some(if i32::try_from(next_value).is_ok() {
                     Expr::Literal {
                         value: next_value as i32,
                         loc: SourceLoc {
