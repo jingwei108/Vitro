@@ -29,7 +29,12 @@ def resolve_exe() -> Path:
     name = "cide_cli.exe" if sys.platform == "win32" else "cide_cli"
     debug = PROJECT_ROOT / "native" / "target" / "debug" / name
     release = PROJECT_ROOT / "native" / "target" / "release" / name
-    return debug if debug.exists() else release
+    # 取 mtime 较新的产物——固定 debug 优先会在陈旧 debug 上拿假绿
+    # （J9 埋雷实测踩中：埋雷注入 release 后 smoke 仍跑旧 debug 全绿）
+    candidates = [p for p in (debug, release) if p.exists()]
+    if not candidates:
+        return release
+    return max(candidates, key=lambda p: p.stat().st_mtime)
 
 
 PROGRAM = (
@@ -255,12 +260,111 @@ def main():
     )
     check(by_id[20]["result"]["shutdown"] is True, "shutdown 回应")
 
+    edge_failures = run_edge_batch(exe)
+    failures.extend(edge_failures)
+
     print()
     if failures:
         print(f"FAILED: {len(failures)} 项 -> {failures}")
         return 1
     print("serve 冒烟全部通过")
     return 0
+
+
+# U0#8 / W0-2 边界样例批：越界 seek / 负参 payload.get / 畸形行——历史上这三个
+# 形状直接 panic 杀死会话（R-2026-09-01/02/03，exit 101），修复后必须返回
+# 结果帧且进程存活。**任何一处 panic 回归（子进程死亡/响应行缺失）本批必红**，
+# 这就是 serve_smoke 对已知 panic 的"埋雷可触发性"（J9）。
+EDGE_LINES = [
+    '{"id": 101, "method": "compile", "params": {"source": "int main(){ int s=0; for(int i=0;i<3;i++) s+=i; return s; }"}}',
+    '{"id": 102, "method": "step.begin"}',
+    # 先执行若干步产生帧缓存与检查点——无检查点时 seek_to 在"没有可用的检查点"
+    # 提前返回，走不到 finish_replay_window 的窗口路径（埋雷触发的必要前置）
+    '{"id": 1021, "method": "step.next"}',
+    '{"id": 1022, "method": "step.next"}',
+    '{"id": 1023, "method": "step.next"}',
+    '{"id": 1024, "method": "step.next"}',
+    '{"id": 1025, "method": "step.next"}',
+    '{"id": 103, "method": "seek", "params": {"step": 50000}}',          # R-2026-09-01 越程
+    '{"id": 104, "method": "seek", "params": {"step": -7}}',             # 负值
+    '{"id": 105, "method": "payload.get", "params": {"start": 0, "end": -1}}',  # R-2026-09-03 负 end
+    '{"id": 106, "method": "payload.get", "params": {"start": -5, "end": 3}}',  # 负 start
+    '{"id": 107, "method": "step.next"}',                                # 越界 seek 后会话仍可用
+    '{"id": 108, "method": "no.such.method"}',
+    '{"id": 109, "method": "seek"}',                                     # 缺 params
+    '{"id": 110, "method": "ping"}',
+    '{ this is not json',                                                 # 非法 JSON 行
+    '{"id": 111, "method": "ping"}',                                     # 畸形行后进程仍活
+]
+
+
+def run_edge_batch(exe: Path):
+    print("\n== 边界/负值/极值批（panic 回归即红）==")
+    fails = []
+    payload = "\n".join(EDGE_LINES) + "\n"
+    try:
+        proc = subprocess.run(
+            [str(exe), "serve"],
+            input=payload,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=120,
+        )
+    except subprocess.TimeoutExpired:
+        print("  FAIL  边界批超时（疑似挂起）")
+        return ["edge-batch-timeout"]
+
+    lines = [l for l in proc.stdout.splitlines() if l.strip()]
+    ok = lambda c, label, detail="": print(f"  {'PASS' if c else 'FAIL'}  {label}" + ("" if c else f"  {detail}")) or (None if c else fails.append(label))
+    ok(proc.returncode == 0, "边界批进程正常退出", f"exit={proc.returncode} stderr={proc.stderr[-300:]}")
+    ok(len(lines) == len(EDGE_LINES), "边界批逐行响应（panic 死亡即缺行）",
+       f"responses={len(lines)} expected={len(EDGE_LINES)}")
+
+    parsed = []
+    for i, line in enumerate(lines):
+        try:
+            parsed.append(json.loads(line))
+        except json.JSONDecodeError as e:
+            ok(False, f"边界批响应 {i} 是合法 JSON", f"{e}: {line[:120]}")
+            return fails
+
+    by_id = {}
+    null_id_frames = []
+    for r in parsed:
+        rid = r.get("id")
+        if rid is None:
+            null_id_frames.append(r)
+        else:
+            by_id[rid] = r
+
+    # 合法请求的 id 关联（101~111 全部在场 = 进程全程存活）
+    expected_ids = [101, 102, 1021, 1022, 1023, 1024, 1025, 103, 104, 105, 106, 107, 108, 109, 110, 111]
+    ok(all(i in by_id for i in expected_ids), "合法边界请求 id 全部关联（进程存活）",
+       f"missing={[i for i in expected_ids if i not in by_id]}")
+
+    # 越界/负参 seek 与 payload.get：返回结果帧或错误帧——禁止 panic（进程死亡已在上面抓）
+    for rid in (103, 104):
+        r = by_id.get(rid, {})
+        ok(("result" in r) ^ ("error" in r), f"seek 边界({rid}) 返回完整帧", str(r)[:150])
+    for rid in (105, 106):
+        r = by_id.get(rid, {})
+        ok(("result" in r) ^ ("error" in r), f"payload.get 负参({rid}) 返回完整帧", str(r)[:150])
+
+    # 越界 seek 后会话仍可用：107 有响应且帧完整
+    r107 = by_id.get(107, {})
+    ok(("result" in r107) ^ ("error" in r107), "越界 seek 后 step.next 仍可用", str(r107)[:150])
+
+    # 非法 JSON 行 → protocol 错误帧（id null 可接受）
+    ok(
+        len(null_id_frames) >= 1
+        and all(f.get("error", {}).get("kind") == "protocol" for f in null_id_frames),
+        "非法 JSON 行 → protocol 错误帧",
+        str(null_id_frames[:1])[:150],
+    )
+    # 存活探针：110/111 pong
+    ok(by_id.get(111, {}).get("result", {}).get("pong") is True, "畸形行之后 ping 仍 pong（进程存活）")
+    return fails
 
 
 if __name__ == "__main__":
