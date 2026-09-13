@@ -2,11 +2,11 @@
   <img src="assets/logo/vitro-logo.svg" alt="vitro" width="640">
 </p>
 
-# Cide
+# Vitro
 
 > 教学 C/C++ 子集参考执行引擎（白箱后端）
 
-一个用 Rust 从零实现的教学 C/C++ 子集编译器与字节码虚拟机：**Lexer → Parser → TypeChecker → BytecodeGen → CideVM** 全链路自研，以 Clang / Clang++ 为行为基准做诚实对照，把"程序究竟怎么跑"变成可见、可解释、可回放的教学素材。
+一个用 Rust 从零实现的教学 C/C++ 子集编译器与字节码虚拟机：**Lexer → Parser → TypeChecker → BytecodeGen → VitroVM** 全链路自研，以 Clang / Clang++ 为行为基准做诚实对照，把"程序究竟怎么跑"变成可见、可解释、可回放的教学素材。
 
 > **本仓库只做后端（MIT 许可）。** 2026-09-11 完成前端切割：`CideFlutter/`、FRB 桥接、web 部署 workflow 与全部 Flutter 构建脚本已迁出，前端交给社区；原生移动端放弃（"看"的场景由 wasm32 + 任意 Web 前端的移动浏览器天然覆盖）。切割前最后完整状态由标签 `before-frontend-split` 保留（`git checkout before-frontend-split -- CideFlutter` 可取回）。
 >
@@ -15,17 +15,17 @@
 ## 三出口一核心
 
 ```
-cide 引擎核心（Rust workspace，禁止平台 API 耦合）
+vitro 引擎核心（Rust workspace，禁止平台 API 耦合）
 │
-├─ 出口 1：native cdylib / C ABI（native/src/capi/，ABI 版本化 cide_abi_version()）
-│    第一消费者：cide_cli、scripts/shadow_verify.go（capi 直调，671 个用例的生产验证）
+├─ 出口 1：native cdylib / C ABI（native/src/capi/，ABI 版本化 vitro_abi_version()）
+│    第一消费者：vitro_cli、scripts/shadow_verify.go（capi 直调，671 个用例的生产验证）
 │    外部消费者：第三方教学 IDE（.NET P/Invoke 子进程等）、任意语言 FFI
 │
 ├─ 出口 2：wasm32-unknown-unknown（.wasm + 薄 JS/TS 绑定）
 │    浏览器前端（社区）、在线教学演示、移动浏览器"看"场景
 │    已冒烟实证：零修改构建 3.75MB，C API 全链路 + E3070 安全检测在 wasm 下工作
 │
-└─ 出口 3：cide_cli serve（JSON-lines 会话模式）
+└─ 出口 3：vitro_cli serve（JSON-lines 会话模式）
      headless 交互：编译 / 运行 / 单步 / 时间旅行 / 断点 的脚本化消费
 ```
 
@@ -37,22 +37,22 @@ cide 引擎核心（Rust workspace，禁止平台 API 耦合）
 |------|------|
 | 语言 | **Rust 1.95.0**（`#![forbid(unsafe_code)]` 覆盖核心 crate） |
 | 编译器 | 手写 Lexer / Parser / TypeChecker / BytecodeGen（10 个独立子 crate） |
-| 执行 | 自研 CideVM 字节码解释器，1MB 线性内存，指令级边界检查 |
+| 执行 | 自研 VitroVM 字节码解释器，1MB 线性内存，指令级边界检查 |
 | 加速 | 模板 JIT（热点循环 trace → 预编译 Rust 函数指针序列，非机器码 JIT） |
-| 出口 | C ABI（capi）、wasm32、`cide_cli serve`（JSON-lines） |
+| 出口 | C ABI（capi）、wasm32、`vitro_cli serve`（JSON-lines） |
 | 许可 | MIT |
 
 > **注意**：模板 JIT 不是传统机器码 JIT。由于核心 crate 启用 `#![forbid(unsafe_code)]`，无法动态生成机器码，因此把热点循环的字节码 trace 编译为预编译 Rust 函数指针序列（超级指令），跳过解释器 dispatch 开销，不匹配时回退标准解释执行。
 
 ## 当前状态（2026-09-11 实测）
 
-- **C 教学子集**：C Shadow Verification **671 个用例**（完全匹配 664 + known_issue 3 + gap_extension 4，无非预期差异；cide_better 已清零）
+- **C 教学子集**：C Shadow Verification **671 个用例**（完全匹配 664 + known_issue 3 + gap_extension 4，无非预期差异；vitro_better 已清零）
 - **C++ 教学子集**：C++ Shadow Verification **97 个用例**（95 一致 + 2 个已记录的 `clang_compile_fail`）；C++ E2E 回归 81 个用例
 - **真实程序回归**：K&R 69 题全绿；LeetCode 138 题全部通过；Baseline 用例全部通过
 - **全量测试**：`cargo test --workspace --all-features` → **845 passed / 0 failed**（60 个测试套件）；clippy 0 warning
-- **capi 第一批**：13 个新入口全部落地（`cide_abi_version` 首批 `1.1.0`，当前 `1.2.0`），StepPayload schema v0.1 发布
+- **capi 第一批**：13 个新入口全部落地（`vitro_abi_version` 首批 `1.1.0`，当前 `1.2.0`），StepPayload schema v0.1 发布
 - **wasm32 出口**：零修改构建 3.75MB `.wasm`，Node 下 C API 全链路（compile → run → output）+ E3070 教学诊断通过
-- **时间旅行**：VM 快照 / 检查点 / Seek / 异常回退全链路可用（`cide_cli unified`、`serve` 的 `step.*`/`seek`）
+- **时间旅行**：VM 快照 / 检查点 / Seek / 异常回退全链路可用（`vitro_cli unified`、`serve` 的 `step.*`/`seek`）
 
 > 失败与差异一律如实记录在各 `*_FAILURES.md`（见下文"测试防线"），禁止通过修改测试预期值粉饰数据。
 
@@ -61,16 +61,16 @@ cide 引擎核心（Rust workspace，禁止平台 API 耦合）
 ```
 native/                    Rust workspace（编译器 + VM + 三出口）
 ├── crates/                10 个子 crate
-│   ├── cide_shared/       SourceLoc、ErrorCode 等共享基础类型
-│   ├── cide_ast/          AST 节点与类型系统
-│   ├── cide_lexer/        词法分析器
-│   ├── cide_parser/       语法分析器
-│   ├── cide_cpp_frontend/ C++ 前端支持
-│   ├── cide_typeck/       类型检查器
-│   ├── cide_codegen/      字节码生成器
-│   ├── cide_runtime/      VM 运行时共享数据（内存状态、opcode、符号表）
-│   ├── cide_vm/           CideVM 字节码解释器
-│   └── cide_algorithm_steps/ 算法步骤语义标注
+│   ├── vitro_shared/       SourceLoc、ErrorCode 等共享基础类型
+│   ├── vitro_ast/          AST 节点与类型系统
+│   ├── vitro_lexer/        词法分析器
+│   ├── vitro_parser/       语法分析器
+│   ├── vitro_cpp_frontend/ C++ 前端支持
+│   ├── vitro_typeck/       类型检查器
+│   ├── vitro_codegen/      字节码生成器
+│   ├── vitro_runtime/      VM 运行时共享数据（内存状态、opcode、符号表）
+│   ├── vitro_vm/           VitroVM 字节码解释器
+│   └── vitro_algorithm_steps/ 算法步骤语义标注
 ├── src/
 │   ├── capi/              C API（出口 1，公共契约，ABI 版本化）
 │   ├── session_api.rs     会话语义中立层（capi 与 serve 共用）
@@ -78,9 +78,9 @@ native/                    Rust workspace（编译器 + VM + 三出口）
 │   ├── engine/            编译管线与工具
 │   ├── compiler/          静态分析模块（CFG / 数据流 / 算法识别 / 意图推断）
 │   ├── diagnostics/       结构化诊断、自动修复建议、知识图谱、教学推理
-│   ├── flutter_bridge.rs  历史会话包装层（cide_cli 当前消费，名称待重构收敛）
-│   └── bin/cide_cli.rs    CLI 调试工具（出口 3 的 serve 也在这里）
-├── include/cide_capi.h    C API 头文件
+│   ├── flutter_bridge.rs  历史会话包装层（vitro_cli 当前消费，名称待重构收敛）
+│   └── bin/vitro_cli.rs    CLI 调试工具（出口 3 的 serve 也在这里）
+├── include/vitro_capi.h    C API 头文件
 ├── runtime_libc/          标准库存根 + 内置 C++ 容器（.cpp 接口声明为唯一真相来源）
 ├── benches/               性能基线
 └── tests/                 五层测试防线与用例（baseline / knr / leetcode / cpp / shadow）
@@ -96,19 +96,19 @@ docs/                      设计文档、规范与事故报告
 
 ```bash
 # 1. 构建 CLI 调试工具（五分钟跑通第一个程序，无需任何前端）
-cd native && cargo build --release --bin cide_cli
-./target/release/cide_cli run tests/cases/baseline/hello_world.c
+cd native && cargo build --release --bin vitro_cli
+./target/release/vitro_cli run tests/cases/baseline/hello_world.c
 
 # 2. 直接跑一段代码（从 stdin 读源码）
 echo '#include <stdio.h>
-int main() { printf("hello, cide\n"); return 0; }' | ./target/release/cide_cli run -
+int main() { printf("hello, vitro\n"); return 0; }' | ./target/release/vitro_cli run -
 
 # 3. 编译并运行引擎核心库（C ABI / wasm 出口的构建基础）
-cd native && cargo build --release                 # native/target/release/cide_native.dll
+cd native && cargo build --release                 # native/target/release/vitro_native.dll
 cd native && cargo build --target wasm32-unknown-unknown --release   # wasm32 出口
 
 # 4. JSON-lines 会话（headless 交互出口）
-./target/release/cide_cli serve
+./target/release/vitro_cli serve
 
 # 5. 测试与静态检查
 cd native && cargo test --workspace --all-features
@@ -128,7 +128,7 @@ python scripts/serve_smoke.py
 
 项目采用**五条分层协作的测试防线**，核心哲学：*测试不是为了标榜通过率，而是为了诚实地发现自己可能存在的问题*。
 
-1. **Shadow Verification**：同一份源码同时交给 Clang / Clang++ 与 Cide 执行，比对纯程序 stdout（Golden 只能来自 Clang，不能来自 Cide 自己）；自 2026-09-06 起为 CI 硬门禁
+1. **Shadow Verification**：同一份源码同时交给 Clang / Clang++ 与 Vitro 执行，比对纯程序 stdout（Golden 只能来自 Clang，不能来自 Vitro 自己）；自 2026-09-06 起为 CI 硬门禁
 2. **K&R + LeetCode 真实程序回归**：验证"真实世界代码能不能跑"
 3. **三层契约验证**：Host Contract / Bytecode Self-Consistency / Differential Stress
 4. **Fuzz 压力测试**：确定性 RNG 生成恶意内存与调用序列，验证安全检测不泄漏
@@ -138,7 +138,7 @@ python scripts/serve_smoke.py
 
 ## 诚实声明：这是一个 AI 实验田
 
-**Cide 不是由一个完整掌握每一行代码的团队从零手写而成的项目。**
+**Vitro 不是由一个完整掌握每一行代码的团队从零手写而成的项目。**
 
 它是人与 AI 协作的产物：
 

@@ -107,7 +107,7 @@ python tmp/annot_raw.py  gcd --next 6
 | 39 | dpLIS | 同上 | L14 `result = max(result, dp[i]);` | 结果更新（真正转移在 L12，本轮**未产生** transition 帧） |
 | 70 | matrixChain | 同上 | L7 `dp[i][j] = 0;` | 初始化 |
 
-**根因**：`cide_algorithm_steps/src/dp.rs:21` 的判据只有 `line_lower.contains("dp[") && line_lower.contains('=')`，
+**根因**：`vitro_algorithm_steps/src/dp.rs:21` 的判据只有 `line_lower.contains("dp[") && line_lower.contains('=')`，
 初始化行天然满足。**建议**：排除右侧为字面量的形态（`dp[...] = <int literal>;`），
 或要求同一语句内两侧都有 `dp[`（真正的转移是 `dp[i][j] = f(dp[...])`）。
 
@@ -300,7 +300,7 @@ python tmp/annot_raw.py  gcd --next 6
 
 **另有 2 处覆盖缺口（不是"行错"，是"该有的 phase 没有"），建议登记**：
 
-- `huffman_tree` 的 `select` 分支（`cide_algorithm_steps/src/tree.rs:131` "在森林中选择两个最小权值节点"）**从未触发**——因为 `Select()` 被判定成 `selection_sort`，走的是 selection_sort 的模板；
+- `huffman_tree` 的 `select` 分支（`vitro_algorithm_steps/src/tree.rs:131` "在森林中选择两个最小权值节点"）**从未触发**——因为 `Select()` 被判定成 `selection_sort`，走的是 selection_sort 的模板；
 - `seqList` 全程只有 2 条标注：`listInsert` 的后移/写值、`listFind` 的查找零标注（模板演示的三类操作只覆盖了删除一半）。
 
 ---

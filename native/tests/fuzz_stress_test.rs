@@ -5,7 +5,7 @@
 //! 目标：随机内存状态 + 随机标准库调用序列，验证安全检测不泄漏。
 //!
 //! 测试哲学（不可妥协）：
-//! - NO_CODE_DISTORTION：不扭曲 C 语义去迎合 Cide。
+//! - NO_CODE_DISTORTION：不扭曲 C 语义去迎合 Vitro。
 //! - RECORD_DONT_HIDE：任何异常行为（包括未定义行为）必须记录。
 //! - FIX_REAL_BUGS：测试失败时，修 Host Func 或 VM 的实现，而不是改测试预期值让它通过。
 //! - 不通过删减测试用例来消除差异。
@@ -18,15 +18,15 @@
 //! - Fuzz D：混合恶意序列（malloc/free/字符串/IO/rand）+ 整体稳定性验证。
 //! - Fuzz E：内存泄漏检测验证（随机分配后不释放，验证泄漏报告）。
 
-use cide_native::engine::session_ops::append_leak_report;
-use cide_native::session::Session;
-use cide_native::vm::core::CideVM;
-use cide_native::vm::host_funcs::{
+use vitro_native::engine::session_ops::append_leak_report;
+use vitro_native::session::Session;
+use vitro_native::vm::core::VitroVM;
+use vitro_native::vm::host_funcs::{
     host_atoi, host_free, host_getchar, host_malloc, host_memcpy, host_memmove, host_memset, host_printf_n,
     host_putchar, host_rand, host_realloc, host_scanf_n, host_srand, host_strcat, host_strcmp, host_strcpy,
     host_strlen, host_strncpy,
 };
-use cide_runtime::instruction::SourceLoc;
+use vitro_runtime::instruction::SourceLoc;
 
 // ─── 确定性 RNG（SplitMix64）──────────────────────────────────────────────────
 
@@ -77,16 +77,16 @@ impl FuzzRng {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-fn fresh_session() -> (CideVM, Session) {
-    (CideVM::new(), Session::default())
+fn fresh_session() -> (VitroVM, Session) {
+    (VitroVM::new(), Session::default())
 }
 
-fn write_test_string(vm: &mut CideVM, addr: u32, s: &str) {
+fn write_test_string(vm: &mut VitroVM, addr: u32, s: &str) {
     vm.write_cstring(addr, s);
 }
 
 #[allow(dead_code)]
-fn read_test_string(vm: &CideVM, addr: u32) -> String {
+fn read_test_string(vm: &VitroVM, addr: u32) -> String {
     let mem = vm.memory_ref();
     let start = addr as usize;
     if start >= mem.len() {
@@ -103,7 +103,7 @@ fn read_test_string(vm: &CideVM, addr: u32) -> String {
 /// 返回该轮发现的所有 issue 描述。
 fn fuzz_round_malloc_free(rng: &mut FuzzRng, max_ops: usize) -> Vec<String> {
     let mut issues = Vec::new();
-    let mut vm = CideVM::new();
+    let mut vm = VitroVM::new();
     let mut session = Session::default();
 
     for op_idx in 0..max_ops {
@@ -280,7 +280,7 @@ fn test_fuzz_malloc_free_uaf_double_free() {
 
 fn fuzz_round_string_ops(rng: &mut FuzzRng, max_ops: usize) -> Vec<String> {
     let mut issues = Vec::new();
-    let mut vm = CideVM::new();
+    let mut vm = VitroVM::new();
     let mut session = Session::default();
     let mut bufs: Vec<(u32, i32)> = Vec::new();
 
@@ -529,7 +529,7 @@ fn test_fuzz_string_ops() {
 
 fn fuzz_round_io(rng: &mut FuzzRng, max_ops: usize) -> Vec<String> {
     let mut issues = Vec::new();
-    let mut vm = CideVM::new();
+    let mut vm = VitroVM::new();
     let mut session = Session::default();
 
     // 预置一些输入行
@@ -682,7 +682,7 @@ fn test_fuzz_io_ops() {
 
 fn fuzz_round_mixed(rng: &mut FuzzRng, max_ops: usize) -> Vec<String> {
     let mut issues = Vec::new();
-    let mut vm = CideVM::new();
+    let mut vm = VitroVM::new();
     let mut session = Session::default();
 
     for op_idx in 0..max_ops {
@@ -832,7 +832,7 @@ fn test_fuzz_mixed_malicious() {
 
 fn fuzz_round_leak_detection(rng: &mut FuzzRng) -> Vec<String> {
     let mut issues = Vec::new();
-    let mut vm = CideVM::new();
+    let mut vm = VitroVM::new();
     let mut session = Session::default();
 
     // 随机分配若干块，部分释放，部分泄漏

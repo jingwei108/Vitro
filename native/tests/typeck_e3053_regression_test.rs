@@ -12,9 +12,9 @@
 //! ② `report_warning` 对 W3053 做（行, 码）去重，列表轰炸最多 1 条。
 //! 真实截断（超值域常量、int 变量赋值）**仍必须报警**——豁免不得过度。
 
-use cide_native::compiler::lexer::Lexer;
-use cide_native::compiler::parser::Parser;
-use cide_native::compiler::typeck::TypeChecker;
+use vitro_native::compiler::lexer::Lexer;
+use vitro_native::compiler::parser::Parser;
+use vitro_native::compiler::typeck::TypeChecker;
 
 const W3053: i32 = 3053;
 

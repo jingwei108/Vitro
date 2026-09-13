@@ -5,7 +5,7 @@
 
 use crate::engine::compile_pipeline::setup_vm;
 use crate::session::Session;
-use crate::vm::core::CideVM;
+use crate::vm::core::VitroVM;
 
 /// 生成内存泄漏报告并追加到输出。
 ///
@@ -67,7 +67,7 @@ pub fn reset_runtime(session: &mut Session) {
     session.memory.quarantine_bytes = 0;
     // R1 ①：动态堆起点——越过全局数据末端（含 argv 顶界）。此前写死 HEAP_START，
     // "全局数据 > 20KB 且使用 malloc" 会静默压坏堆数据（AGENTS.md 已知限制销项）。
-    let heap_base = cide_runtime::compute_heap_base(
+    let heap_base = vitro_runtime::compute_heap_base(
         session.compile.global_data_end,
         session.runtime.argc,
         &session.runtime.argv,
@@ -86,7 +86,7 @@ pub fn reset_runtime_for_step(session: &mut Session) {
 }
 
 /// 为 VM 注入预设测试文件
-pub fn inject_preset_files(vm: &mut CideVM, session: &mut Session) {
+pub fn inject_preset_files(vm: &mut VitroVM, session: &mut Session) {
     let mut vfs = std::mem::take(&mut session.vfs);
     vfs.inject_preset_file("test.txt", b"hello\nworld\n", vm, &mut session.memory);
     vfs.inject_preset_file("numbers.txt", b"1 2 3 4 5\n", vm, &mut session.memory);

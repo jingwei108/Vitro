@@ -1,11 +1,32 @@
 # Changelog
 
-All notable changes to the Cide project will be documented in this file.
+All notable changes to the Vitro project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+### Changed：项目更名 Cide → Vitro（全量符号落地，ABI 2.0.0）
+
+品牌与符号层一次性统一为 **Vitro**（*in vitro*，"在玻璃之中"——白箱观察 +
+Clang 基线诚实对照的定位同构；此前品牌/符号双名并存是 AI 辅助开发的幻觉温床）。
+决策依据与完整映射见 [`docs/current/01-定位与路线/项目更名记录.md`](docs/current/01-定位与路线/项目更名记录.md)。
+
+- **crate（10 个）** `cide_*` → `vitro_*`；主包 `cide_native` → `vitro_native`（cdylib `vitro_native.dll`）；
+- **C ABI（41 入口）** `cide_*` → `vitro_*`，契约版本 **1.3.0 → 2.0.0**（符号面 breaking → major；
+  函数语义 / JSON 帧格式 / 状态码零变化，消费方迁移 = 纯符号改名 + 重链接）；
+- **CLI** `cide_cli` → `vitro_cli`（`src/bin/vitro_cli.rs`）；C 头文件 `cide_capi.h` → `vitro_capi.h`；
+  运行时 libc 目录 `runtime_libc/cide/` → `runtime_libc/vitro/`；Go module `cide` → `vitro`；
+- **CideVM → VitroVM**（虚拟机名随品牌）；大小写三变体 cide/Cide/CIDE → vitro/Vitro/VITRO 全量替换；
+- **边界（诚实记录）**：`docs/archive/` 内容与归档文件名保留 Cide 原样（历史快照不篡改，维护者裁定
+  2026-09-14）；活文档中对归档原文件名的引用受保护未替换；英文词 `INCIDENT(S)`/`accidental` 天然豁免；
+- **联动修改**：`test_e2e_my_strlen` 输入字面量 `"CideVM"`（6 字符）→ `"VitroVM"`（7 字符），
+  期望输出 `"6"` → `"7"` 联动（非预期值粉饰，注释已锚定）；
+- **品牌资产**：`assets/logo/` 横幅锁定 + 方形图标 + 预览页（README 头图已引用 vitro-logo.svg）；
+- **验证**：cargo check / clippy(-D warnings) / 全量 test（68 套件）全绿；go vet exit 0；
+  Shadow 防线 671 用例 match 664 + known_issue 3 + gap_extension 4（与改名前基线逐项一致，
+  行为零差异）；serve 冒烟 54 项断言全 PASS。
 
 ### Fixed (教学标注)：二审 P0-B——bst 家族判据定清（名字+语义双条件）+ bst_validate/bst_delete 新算法 + is_recursive 真实管线激活
 
@@ -26,7 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   语义词 + TreeNode 语境；bst_search 额外要求递归（迭代 findMin 不算）。
   三个模板从零标注复亮：bstInsert 4 条、bstSearch 7 条（bst_insert +
   bst_search）、bstDelete 11 条（bst_insert + bst_delete）。
-- **新增 bst_validate 步骤模板**（`cide_algorithm_steps/src/tree.rs`）：
+- **新增 bst_validate 步骤模板**（`vitro_algorithm_steps/src/tree.rs`）：
   empty_valid（空树合法）/ range_check（(min,max) 开区间校验）/ recursive
   （区间收窄递归）三 phase，挂载点即二审表格的 L20/L21/L32——实测
   binarySearchTreeValidation 三条错误插入文案全部替换为正确校验文案。
@@ -172,7 +193,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed (教学标注)：U1#1 第一批——防线 6 算法标注三误标修复 + 88 模板标注人审清单（红→绿）
 
 - **三个审查实锤误标全部机器取证后修复**：
-  - **二分三分支不可达**（`cide_algorithm_steps/search.rs`）：mid_calc 旧
+  - **二分三分支不可达**（`vitro_algorithm_steps/search.rs`）：mid_calc 旧
     条件 `contains("mid") && contains('=')` 过宽——`if (a[mid] == target)`
     含 `==`、`left = mid + 1` 含 `=`，compare / narrow_left / narrow_right
     三分支全部被短路。机器取证：比较行被标"计算中点 mid=2"，学生在循环
@@ -188,7 +209,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 修复后二分标注序列（实测）：`搜索范围 [0,4]` → `计算中点 mid=2` →
   `arr[2] 与目标值 7 比较` → `目标值在右半区，调整左边界 left=3` →
   `找到目标值，返回索引 3`。
-- **红→绿锚**：cide_algorithm_steps 单测 ×3（比较行不被短路 / narrow
+- **红→绿锚**：vitro_algorithm_steps 单测 ×3（比较行不被短路 / narrow
   实际值 / mid_calc 反向锚）+ algorithm_detector 单测 ×2（insert_node
   零误判 / 标准命名仍识别）。
 - **人审清单交付**（U1#1① 的"人审固化"环节）：
@@ -202,7 +223,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed (parser/ast)：U1 第六批 #8——递归深度防护补全（五通道）+ 后置 AST 深度预算（红→绿）
 
-- **五通道实测栈溢出复现后修复**（修复前 release cide_cli 全部
+- **五通道实测栈溢出复现后修复**（修复前 release vitro_cli 全部
   "has overflowed its stack"）：初始化列表嵌套（3000 层）、赋值右结合链
   （3000 级 `a = b = b = …`）、一元运算符链（5000 个 `!`）崩在 parser
   递归；数组后缀链（5000 个 `[0]`）与左结合加法链（5000 项，外部审查
@@ -212,7 +233,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - parser 挂点：`parse_init_list` / `parse_assign` / `parse_ternary` /
     `parse_unary` / `parse_abstract_declarator` 五个递归入口挂防护壳
     （超限 E1006 + 跳 EOF 让外层循环收敛）。
-  - 后置 AST 深度预算：`cide_ast::depth` 迭代式 DFS（显式栈——被测的
+  - 后置 AST 深度预算：`vitro_ast::depth` 迭代式 DFS（显式栈——被测的
     就是病态深 AST，递归测量自身会先溢出），`parse()` 成功后对函数体/
     全局初始化式测深，超 512 报 E1006 并 `mem::forget`（递归 Drop 同样
     溢出，在"泄漏一次编译的 AST"与"崩溃进程"间选前者）。
@@ -289,7 +310,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   while/do-while 两者都从循环体 frame 起。`gen_return` 的 `emit_dtors_for_scope_exit(0)`
   语义不变（析构全部）。range-for 同步接入。
 - 红→绿锚：`native/tests/cases/cpp/cpp_raii_{break_while,continue_for,break_dowhile}.cpp`
-  ×3（golden 由 clang++ 生成；修复前 `test_cide_e2e_cpp` 3/81 FAIL 留痕，
+  ×3（golden 由 clang++ 生成；修复前 `test_vitro_e2e_cpp` 3/81 FAIL 留痕，
   修复后输出与 clang++ 逐行一致）。
 
 ### Fixed (codegen/VM JIT)：U1 第三批 #5——emit_zero_init 指令爆炸 × trace 录满注册半截 trace（合法循环程序被判错，红→绿）
@@ -370,18 +391,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   走"非常量表达式"诊断）。红锚 debug 轮廓 panic → 修复后 debug/release
   双轮廓绿。
 
-### Changed (tests/tools)：U0 #1 + #6 收官——cide_better 16 → 0（J2 闭环）+ 红→绿规约成文
+### Changed (tests/tools)：U0 #1 + #6 收官——vitro_better 16 → 0（J2 闭环）+ 红→绿规约成文
 
-- **cide_better 16 例逐例审计（J2 二择一：补头转真 golden / 移 gap 写明扩展）**：
+- **vitro_better 16 例逐例审计（J2 二择一：补头转真 golden / 移 gap 写明扩展）**：
   统一真实根因为 `NULL` / `bool` / `FILE` 标识符缺失（undeclared identifier
   是 `-Wno-implicit-function-declaration` 压不住的硬错误；只缺 printf/malloc
   头的用例被该 flag 救为 match——已实证核对口径）。处置：12 例补
   `stdlib/stdio/stddef` 头转真 golden；`keyword_compat` 移 gap（`register`
-  变量取地址：C 标准禁止、Cide 宽容接受——真实扩展差异，注释写明）；
+  变量取地址：C 标准禁止、Vitro 宽容接受——真实扩展差异，注释写明）；
   `file_*` 3 例（VFS 沙盒 I/O）由驱动新增 **`gap_extension` 分类**承载
-  （gap 目录语义即"Cide 扩展，非 C 标准"，不再冒充 cide_better；启动自检
+  （gap 目录语义即"Vitro 扩展，非 C 标准"，不再冒充 vitro_better；启动自检
   表同步加行）。**终态 667 = 660 match + 3 known_issue + 4 gap_extension +
-  0 cide_better，门禁通过**。
+  0 vitro_better，门禁通过**。
 - **known_issue 处置**：`spfa_default` 模板队列溢出修复（普通队列容量上界
   = 每点最多入队 n 次 → `MAXV*MAXV` + 根因注释；按 E2E_FAILURES 登记建议）
   → 转 match；`function_pointer_sizeof` / `sizeof_array_param` 用例注释补
@@ -403,7 +424,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   提交峰值（与 `scripts/internal/probeutil` 同口径，**驱动侧独立测量**），
   超预算 fail 并回显峰值。默认预算 512MB = 当前基线的宽松护栏（实测形状
   峰值 75MB；**非 J5 的 64B/步**——那要等 U2 生命周期重构后收紧，注释中
-  明示分层）；`CIDE_RSS_BUDGET_MB=5` 证红（peak=75MB > 5MB → exit 1），
+  明示分层）；`VITRO_RSS_BUDGET_MB=5` 证红（peak=75MB > 5MB → exit 1），
   "先证会红"义务闭环。防线对宿主内存零观测（两次 GB 级事故的制度性根因）
   就此补上常设监控。
 - **磁盘卫生（U0#4）**：删除已死 android 交叉 target 三目录 ~2.6GB
@@ -419,7 +440,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed (capi/tools)：U0#5 `as` 无防御转换收口（第一批）——负 argc 实锤 + `checked_conversions` 清零 deny
 
-- **负 argc 修复（红→绿）**：`cide_set_argv` 的 `Vec::with_capacity(argc as usize)`
+- **负 argc 修复（红→绿）**：`vitro_set_argv` 的 `Vec::with_capacity(argc as usize)`
   把负 argc 绕回 `usize::MAX` → 分配器 capacity overflow panic（被入口 guard
   吞成静默无操作）。修复：argc < 0 忽略本次调用（会话 argc/argv 不动）。
   回归锚 `capi_negative_argc_test`——观测手段为 **panic hook 计数**（guard
@@ -459,17 +480,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 验收：`interaction_probe`（Go，J9 有牙）**从红转绿**——1800 请求 0 死亡
   0 非法响应 0 不变量违反、fuzz 30/30 响应进程存活、stderr 零 panic 记录。
 
-### Changed (capi)：W0-3 契约止血——`cide_get_capabilities_json` 所有权对齐书面契约（ABI 1.3.0）+ 头文件补齐 20 声明 + 入口护栏全覆盖
+### Changed (capi)：W0-3 契约止血——`vitro_get_capabilities_json` 所有权对齐书面契约（ABI 1.3.0）+ 头文件补齐 20 声明 + 入口护栏全覆盖
 
-- **所有权 P0 修复（红→绿）**：`cide_get_capabilities_json` 曾返回 `OnceLock`
+- **所有权 P0 修复（红→绿）**：`vitro_get_capabilities_json` 曾返回 `OnceLock`
   静态指针（"无需释放"），与书面契约"全部 JSON 函数为 rust-alloc 所有权
-  （`cide_free_string` 释放）"矛盾——**下游按契约释放即 UAF**。改为
+  （`vitro_free_string` 释放）"矛盾——**下游按契约释放即 UAF**。改为
   序列化进程级缓存一次、每次调用 clone 出独立 rust-alloc 缓冲；契约测试
   `capi_string_ownership_contract_test` 先红（两次调用返回同一指针）后绿
   （不同指针 + 各自 free + 会话级 JSON 出口全周期 free 存活）。ABI
   1.2.0 → **1.3.0**（行为契约变更 = minor）。
-- **头文件补齐 20 个缺失声明**（实测更正：裁定原记 19）：含 `cide_free_string`
-  与整个 `*_json` 族、`cide_set_max_steps` / 断点 / 步进 / JIT 统计 / 隔离区
+- **头文件补齐 20 个缺失声明**（实测更正：裁定原记 19）：含 `vitro_free_string`
+  与整个 `*_json` 族、`vitro_set_max_steps` / 断点 / 步进 / JIT 统计 / 隔离区
   预算等——此前只存在于注释里，下游按头文件编程即缺声明。导出 41 = 声明 41
   对账零缺失；新增**三种所有权分区总说明**（rust-alloc 必 free / 会话租借
   勿 free / 调用方缓冲）逐函数标注；clang 纯 include 编译验收通过。
@@ -477,7 +498,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   （此前仅 first_batch 16/19 有，文档承诺"全部入口"）；`guard` 提为
   `pub(crate)` 共用。22/22 对账。
 - 删除 `native/src/shared/` 三个孤儿文件（func_meta/symbol/type_utils，无 mod
-  声明从未编译，实际类型已在 `cide_runtime`）。
+  声明从未编译，实际类型已在 `vitro_runtime`）。
 
 ### Fixed (typeck)：W0-4——char 初始化器的 W3053 误报轰炸（R-2026-09-12）
 
@@ -496,10 +517,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed (vm)：JIT trace 静默错值——fast path 在录制期间禁用（R-2026-09-13）
 
-- **现象**：嵌套纯计数循环（教科书 JIT 目标形状）在 `cide_cli run`（executor + JIT）
+- **现象**：嵌套纯计数循环（教科书 JIT 目标形状）在 `vitro_cli run`（executor + JIT）
   下静默错值（`inner=20200 j=0`，正确值 `inner=40000 j=200`），零诊断；`unified`
   路径与 clang 均正确。debug/release 同输出（纯逻辑缺陷）。
-- **根因**：`CideVM::run` 的 JIT fast path 在 trace 录制期间仍然生效——外层录制
+- **根因**：`VitroVM::run` 的 JIT fast path 在 trace 录制期间仍然生效——外层录制
   推进到已 JIT 化的内层循环头时命中内层 trace 被 bulk 一次跑完，外层 trace
   **缺失内层指令**却被注册；此后每轮外层由该不完整 trace 执行，内层被完全跳过。
   触发三层条件：外层回边 ≥ `JIT_THRESHOLD=100` + 内层已 JIT 化 + 外层循环体无
@@ -517,7 +538,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 裁定 §14.8 认定的两处方法学缺陷修复：
 
 - **① 真禁用开关**：`jit_traces_mut().clear()` 只清表，`ip_hits` 仍累积并重新
-  录制，"纯解释"轮实为混合。新增 `CideVM::jit_enabled` 结构性开关（fast path
+  录制，"纯解释"轮实为混合。新增 `VitroVM::jit_enabled` 结构性开关（fast path
   不命中、热点检测与录制均不触发，`set_jit_enabled`/`jit_enabled` 访问器）。
 - **② 统一入口**：两分支同走 `execute_run`（旧版 JIT 走 `execute_run`、解释走
   裸 `vm.run`，双变量无归因）。
@@ -543,7 +564,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **baseline `jit_single_hot_loop.c`**：JIT bulk 主战场（单层热循环）的 clang
   golden 覆盖；既有两条嵌套用例注释由"保持红"更新为"保持绿"（红→绿完成）。
 - **弱断言升级**：`jit_unit_test.rs` 两处 `contains("200"/"400")` 对错值
-  "-200"/"-400" 同样为真，改 `starts_with`（`cide_get_output` 为展示视图无法
+  "-200"/"-400" 同样为真，改 `starts_with`（`vitro_get_output` 为展示视图无法
   整体 eq，该通道上可用最强断言）。
 - **突变验证留痕（J9 先证会红）**：注入 `tpl_add` 加→减突变，实测 **cargo 侧
   11 红 + shadow 侧 9 红（3 条 JIT 专项 + 6 例热循环 LeetCode 连带），margin=20
@@ -552,12 +573,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   自身 UB（读未初始化 children，堆残留决定 NULL 与否），E2E_FAILURES 既有条目
   已登记"表现非确定性"，FAIL 态命中 shadow 白名单，非本轮引入的回归。
 
-### Added (capi)：`cide_get_compile_errors_length`（ABI 1.2.0）
+### Added (capi)：`vitro_get_compile_errors_length`（ABI 1.2.0）
 
-- 新增编译错误 JSON 的字节长度出口（不含 NUL；无错误返回 0），与 `cide_get_compile_errors`
+- 新增编译错误 JSON 的字节长度出口（不含 NUL；无错误返回 0），与 `vitro_get_compile_errors`
   配套——驱动侧先取长度再定长读取，**根治** `ptrToGoString` 变长窗口扫描对短于
   窗口的分配构成越界读的瑕疵（PR 评审第 1 项）。按"加函数 = minor"承诺升
-  `CIDE_ABI_VERSION` 1.1.0 → **1.2.0**；新增 capi 集成测试
+  `VITRO_ABI_VERSION` 1.1.0 → **1.2.0**；新增 capi 集成测试
   `test_compile_errors_length_matches_string`（干净会话 0/null、失败会话 length 与
   NUL 串字节数一致）。
 - 连带修复：replay S5 A4a 的 ABI 断言由硬编码 `"1.1.0"` 改为**版本下限语义**
@@ -569,7 +590,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 PR 评审认定的三项技术债全部落地（评审意见：ptrToGoString UB 假设 / v0.1 白名单
 双份硬编码 / serve 封装 ×8 份重复）：
 
-- **仓库根新建 `go.mod`**（`module cide`，零第三方依赖不变），新增共享包
+- **仓库根新建 `go.mod`**（`module vitro`，零第三方依赖不变），新增共享包
   `scripts/internal/{capi,pyrandom,probeutil}`：DLL 绑定 + 字符串读取 + 产物新鲜度、
   CPython random 逐比特复刻（MT19937 双 seeding 路径单源）、探针 CLI 定位 + psapi
   采样。六个 Go 驱动迁入各自子目录（`scripts/shadow_verify/main.go` 等，
@@ -580,7 +601,7 @@ PR 评审认定的三项技术债全部落地（评审意见：ptrToGoString UB 
   回放驱动共读同一份，加载失败/schema 不符 fail loud（exit 2）。**有意不从引擎
   运行时拉取**：白名单是 S5 断言的"验收快照"，运行时跟随会取消漂移检测语义
   （评审建议的部分采纳理由见 AGENTS.md D5 收尾重构段）。
-- **capi.Load 统一绑定全部符号**（含 `cide_get_compile_errors_length`），
+- **capi.Load 统一绑定全部符号**（含 `vitro_get_compile_errors_length`），
   shadow C/C++/random_diff 的编译错误读取全部改定长路径；`ptrToGoString` 剩余
   调用方（engine_version / runtime_error）为短而有界串，UB 假设已在
   `internal/capi` 头注声明（评审第 1 项的注释义务 + 根治一并落地）。
@@ -605,12 +626,12 @@ PR 评审认定的三项技术债全部落地（评审意见：ptrToGoString UB 
   （非预期差异 exit 1 / Clang 预检与产物新鲜度 exit 2）。
 - **双轨对账 PASS**：663 用例集合/顺序/逐用例 diff_type/expected/summary/
   category_frequency/clang_version 全维度一致（`663 / match 644 / known_issue 3 /
-  cide_better 16 / 0 非预期差异`）；`--refresh-clang` 全量重算与缓存热跑、16 路与
+  vitro_better 16 / 0 非预期差异`）；`--refresh-clang` 全量重算与缓存热跑、16 路与
   32 路并发三次交叉验证逐用例 verdict 一致。CI 已切换（缓存 key 同步改
   `hashFiles(scripts/shadow_verify.go)`）；Python 主驱动（`shadow_verify.py` /
-  `cide_output.py` / `extract_shadow_cases.py`）退役删除。
+  `vitro_output.py` / `extract_shadow_cases.py`）退役删除。
 - **形态（有意差异）**：两段流水线——Clang 侧并发（`--jobs N`，0=自动
-  min(CPU,16)，实测 32 路仅比 16 路快 6%，瓶颈在子进程启动/IO），Cide 侧互斥串行
+  min(CPU,16)，实测 32 路仅比 16 路快 6%，瓶颈在子进程启动/IO），Vitro 侧互斥串行
   （DLL 非线程安全实证，实测串行段 ~1.5s 占比可忽略）；Clang 结果缓存为 Go 自有
   schema（`go1`，Go 结构体序列化 + sha256），与历史 Python 缓存同目录共存、key
   空间不相交；Clang 编译失败重试 3 次（第一站实证）；瞬态环境异常（超时 / 启动
@@ -682,18 +703,18 @@ PR 评审认定的三项技术债全部落地（评审意见：ptrToGoString UB 
 本次为**首个可复现基线**）：
 
 - **新增 `scripts/core_asset_verdict/random_diff.go`**：10 族生成器 × 100 例 + 语义模型求值 +
-  clang / Cide 三路对照，判定口径对齐（`model_clang_mismatch` / `clang_cide_mismatch` / `agree`，
+  clang / Vitro 三路对照，判定口径对齐（`model_clang_mismatch` / `clang_vitro_mismatch` / `agree`，
   mismatch 落 `.findings/` 最小复现，报告 `random_diff.json` 字段同名）。
 - **RNG 逐比特复刻**：MT19937 + CPython 字符串 seeding（sha512 → init_by_array）与
   getrandbits/_randbelow/randint/choice/random 全链路——**同 seed 生成同一用例集合**，
   双轨对账达逐用例精度。selftest 内置 CPython 3.14 实测金标（random()×3 / randint×5 /
   choice / 大范围 randint），复刻破坏即 exit 2 拒绝运行（J9）。
 - **双轨对账 PASS**：1000 例用例集合一致、verdict + expected 逐用例一致、clang 动态输出
-  0 例不一致。耗时 47.0s（Python 50.7s，持平——cide 串行是共同瓶颈，探针不在 CI 热路径）。
-- **⚠️ 引擎侧实证发现：DLL 非线程安全**。Cide 调用与 clang 并发同池时进程以
+  0 例不一致。耗时 47.0s（Python 50.7s，持平——vitro 串行是共同瓶颈，探针不在 CI 热路径）。
+- **⚠️ 引擎侧实证发现：DLL 非线程安全**。Vitro 调用与 clang 并发同池时进程以
   `0xc0000374`（STATUS_HEAP_CORRUPTION）崩死（2.5s 即现）——引擎存在非线程安全的内部
-  状态。此前 Python 版未崩只是 6 线程下 cide 调用碰撞率低，**不是**线程安全的证据。
-  Go 版 Cide 调用已恢复互斥串行；主驱动 `shadow_verify.py --jobs` 的并发口径存在同源
+  状态。此前 Python 版未崩只是 6 线程下 vitro 调用碰撞率低，**不是**线程安全的证据。
+  Go 版 Vitro 调用已恢复互斥串行；主驱动 `shadow_verify.py --jobs` 的并发口径存在同源
   风险，待专项评估（本条为风险记录，非回归）。
 - 语义口径修正：clang 子进程 stdout 显式做 CRLF→LF 归一（对齐 Python `text=True` 的
   universal newlines；Windows CRT 文本模式会写 `\r\n`，不归一则全部假 mismatch）。
@@ -716,18 +737,18 @@ PR 评审认定的三项技术债全部落地（评审意见：ptrToGoString UB 
   锚点正则命中/拒绝、未知键/预留字段/哨兵值必被识别），不过即 exit 2 拒绝运行——
   Python 版无此自检。
 - 前置门禁同口径：`capabilities.engine_version` 必须含当前 HEAD（exit 2 fail fast）；
-  `--anchor` 缺省从版本串自取，显式传入必须命中。A4b 的 `cide_engine_version` 读取走
-  规范指针 + `cide_free_string` 契约（Python 版 `c_char_p` 副本无法释放，属已记录差异）。
+  `--anchor` 缺省从版本串自取，显式传入必须命中。A4b 的 `vitro_engine_version` 读取走
+  规范指针 + `vitro_free_string` 契约（Python 版 `c_char_p` 副本无法释放，属已记录差异）。
 - Python 版 `replay_s1_s5.py` 保留为**双轨对照基准**（头部已标注）。
 
 ### Changed (D5 语言迁移第一站：C++ Shadow 驱动 Python→Go)
 
-裁定文档 [`CIDE_CORE_ASSET_RECONSTRUCTION_VERDICT.md`](docs/current/CIDE_CORE_ASSET_RECONSTRUCTION_VERDICT.md) §13.3 W3-1 的第一站落地：
+裁定文档 [`VITRO_CORE_ASSET_RECONSTRUCTION_VERDICT.md`](docs/current/VITRO_CORE_ASSET_RECONSTRUCTION_VERDICT.md) §13.3 W3-1 的第一站落地：
 
 - **新增 `scripts/shadow_verify_cpp.go`**，接管 CI（`ci.yml` 改为 `go run scripts/shadow_verify_cpp.go`）。判定口径与 Python 版逐项对齐：用例来源（内嵌 + 目录、同名目录胜出）、`// category:` 解析、clang 失败重试 3 次、编译 30s / 运行 5s 超时、`.strip()` + CRLF 归一比对、`category=gap` 预期差异豁免、非预期差异 exit 1、报告 JSON 同路径同字段。
-- **性能**：Clang 侧并发 16 路（§13.1 实测 6.0x 依据），全量 **24.75s → 5.2s**（CI 门禁占比 50% → ~12%）。Cide DLL 调用保持串行——引擎会话级线程安全性未验证，试点不做此假设（clang 子进程并发才是耗时大头）。
-- **迁移纪律执行**：双轨同跑对账 **PASS**——94 用例集合一致、逐用例 `diff_type` 一致、Cide stdout 内容级一致（Go：92 match + 2 已知 `clang_compile_fail` / 0 非预期；Python：同）。Python 版 `shadow_verify_cpp.py` 保留为**双轨对照基准**（Go 版判定异常时用于归因复现），日常运行与 CI 均走 Go 版。
-- **纪律移植**：① 启动自检 fail loud（J9）——7 条 compare 口径断言含 3 条语义雷（尾部空白 / CRLF / 单侧运行失败），不过即 exit 2 拒绝运行；② E-P1-5 结构化输出通道同口径（缺符号 fail fast，不退回文本清洗）；③ 产物新鲜度门禁（`cide_engine_version()` 须含 HEAD 短哈希）；④ UTF-8 原生处理，消除 Python 侧编码样板。
+- **性能**：Clang 侧并发 16 路（§13.1 实测 6.0x 依据），全量 **24.75s → 5.2s**（CI 门禁占比 50% → ~12%）。Vitro DLL 调用保持串行——引擎会话级线程安全性未验证，试点不做此假设（clang 子进程并发才是耗时大头）。
+- **迁移纪律执行**：双轨同跑对账 **PASS**——94 用例集合一致、逐用例 `diff_type` 一致、Vitro stdout 内容级一致（Go：92 match + 2 已知 `clang_compile_fail` / 0 非预期；Python：同）。Python 版 `shadow_verify_cpp.py` 保留为**双轨对照基准**（Go 版判定异常时用于归因复现），日常运行与 CI 均走 Go 版。
+- **纪律移植**：① 启动自检 fail loud（J9）——7 条 compare 口径断言含 3 条语义雷（尾部空白 / CRLF / 单侧运行失败），不过即 exit 2 拒绝运行；② E-P1-5 结构化输出通道同口径（缺符号 fail fast，不退回文本清洗）；③ 产物新鲜度门禁（`vitro_engine_version()` 须含 HEAD 短哈希）；④ UTF-8 原生处理，消除 Python 侧编码样板。
 - **vet 豁免裁定沿用**：`go vet -unsafeptr=false`——DLL `Call` 返回值转 `unsafe.Pointer` 是 Win32 互操作必然形态（与 `scripts/gosmoke/cabi_smoke.go` 同裁定），uintptr→Pointer 转换集中在 `ptrToGoString` 一处。
 - 已知差异（有意，记录在案）：clang 编译错误文本从 stdout+stderr 混流改为仅 stderr（对齐 Python `capture_output` 语义）；超时路径的错误文本措辞不同（判定不受影响，超时均归入对应 gap）。
 
@@ -744,7 +765,7 @@ PR 评审认定的三项技术债全部落地（评审意见：ptrToGoString UB 
   `.git/HEAD` + 其指向的 ref + `packed-refs`）——提交/切分支也会刷新哈希。
   注意声明 rerun-if-changed 会关闭默认启发，故包内路径必须一并列出。
 - **修复 2（防线）**：`ensure_abi()`（C/C++ 影子驱动共用）除 ABI 符号外，比对
-  `cide_engine_version()` 与 `git rev-parse --short HEAD`；`scripts/replay/replay_s1_s5.py`
+  `vitro_engine_version()` 与 `git rev-parse --short HEAD`；`scripts/replay/replay_s1_s5.py`
   前置门禁改为 **fail fast（exit 2）**，且 `--anchor` 缺省从 `capabilities.engine_version`
   自动取（默认值再也无法过期；显式传入则必须命中版本串）。
 - **配套**：`session_api::capabilities()` 新增 `engine_version`（additive）——消费方据此
@@ -753,8 +774,8 @@ PR 评审认定的三项技术债全部落地（评审意见：ptrToGoString UB 
 
 ### Added (下游需求清单第二批：B2 / C1 / C2 / D2 / D3)
 
-响应对端 SharpTutor《Cide后端-C#扩展期需求清单》（锚定 `10591ad`）的非阻塞项。
-逐项回执见 [`docs/current/CIDE_DOWNSTREAM_REQUESTS_RESPONSE.md`](docs/current/CIDE_DOWNSTREAM_REQUESTS_RESPONSE.md)。
+响应对端 SharpTutor《Vitro后端-C#扩展期需求清单》（锚定 `10591ad`）的非阻塞项。
+逐项回执见 [`docs/current/VITRO_DOWNSTREAM_REQUESTS_RESPONSE.md`](docs/current/VITRO_DOWNSTREAM_REQUESTS_RESPONSE.md)。
 
 - **B2 schema v0.2 激活轨道**（把"字段只增不改"从文档承诺变成机器防线）：
   - **v0.1 正式冻结**（2026-09-12）：schema 状态由"定稿候选"改为"**v0.1 已冻结**"，
@@ -782,7 +803,7 @@ PR 评审认定的三项技术债全部落地（评审意见：ptrToGoString UB 
   （堆统计口径零影响，有独立测试护栏）。C2 的 `kind` 字段同时落到
   `MemoryRegionData`（`serde(default = "heap"`，向后兼容）。
 - **D3 `pointer_snapshots[].target_name` 跨帧解析**：新增
-  `CideVM::find_variable_name_at_addr`（当前帧 → 全局 → 其余活跃帧；命中判据为变量起始地址
+  `VitroVM::find_variable_name_at_addr`（当前帧 → 全局 → 其余活跃帧；命中判据为变量起始地址
   或数组元素区间），collector 在当帧未命中时回退到它。实测 S3 的 swap 载体：
   `a → x`、`b → y`（此前恒为空串，S3 §6 观测 #2）。schema §2.5 据此写明"空串语义收窄"。
 - **D2 serve 会话拓扑显式化**：`session.create/reset/destroy` 响应携带 `session` 字段
@@ -806,23 +827,23 @@ PR 评审认定的三项技术债全部落地（评审意见：ptrToGoString UB 
 
 ### Fixed (下游需求清单第一批：A1 / A2 / B1 / D1)
 
-响应对端 SharpTutor《Cide后端-C#扩展期需求清单》（锚定 `10591ad`，逐项实测后修复）：
+响应对端 SharpTutor《Vitro后端-C#扩展期需求清单》（锚定 `10591ad`，逐项实测后修复）：
 
 - **A1 输入耗尽 EOF 语义**：`scanf` 族在输入流耗尽时此前**无条件**挂起
   `waiting_input`，导致 `while (scanf("%d", &n) != EOF)` 这类 C 第一课习语在有限输入下
   永久挂起。现：`InputMode::Batch`（`batch_input:true` / CLI `run` 路径）下返回 `EOF(-1)`，
   程序正常 `finished`；默认 `Interactive` 保持"等待学生键入"挂起语义不变
-  （`crates/cide_vm/src/host/io.rs`，与既有 `getchar` 的 Batch 分支同口径）。
+  （`crates/vitro_vm/src/host/io.rs`，与既有 `getchar` 的 Batch 分支同口径）。
   CLI `cmd_run` 作为 headless 批处理路径固定走 Batch。
 - **A2 增量输入喂入**：serve 新增 `input.feed { text }` 方法（语义单源
   `session_api::input_feed`），`run` 返回 `waiting_input` 后追加 stdin 并续跑，
   状态机 `waiting_input → input.feed → running → waiting_input | finished | trap`。
-  修复过程中同时发现并修正 **capi `cide_provide_input_line` 的既有缺陷**：此前在
-  `cide_run` 前清 `waiting_input`，使 `execute_run` 误判为新一次运行而从 `main`
+  修复过程中同时发现并修正 **capi `vitro_provide_input_line` 的既有缺陷**：此前在
+  `vitro_run` 前清 `waiting_input`，使 `execute_run` 误判为新一次运行而从 `main`
   重跑（首个 `scanf` 读到新喂入文本、已产生输出重复打印）。
 - **B1 error_catalog 机器可读导出**：新增 `error_catalog::export_json()`（含
   `code/code_str/lang/category/emoji/title/explanation/common_causes`，按 code 升序稳定可差分）；
-  出口 `cide_get_error_catalog_json`（capi，rust-alloc）与 serve `error_catalog` 方法。
+  出口 `vitro_get_error_catalog_json`（capi，rust-alloc）与 serve `error_catalog` 方法。
   **码段澄清**：E4xxx 已被 C++ 占用（`error_codes.rs` 定义 `E4001~E4031`），
   `lang_of_code` 按码段推断语言（1-3xxx=C / 4xxx=C++ / 5xxx=C#）。
 - **D1 成员函数类型重载**：此前同参数个数、仅类型不同的成员函数重载
@@ -833,7 +854,7 @@ PR 评审认定的三项技术债全部落地（评审意见：ptrToGoString UB 
   `expr/mod.rs`，此前返回 `None` 静默放行）。实测 `show(21)`/`show(3.5)` 正确派发。
 - **A1 遗留分支：EOF 粘滞语义**（补第一批 A1 的缺口）。首修只覆盖"判定 EOF 的
   那一次调用"——判定后**未推进游标**、也**无粘滞标志**，于是 `scanf` 触发的 EOF
-  对 `getchar` 不可见：实测输入 `7\n`，Clang 给 `r1=1 r2=-1 c=-1`，Cide 给 `c=10`
+  对 `getchar` 不可见：实测输入 `7\n`，Clang 给 `r1=1 r2=-1 c=-1`，Vitro 给 `c=10`
   （把 scanf 未消费的 `'\n'` 当普通字符读出）。现 `RuntimeState::stdin_eof` 为粘滞位
   （对齐 C11 7.21.5.1 `feof`）：判定 EOF 时置位并**把游标推到底**；`scanf`（含
   `%d/%u/%f/%c/%s` 各转换符的"跳白后耗尽"分支，经显式 `exhausted` 标志与"字面量/
@@ -842,18 +863,18 @@ PR 评审认定的三项技术债全部落地（评审意见：ptrToGoString UB 
   （Golden 由 Clang 22.1.4 生成）。附带修正测试侧两处缺陷：
   - Shadow 加载器的 `@category:\s*(\S+)` 会跨越中文标点吞掉整段 C 注释，污染
     用例名（实测读到 "`，走"）→ 限定为 `[A-Za-z0-9_\-]+`；
-  - E2E `test_cide_e2e_baseline` 对全部用例硬编码 `InputMode::Interactive`，
+  - E2E `test_vitro_e2e_baseline` 对全部用例硬编码 `InputMode::Interactive`，
     导致"故意读到流末"的用例以 `run_ret=2` 假失败 → 带 `.in` 的用例改走 Batch
     （"预设完整输入"的语义，与 Shadow 防线口径统一）。
 
 验证：`cargo test --workspace` 全绿（0 失败）；`cargo clippy --workspace --all-targets
 --all-features` 零警告；`shadow_verify.py` 662 用例（含新增 2 例）无 compile_gap /
 runtime_gap / output_gap；`shadow_verify_cpp.py` MATCH（2 例存量 `CLANG_COMPILE_FAIL`
-为 `cide_list`/`cide_vec` 已记录问题，与本次无关）。
+为 `vitro_list`/`vitro_vec` 已记录问题，与本次无关）。
 
 ### Added (重构批次 E3：C23 语义级——nullptr / static_assert 真求值 / constexpr / 属性 / unreachable)
 
-执行 [`docs/current/CIDE_RESTRUCTURE_PLAN.md`](docs/current/CIDE_RESTRUCTURE_PLAN.md) 的 E3 批次
+执行 [`docs/current/VITRO_RESTRUCTURE_PLAN.md`](docs/current/VITRO_RESTRUCTURE_PLAN.md) 的 E3 批次
 （口径与差异见 `C_SUBSET_SPEC.md` §2.12）：
 
 - **`nullptr`**：关键字入表，与 `NULL` 同路径（`void*` 空）；无独立 `nullptr_t`
@@ -873,10 +894,10 @@ runtime_gap / output_gap；`shadow_verify_cpp.py` MATCH（2 例存量 `CLANG_COM
 
 ### Changed (重构批次 R4：债务与防线收口——G1/G2/G10/G11/G12/G13 + D14/D16)
 
-执行 [`docs/current/CIDE_RESTRUCTURE_PLAN.md`](docs/current/CIDE_RESTRUCTURE_PLAN.md) 的 R4 批次，
+执行 [`docs/current/VITRO_RESTRUCTURE_PLAN.md`](docs/current/VITRO_RESTRUCTURE_PLAN.md) 的 R4 批次，
 重构计划全批次（R1→E1→R2→E2→R3→E3→R4）至此交付：
 
-- **D14 unwrap 收敛**：`cide_typeck/src/decl.rs` 3 处 `unwrap()` 消除
+- **D14 unwrap 收敛**：`vitro_typeck/src/decl.rs` 3 处 `unwrap()` 消除
   （`take().unwrap()` ×2 → let-else（外层 if-let 守卫语义不变）；默认参数
   `clone().unwrap()` → 跳过 None）。生产代码 unwrap 回到 0。
 - **D16 decl.rs 拆分**：typeof/auto 类型解析家族（`type_has_auto` /
@@ -903,7 +924,7 @@ runtime_gap / output_gap；`shadow_verify_cpp.py` MATCH（2 例存量 `CLANG_COM
 
 ### Fixed (schema v0.1 签字回放 S1–S5：61/61 PASS——五个引擎缺陷修复)
 
-采纳 SharpTutor 签字材料（`docs/cide-replay/` 五文档，锚定 `7dbeaef`），新增
+采纳 SharpTutor 签字材料（`docs/vitro-replay/` 五文档，锚定 `7dbeaef`），新增
 回放驱动 `scripts/replay/replay_s1_s5.py`（断言编号与对端文档一一对应），
 **61/61 断言 PASS**。回放暴露并修复五个引擎缺陷：
 
@@ -924,12 +945,12 @@ runtime_gap / output_gap；`shadow_verify_cpp.py` MATCH（2 例存量 `CLANG_COM
 
 **语义演进**：seek 在锚点固化后更新——step 0 检查点恒存在，任何 >=0 的 seek
 都可成功（已同步下游 S3 §6 观测 #5）。构建期新增 `build.rs` 注入
-`CIDE_GIT_HASH`（`cide_engine_version()` 含锚定 commit，S5 A4 / 回放纪律 #2
+`VITRO_GIT_HASH`（`vitro_engine_version()` 含锚定 commit，S5 A4 / 回放纪律 #2
 的版本锚定依赖）。
 
 ### Changed (重构批次 R3：语义单源审计)
 
-执行 [`docs/current/CIDE_RESTRUCTURE_PLAN.md`](docs/current/CIDE_RESTRUCTURE_PLAN.md) 的 R3 批次。
+执行 [`docs/current/VITRO_RESTRUCTURE_PLAN.md`](docs/current/VITRO_RESTRUCTURE_PLAN.md) 的 R3 批次。
 审计清单归档于 [`docs/current/R3_MULTI_TRUTH_AUDIT.md`](docs/current/R3_MULTI_TRUTH_AUDIT.md)
 （A 本批收口 3 项 / B 历史批次复核确认 5 项 / C 有意保留 3 项含 CS0/CS5/R4 归属 / D 扫描方法）：
 
@@ -941,15 +962,15 @@ runtime_gap / output_gap；`shadow_verify_cpp.py` MATCH（2 例存量 `CLANG_COM
   不再可能复发）。
 - **堆耗尽教学消息常量化**：`report_heap_exhausted` 文本硬编码 "1MB/256KB"
   改为自 `MEM_SIZE`/`DEFAULT_QUARANTINE_BUDGET` 格式化（改常量不再漏改文案）。
-- **`session.reset` 语义单源**：配置保留式重置自 cide_cli 迁至
+- **`session.reset` 语义单源**：配置保留式重置自 vitro_cli 迁至
   `session_api::reset_session_preserving_config`（出口薄包装纪律）。
 
 ### Added (重构批次 E2：模块化预处理器 + 预定义宏族 + capabilities 出口)
 
-执行 [`docs/current/CIDE_RESTRUCTURE_PLAN.md`](docs/current/CIDE_RESTRUCTURE_PLAN.md) 的 E2 批次
+执行 [`docs/current/VITRO_RESTRUCTURE_PLAN.md`](docs/current/VITRO_RESTRUCTURE_PLAN.md) 的 E2 批次
 （§3 设计定案全项落地；口径与诚实放弃清单见 `C_SUBSET_SPEC.md` §2.11）：
 
-- **`cide_lexer/preprocessor/` 子模块化**（皮肤与内核分离）：
+- **`vitro_lexer/preprocessor/` 子模块化**（皮肤与内核分离）：
   `resolver`（include-once + 依赖环静态检测 + quote-include 候选链 + 存根加载）、
   `macro_table`（宏表单源 + 遮蔽诊断 W1018 + 预定义宏族）、
   `expander`（token 树转录展开 + 深度 64/产出 262144 双保险丝 + 展开链教学追踪 +
@@ -962,15 +983,15 @@ runtime_gap / output_gap；`shadow_verify_cpp.py` MATCH（2 例存量 `CLANG_COM
   又被自身名涂蓝；现按 C99 §6.10.3.1 实参先行展开，`#`/`##` 体例外用原始实参）；
   ② include 拼接点在 include 行尾之前，行尾消费循环会吃掉内容首行（存量头文件
   首行均为注释而未暴露；改为整行消费后再拼接）；③ 嵌套自定义头文件的相对路径
-  按源码目录解析（改为"包含者目录优先"候选链 + `#__cide_push_dir/pop_dir` 哨兵
+  按源码目录解析（改为"包含者目录优先"候选链 + `#__vitro_push_dir/pop_dir` 哨兵
   精确维护目录栈）。
 - **新增指令/能力**：`#if`/`#elif`（含短路算术表达式求值 E1014）、`#undef`、
   `__has_include`、include-once、环检测 E1015、拼接非法结果 E1016、双展开保险丝
   E1017、遮蔽警告 W1018、副作用警告 W1019；预定义宏族 `__STDC_VERSION__=202311L`
-  （名义锚点）与 `__CIDE_SUBSET__`。
+  （名义锚点）与 `__VITRO_SUBSET__`。
 - **capabilities 出口**（"版本宏当能力探测"三层配套之一）：capi
-  `cide_get_capabilities_json()` + serve `capabilities` 方法，机器可读真实能力
-  （语言锚点/预定义宏/预处理能力/内存模型常量，后者自 `cide_runtime` 单源引用）。
+  `vitro_get_capabilities_json()` + serve `capabilities` 方法，机器可读真实能力
+  （语言锚点/预定义宏/预处理能力/内存模型常量，后者自 `vitro_runtime` 单源引用）。
 - **教学追踪出口**：宏展开链 + `#if` 分支选择原因随 `compile.preprocessor_trace`
   导出（serve compile 响应含该字段，容量封顶 64 条）。
 - **回归与验证**：9 个新 baseline 用例（含环用例的"双侧编译失败=match"形态）+
@@ -980,9 +1001,9 @@ runtime_gap / output_gap；`shadow_verify_cpp.py` MATCH（2 例存量 `CLANG_COM
 
 ### Changed (重构批次 R2：会话收口——flutter_bridge 整删，出口单轨化)
 
-执行 [`docs/current/CIDE_RESTRUCTURE_PLAN.md`](docs/current/CIDE_RESTRUCTURE_PLAN.md) 的 R2 批次：
+执行 [`docs/current/VITRO_RESTRUCTURE_PLAN.md`](docs/current/VITRO_RESTRUCTURE_PLAN.md) 的 R2 批次：
 
-- **cide_cli 全部子命令迁 `Session` + `session_api`**：compile/run/step 三条路径
+- **vitro_cli 全部子命令迁 `Session` + `session_api`**：compile/run/step 三条路径
   改为本地 `Session` 直驱（unified/export/serve 原已如此）；serve 与 CLI 现共用
   同一套语言中立入口，三出口薄包装纪律闭环。
 - **`flutter_bridge.rs` 整删（-836 行）**：全局会话单例（`SESSIONS` u64 map +
@@ -1003,7 +1024,7 @@ runtime_gap / output_gap；`shadow_verify_cpp.py` MATCH（2 例存量 `CLANG_COM
 
 ### Added (重构批次 E1：C23 lexer/typeck 级 + B 档快赢)
 
-执行 [`docs/current/CIDE_RESTRUCTURE_PLAN.md`](docs/current/CIDE_RESTRUCTURE_PLAN.md) 的 E1 批次。
+执行 [`docs/current/VITRO_RESTRUCTURE_PLAN.md`](docs/current/VITRO_RESTRUCTURE_PLAN.md) 的 E1 批次。
 C23 锚定决议下的第一批语言能力（详细口径与差异见 `C_SUBSET_SPEC.md` §2.10）：
 
 - **C23 特性**：`0b` 二进制字面量、`'` 数字分隔符、`u8"..."` 前缀字符串（教学子集差异：
@@ -1038,7 +1059,7 @@ C23 锚定决议下的第一批语言能力（详细口径与差异见 `C_SUBSET
 
 ### Changed (重构批次 R1：内存边界收口——动态堆起点 + 全局区判据单源)
 
-执行 [`docs/current/CIDE_RESTRUCTURE_PLAN.md`](docs/current/CIDE_RESTRUCTURE_PLAN.md) 的 R1 批次
+执行 [`docs/current/VITRO_RESTRUCTURE_PLAN.md`](docs/current/VITRO_RESTRUCTURE_PLAN.md) 的 R1 批次
 （手术清单五项全部落地，基线锚点标签 `pre-restructure`，全程防线在线）：
 
 - **堆起点动态化（R1 ①）**：`heap_base = max(HEAP_START, align4(global_data_end))`——堆区不再写死
@@ -1047,12 +1068,12 @@ C23 锚定决议下的第一批语言能力（详细口径与差异见 `C_SUBSET
   `heap_offset`）自动跟随；时间旅行快照新增 `heap_base` 字段随检查点往返。
   "大全局 + malloc" 的静默压坏在结构上不再可能（见下文 Fixed 的已知限制销项）。
 - **判据单源化（R1 ②）**：`gen_string_literal` 的 `MEM_SIZE / 16` 魔数与 VM `setup_argv` 的
-  `HEAP_START` 判据统一为 `cide_runtime::GLOBAL_REGION_LIMIT`（`0x10000` = 64 KB，取值不变、
+  `HEAP_START` 判据统一为 `vitro_runtime::GLOBAL_REGION_LIMIT`（`0x10000` = 64 KB，取值不变、
   不收紧存量行为）；全局区全部 7 个 bump 站点（全局变量 / extern 占位 / vtable / 字符串字面量 /
   全局初始化字符串 / 静态局部变量 / 静态数组字符串元素）收敛到 codegen `bump_global_offset`
   单一入口，越过上限编译期报错。**行为变化（诚实记录）**：旧引擎"全局数据 > 60 KB 且无字符串、
-  无 malloc"可静默放行（本就处于损坏风险区），现编译失败（fail loud）；`cide_vm/core/state.rs`
-  与 `cide_runtime` 的同值双写常量改为 `pub use` 再导出（真相单源）。
+  无 malloc"可静默放行（本就处于损坏风险区），现编译失败（fail loud）；`vitro_vm/core/state.rs`
+  与 `vitro_runtime` 的同值双写常量改为 `pub use` 再导出（真相单源）。
 - **argv 编址修复（R1 ③）**：`setup_argv` 旧实现以 `global_count`（恒 0）编址，argv 指针数组
   落在 `GLOBAL_START`，与全局数据重叠（预存 bug）；现改自 `GLOBAL_REGION_LIMIT` 向下分配
   （占用由 `argv_region_footprint` 统一计算），与全局数据冲突时明确 trap。带 argv 的程序
@@ -1101,7 +1122,7 @@ C23 锚定决议下的第一批语言能力（详细口径与差异见 `C_SUBSET
   **尝试把上限收紧为 `HEAP_START` 后发现会误伤 `lc_22` / `lc_977` 等现有用例**
   （它们的全局区本就越过 20 KB，只因不使用堆而行为正确），故**回滚该改动**，
   并如实记入 `AGENTS.md` 的已知限制而非擅自改变行为。
-- **回归表现与验证**：上述第 3 项使 `test_cide_e2e_leetcode` 的 `lc_67` / `lc_76` 失败
+- **回归表现与验证**：上述第 3 项使 `test_vitro_e2e_leetcode` 的 `lc_67` / `lc_76` 失败
   （`lc_67` 的 `static char res[1000]` 溢出到堆区，`printf` 打出被压坏的内存内容，
   实际输出 `100 / o / world / 1 2 3 4 5`）。修复后
   `cargo test --workspace --all-features` 全量 **0 failed**。
@@ -1116,13 +1137,13 @@ C23 锚定决议下的第一批语言能力（详细口径与差异见 `C_SUBSET
   已完成的计划（`DATASTRUCTURE_SYNTAX_ROADMAP` / `POINTER_COMPOUND_ASSIGN_PLAN` /
   `PHASE_KR_LEETCODE_TEST_PLAN` / `CPP_BUILTIN_LAYOUT_DECOUPLING_PLAN` / `RECURSIVE_TYPE_SYSTEM_REFACTOR`）、
   被取代的评估与报告（`code_review_report.md`(2026-06-13/14) / `M7_BETA_READINESS` /
-  `S6_READINESS_ASSESSMENT` / `SHADOW_VS_CI`）、定位被取代的 `CIDE_MOBILE_TEACHING_THREE_LANGUAGE_PLAN`。
+  `S6_READINESS_ASSESSMENT` / `SHADOW_VS_CI`）、定位被取代的 `VITRO_MOBILE_TEACHING_THREE_LANGUAGE_PLAN`。
 - **重写核心文档**：根 `README.md`（纯后端定位 + 三出口一核心 + 实测状态）、`docs/README.md`（索引）、
   `docs/current/{DESIGN,ROADMAP,BUILD,QUICKSTART}.md`；其中 `ROADMAP.md` 新增「已知缺口」诚实记录表。
 - **保留文档去前端化**：清除 `CideFlutter` / FRB / Dart 残留与失效引用，修正 crate 路径沉降
-  （`native/src/vm/*` → `native/crates/cide_{vm,runtime}/src/*`、`compiler/cpp_frontend/` → `crates/cide_cpp_frontend/`、
-  `unified/checkpoint.rs` → `cide_vm::snapshot`），更新过时统计与日期口径；历史日志条目一律保持原样。
-- **英文文档下线**：删除 `README_EN.md`、`docs/current/{BUILD_EN,CIDE_CLI_EN,QUICKSTART_EN}.md`、
+  （`native/src/vm/*` → `native/crates/vitro_{vm,runtime}/src/*`、`compiler/cpp_frontend/` → `crates/vitro_cpp_frontend/`、
+  `unified/checkpoint.rs` → `vitro_vm::snapshot`），更新过时统计与日期口径；历史日志条目一律保持原样。
+- **英文文档下线**：删除 `README_EN.md`、`docs/current/{BUILD_EN,VITRO_CLI_EN,QUICKSTART_EN}.md`、
   `native/third_party/README.md`（目录随之移除）与归档中的英文占位文件；仓库仅保留 `AGENTS_EN.md`（翻译后续再议）。
 - **`AGENTS.md`**：新增「文档体系」纪律（新文档进 `current/`、被取代者带 `ARCHIVE_` 前缀入 `archive/`、
   英文只留 `AGENTS_EN.md`）与 `docs/{current,spec,archive}` 目录说明。
@@ -1156,7 +1177,7 @@ C23 锚定决议下的第一批语言能力（详细口径与差异见 `C_SUBSET
   / `ci_three_tier_check` 全绿。
 
 ### Removed (前端切割：仓库转型为纯后端)
-- **执行主计划的前端切割决议**（[`CIDE_BACKEND_SPLIT_WASM_WHITEBOX_PLAN.md`](docs/current/CIDE_BACKEND_SPLIT_WASM_WHITEBOX_PLAN.md)）：
+- **执行主计划的前端切割决议**（[`VITRO_BACKEND_SPLIT_WASM_WHITEBOX_PLAN.md`](docs/current/VITRO_BACKEND_SPLIT_WASM_WHITEBOX_PLAN.md)）：
   本仓库只保留教学 C/C++ 子集参考执行引擎（白箱后端），前端迁出给社区，原生移动端放弃。
   切割前最后完整状态由标签 **`before-frontend-split`**（打在 `7dfd04f`）保留，
   `git checkout before-frontend-split -- CideFlutter` 可取回。
@@ -1166,7 +1187,7 @@ C23 锚定决议下的第一批语言能力（详细口径与差异见 `C_SUBSET
   - **能力保留**：自动修复应用器 `apply_fix` 的本体此前只存在于 FRB api 层（前端迁出会连带丢失），
     现迁入语言中立层 `native/src/diagnostics/auto_fix.rs`（三出口均可复用），
     `crash_regression_tests` 的 3 个相关用例改走新入口。
-  - `flutter_bridge.rs`（手写会话包装层，无 FRB 依赖）保留——`cide_cli` 当前消费；名称待后续重构收敛。
+  - `flutter_bridge.rs`（手写会话包装层，无 FRB 依赖）保留——`vitro_cli` 当前消费；名称待后续重构收敛。
 - 移除 web 部署：`.github/workflows/deploy_web.yml`（CideFlutter web → GitHub Pages + Gitee Pages）。
 - 移除 Flutter 构建脚本（`build_flutter.py` / `build.py` / `build_release.py` / `build_utils.py` /
   `test_mobile.py` / `test_full_chain.py` / `patch_flutter_windows_generator.py` / `build_web.sh` /
@@ -1179,12 +1200,12 @@ C23 锚定决议下的第一批语言能力（详细口径与差异见 `C_SUBSET
 
 ### Fixed (C++ lambda · 批次 H：条目 1 返回类型推断 / 条目 2 文件作用域 lambda 变量)
 - **条目 1（lambda 返回类型硬编码 `Type::int()`）**：`__call` 的返回类型此前在
-  `resolve_lambda`（`crates/cide_typeck/src/expr/cpp.rs`）与 Pass 4 生成的 `FuncDecl`
-  （`crates/cide_typeck/src/lib.rs`）中**各自硬编码 `int`**，非 `int` 返回的 lambda 在调用点被当作 `int`
+  `resolve_lambda`（`crates/vitro_typeck/src/expr/cpp.rs`）与 Pass 4 生成的 `FuncDecl`
+  （`crates/vitro_typeck/src/lib.rs`）中**各自硬编码 `int`**，非 `int` 返回的 lambda 在调用点被当作 `int`
   （`printf("%.2f", d(1.5))` 触发 `E3062` 格式不匹配）。
   新增 `TypeChecker::infer_lambda_return_type`（取 body 首个 `return` 表达式的轻量推断：字面量 /
   形参 / 已捕获变量 / 二元运算取较宽者 / 显式转型），结果存入 `LambdaInfo::return_type`，**两处共用同一来源**。
-  实测 `auto d = [](double x){ return x * 2.0; };` → Cide `d=3.00`，与 Clang++ 一致。
+  实测 `auto d = [](double x){ return x * 2.0; };` → Vitro `d=3.00`，与 Clang++ 一致。
 - **条目 2（文件作用域 lambda 变量）**：`auto gf = [](int x){ return x + 7; };` 定义在 `main` 之外时，
   Pass 2.5 的 `declare_var` 登记的是**替换前的 `auto`**（类型替换发生在登记之后），于是调用点查表得到
   `auto` → `E3066 不能对非函数类型进行调用`。Pass 2.5 改为**先定型再登记**：全局 `auto`/`typeof`
@@ -1204,13 +1225,13 @@ C23 锚定决议下的第一批语言能力（详细口径与差异见 `C_SUBSET
   `scanf("a=%d", &x)` 读 `a=42` 得到 `x=0`（Clang 得 42）。现新增 `ScanfItem::Literal(u8)`：与输入流的下一个
   字符**精确比较**，不匹配即按标准**停止解析**并返回已赋值项数；`%%` 同样展开为字面 `%` 参与匹配。
   `sscanf` 同族同修（与空白指令修复的先例一致）。
-- **标准输入换行口径统一（重要，由防线扩容暴露）**：capi `cide_set_input`、FRB `set_input`、
-  `cide_cli serve` 的 `run.input` 与 `-i` 输入文件此前各自用 `str::lines()` 拆分，**丢掉行尾 `'\n'`**，
+- **标准输入换行口径统一（重要，由防线扩容暴露）**：capi `vitro_set_input`、FRB `set_input`、
+  `vitro_cli serve` 的 `run.input` 与 `-i` 输入文件此前各自用 `str::lines()` 拆分，**丢掉行尾 `'\n'`**，
   而 E2E 防线用 `split_inclusive('\n')` —— 同一份输入在不同出口语义不一致，`getchar()` 永远读不到换行。
   现统一到 `RuntimeState::split_stdin` / `set_stdin`（保留换行、`\r\n` 规整为 `\n`），四个入口共用。
 - **Shadow 防线支持用例自带 `.in` 注入（能力扩容）**：此前 Shadow 一律批量运行且不喂 stdin
   （脚本注释自述"纳入 key 以备扩展"），K&R 目录里 29 个 `.in` 文件从未被使用 ——
-  "无输入"两侧恰好一致的**虚假 match**。现 `ShadowCase` 携带 `stdin`、Clang 与 Cide 喂同一份字节、
+  "无输入"两侧恰好一致的**虚假 match**。现 `ShadowCase` 携带 `stdin`、Clang 与 Vitro 喂同一份字节、
   缓存 key 纳入真实 stdin。首次启用即暴露上述换行缺陷（19 例 `output_gap`：`kr_1_8` 的换行计数恒为 0
   等），修复后全部转绿。
 - 回归：新增 3 个 Shadow/E2E 用例（`baseline/scanf_return_value.c`、`scanf_literal_match.c`、
@@ -1220,20 +1241,20 @@ C23 锚定决议下的第一批语言能力（详细口径与差异见 `C_SUBSET
 > 起因：复核 PR 清单「条目 5：堆决议第三道墙」时给第三道墙补用例，结果发现**第二道墙本身是坏的**。
 - **步数保险丝对全速运行的程序从未生效（严重）**：`native/src/engine/compile_pipeline.rs::setup_vm`
   里硬编码了 `vm.set_max_steps(10_000_000)` —— 每次 `run` 之前都会把会话配置**抹掉**，
-  与 `CideVM::reset()` 的"保留会话级配置"注释直接冲突。实测：设 2000 步的程序一路跑到
+  与 `VitroVM::reset()` 的"保留会话级配置"注释直接冲突。实测：设 2000 步的程序一路跑到
   **16 万步、直到撞 1MB 堆墙**才停；教学场景"可控地撞上限拿教学 trap"完全落空。
   旧用例 `test_second_wall_max_steps_fuse` 只断言 trap 消息含"步数超过限制"，1000 万步同样满足，
-  因此长期掩盖该缺陷。现删除该行（默认值由 `CideVM::default()` 提供、`reset()` 保留用户配置），
+  因此长期掩盖该缺陷。现删除该行（默认值由 `VitroVM::default()` 提供、`reset()` 保留用户配置），
   并把用例强化为**回显配置值**（`（1000 步）`）。
-- **会话级配置静默丢弃**：`cide_set_max_steps` / `cide_set_call_depth_limit`（capi）与
-  `cide_cli serve` 的 `config.set` 此前都写成 `if let Some(vm) = session.vm.as_mut() { .. }`
+- **会话级配置静默丢弃**：`vitro_set_max_steps` / `vitro_set_call_depth_limit`（capi）与
+  `vitro_cli serve` 的 `config.set` 此前都写成 `if let Some(vm) = session.vm.as_mut() { .. }`
   并返回"成功" —— 会话尚未编译时（无 VM）配置被丢弃却报告成功。现下沉到语言中立层
   `Session::set_max_steps` / `Session::set_call_depth_limit`（无 VM 时先建立承载配置的 VM），
   capi 与 serve 共用同一入口。
 - **配置可写不可读**：`session_api::config()` 补 `max_steps` / `call_depth_limit` 回显
-  （VM 未创建时为 `null`），并给 `CideVM` 补 `max_steps()` getter —— 消费方（SharpTutor / 判分脚本）
+  （VM 未创建时为 `null`），并给 `VitroVM` 补 `max_steps()` getter —— 消费方（SharpTutor / 判分脚本）
   据此可确认保险丝真的落到 VM 上，而不是"设置成功、实际未生效"。
-- **堆决议三道墙用例补齐**（`CIDE_HEAP_QUARANTINE_DECISION.md` §6 的最后一项，原记为"推导项"）：
+- **堆决议三道墙用例补齐**（`VITRO_HEAP_QUARANTINE_DECISION.md` §6 的最后一项，原记为"推导项"）：
   新增 `crash_regression_tests::test_third_wall_region_table_bounded_when_step_fuse_trips_first`
   —— leak 路径上步数保险丝先触发时，region 条数必须 ≤ 步数上限（有界），且未撞 1MB 墙。
 - 回归：新增 `native/tests/session_config_test.rs`（4 用例：配置跨 run 存活并生效、调用深度上限存活、
@@ -1244,7 +1265,7 @@ C23 锚定决议下的第一批语言能力（详细口径与差异见 `C_SUBSET
   `不兼容的指针类型赋值：Base* ← Derived*` 并建议"隐式类型转换可能导致数据截断" ——
   复用了**标量**转换码 `W3053_ImplicitScalarConversion`。C++ 向上转型是隐式允许的多态基础写法，
   Clang++ 在 `-Wall -Wextra` 下实测零警告。
-  - 新增专用码 `W3067_PointerTypeMismatch`（`cide_shared::ErrorCode` + 错误目录条目 + 建议文案
+  - 新增专用码 `W3067_PointerTypeMismatch`（`vitro_shared::ErrorCode` + 错误目录条目 + 建议文案
     "指针类型不兼容，需要显式转换；向上转型（派生类指针 → 基类指针）本就不需要转换"）。
   - `TypeChecker::is_upcast`：沿**单继承链**回溯判定向上转型（教学子集不支持多继承，单链足够；
     带 32 步步数上限防环），向上转型不再产生任何指针诊断。
@@ -1252,10 +1273,10 @@ C23 锚定决议下的第一批语言能力（详细口径与差异见 `C_SUBSET
     （不再出现"数据截断"）。
 - **诚实记录补录**：该差异此前未写入 `CPP_SUBSET_SPEC.md`（违反"以 Clang 为标准、不一致必须记录"的纪律）。
   现补 §4.5「指针赋值的方向语义」：三场景对照表 + 修复记录 + **剩余差异**（Clang 对向下转型是
-  **error** 拒绝编译，Cide 仅为警告并继续编译）+ 已知显示瑕疵（警告的 code 被加 `E` 前缀，见下）。
+  **error** 拒绝编译，Vitro 仅为警告并继续编译）+ 已知显示瑕疵（警告的 code 被加 `E` 前缀，见下）。
 - 回归：新增 `native/tests/pointer_upcast_test.rs`（3 用例：向上转型无指针诊断、向下转型仍提示、
   无关类型仍提示且不出现"截断"文案）；`type_checker_unit_test.rs` 的 B39 用例改用新码文案。
-- **已知显示瑕疵（未修，如实记录）**：诊断 JSON 的 `code` 字段与 `cide_cli` 输出对**警告**也加 `E` 前缀
+- **已知显示瑕疵（未修，如实记录）**：诊断 JSON 的 `code` 字段与 `vitro_cli` 输出对**警告**也加 `E` 前缀
   （`W3067` → `E3067`，此前 `W3053` → `E3053` 同源）；`severity` 字段正确。修复需让
   `session_api::compile` 按 severity 生成 `E`/`W`/`H` 前缀 —— 属独立小项，本次不动。
 
@@ -1277,7 +1298,7 @@ C23 锚定决议下的第一批语言能力（详细口径与差异见 `C_SUBSET
   串用 helper.c 的源码行、函数定义行不得报为递归调用）。
 
 ### Fixed (教学标注 · 批次 C：P0-2 越界描述 / P0-3 两套标注互相矛盾)
-- **P0-2（描述不存在的比较）**：`cide_algorithm_steps::sorting::infer_bubble_sort` 新增内层下标有效性判据
+- **P0-2（描述不存在的比较）**：`vitro_algorithm_steps::sorting::infer_bubble_sort` 新增内层下标有效性判据
   —— 内层循环条件为 `j < n-1-i`，故参与相邻比较的 `j` 合法上界是 `n-2-i`；当 `j` 停在退出值上时
   **不再产出** "比较/交换 `arr[j]` 与 `arr[j+1]`"，直接返回 `None`（宁缺勿错）。修复前实测 5 元素数组
   产生 **24 步**含 `arr[5]`（数组上界为 4）的描述、真实比较只有 10 次；修复后 **0 步**。
@@ -1291,7 +1312,7 @@ C23 锚定决议下的第一批语言能力（详细口径与差异见 `C_SUBSET
   同一步两套交换标注必须一致、冒泡"第 k 趟"必须等于"第 k 大"）。
 
 ### Fixed (教学标注与 CLI 契约 · 批次 B：P2-7 变量快照可见性与类型名)
-- **P2-7a（同名变量无法区分）**：`CideVM::get_variable_snapshot` 改为按 **(函数归属, 声明行)** 过滤并对同名去重 ——
+- **P2-7a（同名变量无法区分）**：`VitroVM::get_variable_snapshot` 改为按 **(函数归属, 声明行)** 过滤并对同名去重 ——
   新增 `Symbol::decl_line`（codegen 在参数/局部/静态/全局各构造点填入），`decl_line > 当前执行行` 的符号视为
   "尚未进入作用域"不可见，同名保留"已进入作用域且声明最晚"者；`code_line == 0`（预热步 / 库函数内部）时
   不输出局部变量（无法判定作用域时保守留空，而不是猜一个）。两个 `for` 各声明一个 `i` 时，现在按执行位置
@@ -1303,7 +1324,7 @@ C23 锚定决议下的第一批语言能力（详细口径与差异见 `C_SUBSET
 - **P2-7b（数组暴露"地址式"值）**：`local_vars` 中数组条目的 `value` 改为**元素摘要**（`{5, 3, 1, 4, 2}`，
   超过 16 个元素截断为 `…`）。此前显示首元素（多为 `0`），与 `array_snapshots` 重复且易被消费方误读成
   "数组的值"；`addr` 字段保留（内存/指针视图仍需数组基址）。
-- **P2-7c（类型名泄漏内部结构）**：`ty_name` 由 `format!("{:?}", ty)` 改为 `cide_runtime::type_display_name`
+- **P2-7c（类型名泄漏内部结构）**：`ty_name` 由 `format!("{:?}", ty)` 改为 `vitro_runtime::type_display_name`
   —— C/C++ 风格稳定可读名（`int` / `unsigned int` / `const char*` / `int[5]` / `struct Node` / `Foo` / `int&`）。
   该函数同时成为 `array_snapshots[].element_ty` 的单一来源（输出值不变 `int`，消除手写映射漂移）。
 - **回归与文档**：新增 `native/tests/step_payload_vars_test.rs`（3 用例：同名变量按声明行切换、跨函数隔离、
@@ -1311,13 +1332,13 @@ C23 锚定决议下的第一批语言能力（详细口径与差异见 `C_SUBSET
   §8 风险 #7 标记已修复、新增 #8 记录跨函数/同名问题）。
 
 ### Fixed (教学标注与 CLI 契约 · 批次 A：P0-1 冒泡趟数文案 / P1-5 `compile` 退出码 / 引擎附注粘连)
-- **P0-1（教学文案把概念教反）**：`crates/cide_algorithm_steps/src/sorting.rs` 冒泡排序外层循环的描述由
+- **P0-1（教学文案把概念教反）**：`crates/vitro_algorithm_steps/src/sorting.rs` 冒泡排序外层循环的描述由
   `kth = n - i` 改为 `i + 1` —— 第 pass 趟确定的是「第 pass 大」的元素（升序冒泡每趟把当前未排序区间的最大值
   冒到区间末尾），旧式是"剩余待排个数"，与排名恰好相反（n=5 时第 1 趟显示"第 5 大"= 最小元素）。同时加
   `i + 1 <= n` 有效性判据。错误并非实现偏离设计：`docs/archive/REVIEW_REPORT_2026-05-18_FULL.md:1059`
   的设计稿即写作 `第 {i} 趟：将第 {n-i} 大的元素`。
-- **P1-5（CLI 退出码不反映编译失败）**：`native/src/bin/cide_cli.rs::cmd_compile` 此前丢弃 `compile_file`
-  的返回值，`cide_cli compile bad.c` 会带着诊断信息退出 0，CI 脚本 / headless 消费方（SharpTutor）据此
+- **P1-5（CLI 退出码不反映编译失败）**：`native/src/bin/vitro_cli.rs::cmd_compile` 此前丢弃 `compile_file`
+  的返回值，`vitro_cli compile bad.c` 会带着诊断信息退出 0，CI 脚本 / headless 消费方（SharpTutor）据此
   误判"编译通过"。现与 `cmd_run` 一致：编译失败即 `std::process::exit(1)`。
 - **引擎附注粘连（泄漏报告压成一行）**：`RuntimeState::push_note` 统一为每段附注补齐尾随 `\n`。display 视图是
   零分隔顺序拼接，而 `append_leak_report` 的 5 行**全部没有尾随换行**（只有首行有前导 `\n`），实测输出被压成
@@ -1330,23 +1351,23 @@ C23 锚定决议下的第一批语言能力（详细口径与差异见 `C_SUBSET
 - **根因**：`RuntimeState::output_lines` 一个 `Vec<String>` 同时承担「程序 stdout / 程序 stderr / 引擎附注」三种语义，
   且附注可在流**中间**插入（如 `[堆] 内存耗尽` 提示在 `malloc` 失败处 push，程序随后还会继续输出）。
   消费方只能靠文本正则把附注洗掉，同一套清洗规则散落**十余处**（`shadow_verify.py`、`shadow_verify_cpp.py`、
-  `cide_e2e.rs`、`bytecode_libc_consistency.rs`、`test_utils.rs`、`bytecode_gen_cpp_unit_test.rs`、
+  `vitro_e2e.rs`、`bytecode_libc_consistency.rs`、`test_utils.rs`、`bytecode_gen_cpp_unit_test.rs`、
   `end_to_end_extra_test.rs`、`qsort_test.rs`、`test_more.py`、`test_massive.py` …），且语义互不一致
   （全局替换 vs 行内截断、`>=30` vs `==30` 个等号、丢空行 vs 仅 strip 首尾）。教学程序自己打印
   `程序运行完成，返回值：7` 时会被**整段删除**，一条本来正确的用例被记成 `output_gap`（假阳性）。
-- **修复**：`cide_runtime` 新增 `OutputKind{Stdout,Stderr,Note}` + `OutputChunk`；`RuntimeState::output_chunks`
+- **修复**：`vitro_runtime` 新增 `OutputKind{Stdout,Stderr,Note}` + `OutputChunk`；`RuntimeState::output_chunks`
   成为唯一真相，提供 `stdout()` / `stderr()` / `notes()` / `display()` 四个投影（`output()` 保留为 `display()` 别名，
   UI / CLI 展示语义不变）。约 20 处 push 点完成分类迁移：`printf`/`puts`/`putchar`/`fputs(stdout)` → stdout；
   `fputs(stderr)`/`fprintf(stderr)`/`perror` → stderr；运行完成提示 / 泄漏报告 / `malloc(0)` 警告 / 堆耗尽提示 /
-  `[abort]` / 断言失败 / `qsort`·`bsearch` 深度提示 → note。快照（`cide_vm::snapshot::RuntimeSnapshot`）
+  `[abort]` / 断言失败 / `qsort`·`bsearch` 深度提示 → note。快照（`vitro_vm::snapshot::RuntimeSnapshot`）
   同步携带分段，时间旅行回退不丢通道标记。
-- **出口（ABI 1.0.0 → 1.1.0，加函数 = minor）**：capi 新增 `cide_get_program_output_length` /
-  `cide_get_program_output` / `cide_get_engine_notes_length` / `cide_get_engine_notes` /
-  `cide_get_program_output_delta`；`cide_get_output*` 保持「展示视图」语义不变（`CideFlutter` 集成测试依赖其含
-  "程序运行完成"文本，故不改语义、不升 major）；`cide_cli serve` 的 `output.delta` 新增可选 `stream` 参数
-  （`display`（默认）/ `stdout` / `stderr` / `note`），响应带 `stream` 字段。`native/include/cide_capi.h` 同步。
+- **出口（ABI 1.0.0 → 1.1.0，加函数 = minor）**：capi 新增 `vitro_get_program_output_length` /
+  `vitro_get_program_output` / `vitro_get_engine_notes_length` / `vitro_get_engine_notes` /
+  `vitro_get_program_output_delta`；`vitro_get_output*` 保持「展示视图」语义不变（`CideFlutter` 集成测试依赖其含
+  "程序运行完成"文本，故不改语义、不升 major）；`vitro_cli serve` 的 `output.delta` 新增可选 `stream` 参数
+  （`display`（默认）/ `stdout` / `stderr` / `note`），响应带 `stream` 字段。`native/include/vitro_capi.h` 同步。
 - **驱动侧**：十余处清洗规则**全部删除**；`shadow_verify.py` 与 `scripts/shadow_verify_cpp.py` 共用
-  `native/tests/shadow_verification/cide_output.py`（结构化读取唯一入口，禁止再自行清洗）；DLL 缺新符号时
+  `native/tests/shadow_verification/vitro_output.py`（结构化读取唯一入口，禁止再自行清洗）；DLL 缺新符号时
   **fail fast** 并提示重建，不退回旧清洗口径。
 - **回归固化**：新增 `native/tests/cases/baseline/engine_note_lookalike.c`（程序打印与引擎附注逐字相同的文本、
   触发一次 `malloc(0)` 附注、走一次 stderr、以无尾换行收尾），Golden 由 Clang 生成（`cases_golden/baseline/`）；
@@ -1373,10 +1394,10 @@ C23 锚定决议下的第一批语言能力（详细口径与差异见 `C_SUBSET
   冷启动（并行 + `--refresh-clang` 全量重算）**20.4s**；三次运行的 `(用例, 判定)` 序列**逐项完全一致**（0 非预期差异）。
 - **CI**：`.github/workflows/ci.yml` 新增 `schedule`（夜间 18:00 UTC）夜间模式加 `--refresh-clang`；
   新增 `actions/cache` 缓存 `.clang_cache`（key 含 OS + clang 版本 + 脚本哈希，clang 升级自动失效）。
-- **性能顺带优化**：`run_with_cide` 的 `ctypes.CDLL` 加载与全部函数签名设置从**每用例一次**改为**每进程一次**。
+- **性能顺带优化**：`run_with_vitro` 的 `ctypes.CDLL` 加载与全部函数签名设置从**每用例一次**改为**每进程一次**。
 
-### Added (Phase 1 出口 3：`cide_cli serve` JSON-lines 会话模式)
-- **新增 `native/src/bin/cide_cli.rs::cmd_serve`**：stdin 每行一个 JSON 请求 / stdout 每行一个 JSON 响应（NDJSON）。
+### Added (Phase 1 出口 3：`vitro_cli serve` JSON-lines 会话模式)
+- **新增 `native/src/bin/vitro_cli.rs::cmd_serve`**：stdin 每行一个 JSON 请求 / stdout 每行一个 JSON 响应（NDJSON）。
   契约：**id 关联**（响应原样回填 `id`）、**错误帧与成功帧同构**（`{"id","ok","result"}` / `{"id","ok","error":{kind,message}}`）、
   `session.reset`（长寿命进程复用）；方法集 `compile` / `run` / `output.delta` / `step.begin` / `step.next` /
   `payload.get` / `seek` / `breakpoints.set` / `memory.regions` / `config.get|set` / `session.*` / `ping` / `shutdown`。
@@ -1385,7 +1406,7 @@ C23 锚定决议下的第一批语言能力（详细口径与差异见 `C_SUBSET
   （主计划纪律 §2.2-2：三出口只做薄包装，防"typeck 与 codegen 双轨语义"重演）。capi 侧变为薄包装，出口 JSON 形状不变。
 - **防线**：`scripts/serve_smoke.py`（26 项断言：id 关联 / 帧同构 / 生命周期 / 与 capi 同形的 payload 字段 /
   默认隔离预算 262144 / `config.set` 生效 / 非法程序诊断 / 未知方法错误帧），已进 CI。
-  文档见 [`docs/current/CIDE_CLI.md`](docs/current/CIDE_CLI.md) §6。
+  文档见 [`docs/current/VITRO_CLI.md`](docs/current/VITRO_CLI.md) §6。
 
 ### Added (StepPayload Schema v0.1 定稿文档 + 字段冻结测试)
 - **新增 [`docs/spec/STEP_PAYLOAD_SCHEMA_V0_1.md`](docs/spec/STEP_PAYLOAD_SCHEMA_V0_1.md)**（语言中立）：
@@ -1399,7 +1420,7 @@ C23 锚定决议下的第一批语言能力（详细口径与差异见 `C_SUBSET
   `cache_start_step` 前移。字段一旦改名/增删即测试失败，强制走版本化流程（防止 schema 文档悄悄过期）。
 
 ### Added (堆隔离预算的会话配置出口)
-- **`cide_set_quarantine_budget` / `cide_get_quarantine_budget`（capi）**：补齐堆决议 §1「隔离预算可调，写进会话配置」
+- **`vitro_set_quarantine_budget` / `vitro_get_quarantine_budget`（capi）**：补齐堆决议 §1「隔离预算可调，写进会话配置」
   的对外暴露缺口（此前仅引擎字段可调，capi 无 setter）。语义：默认 256KB；`0` = 关闭隔离（教学对照，
   free 后立即可复用）；超大值裁剪到堆上限（1MB）；负值拒绝。serve 侧经 `config.set` / `config.get` 暴露同一字段。
 - **集成测试 3 例**（`capi_first_batch_tests.rs`，该文件 15→18）：`test_set_quarantine_budget_controls_address_reuse`
@@ -1407,10 +1428,10 @@ C23 锚定决议下的第一批语言能力（详细口径与差异见 `C_SUBSET
   `test_quarantine_budget_is_clamped_to_heap_limit`、`test_quarantine_budget_setter_rejects_null_session`。
 
 ### Added (capi 第一批：SharpTutor 评审定稿落地，10/13 函数)
-- **新增 `native/src/capi/first_batch.rs`**，按 [`CIDE_CAPI_REVIEW_RESPONSE.md`](docs/current/CIDE_CAPI_REVIEW_RESPONSE.md) §1 落地第一批：`cide_abi_version`（契约版本 `1.0.0`，加函数=minor / 改签名=major）、`cide_engine_version`（crate 版本 + 可选构建期 git hash）、`cide_free_string`（rust-alloc 所有权唯一释放入口，废弃 caller-buffer 双轨）、`cide_last_error`、`cide_compile_json`（诊断含 `severity` 枚举与 `end_line/end_column`——精确跨度需动三处错误结构体，本批先给"起点+1"退化值，schema 不欠债）、`cide_run_json`（`status` 三态 + `return_value`/`trap` E 码透传/`waiting_input`/`steps_executed`）、`cide_get_output_delta`（游标增量，多字节边界安全）、`cide_set_max_steps`、`cide_set_call_depth_limit`、`cide_set_deterministic`/`cide_get_deterministic`。
-- **横切契约**：全部 JSON 返回为 rust-alloc 字符串（`cide_free_string` 释放）；全部入口 `catch_unwind` 包裹（panic 不跨 C 边界）；状态码 `0=成功/负=入参或会话无效/正=领域状态`；Session 非线程安全声明；UTF-8 输入输出。
-- **引擎侧配套**：`CideVM` 新增 `call_depth_limit` 字段（V-P1-10）与 `do_call_inner` 深度检查（下限 16 层兜底），`reset()` 不再清空会话级配置（`max_steps`/`call_depth_limit` 由 `set_*` 设定后须跨运行存活）；`RuntimeState` 新增 `deterministic` 字段，`host_time`/`host_clock` 在该模式下固定返回 0（Phase 1 判分确定性最小形态；完整 step 派生伪时钟仍留 Phase 3）。
-- **断点 / 单步三函数（同批落地）**：`cide_set_breakpoints`（JSON 整数数组，须在 `cide_step_begin` 之后设置——step_begin 会重建 VM 并清空断点）、`cide_step_begin`（新增入口：装载 VM + 重建运行时 + 初始检查点）、`cide_step_next_json`（返回 `AutoStepResult` JSON，命中断点时 `paused=true`）、`cide_get_step_payloads_json`（按步号区间取 payload 数组 + `cache_start_step`/`max_collected_step`）。配套：`UnifiedEngine` 由 `Session` 持有（`Session::unified`，三出口共用同一会话）；`StepPayload` 类型链（含 `PointerSnapshot`/`AccessedVar`/`ArraySnapshot`/`ApiFrameInfo`/`AlgorithmStepSnapshot`/`RootCauseHint` 等 16 处）补 `serde::Serialize`。
+- **新增 `native/src/capi/first_batch.rs`**，按 [`VITRO_CAPI_REVIEW_RESPONSE.md`](docs/current/VITRO_CAPI_REVIEW_RESPONSE.md) §1 落地第一批：`vitro_abi_version`（契约版本 `1.0.0`，加函数=minor / 改签名=major）、`vitro_engine_version`（crate 版本 + 可选构建期 git hash）、`vitro_free_string`（rust-alloc 所有权唯一释放入口，废弃 caller-buffer 双轨）、`vitro_last_error`、`vitro_compile_json`（诊断含 `severity` 枚举与 `end_line/end_column`——精确跨度需动三处错误结构体，本批先给"起点+1"退化值，schema 不欠债）、`vitro_run_json`（`status` 三态 + `return_value`/`trap` E 码透传/`waiting_input`/`steps_executed`）、`vitro_get_output_delta`（游标增量，多字节边界安全）、`vitro_set_max_steps`、`vitro_set_call_depth_limit`、`vitro_set_deterministic`/`vitro_get_deterministic`。
+- **横切契约**：全部 JSON 返回为 rust-alloc 字符串（`vitro_free_string` 释放）；全部入口 `catch_unwind` 包裹（panic 不跨 C 边界）；状态码 `0=成功/负=入参或会话无效/正=领域状态`；Session 非线程安全声明；UTF-8 输入输出。
+- **引擎侧配套**：`VitroVM` 新增 `call_depth_limit` 字段（V-P1-10）与 `do_call_inner` 深度检查（下限 16 层兜底），`reset()` 不再清空会话级配置（`max_steps`/`call_depth_limit` 由 `set_*` 设定后须跨运行存活）；`RuntimeState` 新增 `deterministic` 字段，`host_time`/`host_clock` 在该模式下固定返回 0（Phase 1 判分确定性最小形态；完整 step 派生伪时钟仍留 Phase 3）。
+- **断点 / 单步三函数（同批落地）**：`vitro_set_breakpoints`（JSON 整数数组，须在 `vitro_step_begin` 之后设置——step_begin 会重建 VM 并清空断点）、`vitro_step_begin`（新增入口：装载 VM + 重建运行时 + 初始检查点）、`vitro_step_next_json`（返回 `AutoStepResult` JSON，命中断点时 `paused=true`）、`vitro_get_step_payloads_json`（按步号区间取 payload 数组 + `cache_start_step`/`max_collected_step`）。配套：`UnifiedEngine` 由 `Session` 持有（`Session::unified`，三出口共用同一会话）；`StepPayload` 类型链（含 `PointerSnapshot`/`AccessedVar`/`ArraySnapshot`/`ApiFrameInfo`/`AlgorithmStepSnapshot`/`RootCauseHint` 等 16 处）补 `serde::Serialize`。
 - **集成测试** `native/tests/capi_first_batch_tests.rs`（15 用例）：字符串所有权与重复分配、`severity`/`end_column` 字段、运行三态、游标增量三场景（初始/末尾/负游标）、三处保险丝（max_steps 死循环 trap、call_depth_limit 深递归 trap、deterministic 冻住 `time()`）、统一模式（未编译返回 -2、单步 payload schema 关键字段、断点命中 `paused=true`、非法断点入参）。
 - **本批全部 13/13 落地**（含上表断点/单步三函数）。
 
@@ -1433,17 +1454,17 @@ C23 锚定决议下的第一批语言能力（详细口径与差异见 `C_SUBSET
 
 ### Fixed (SharpTutor Issue A/B：教学阻断修复)
 - **Issue A：scanf/sscanf 格式串空白指令不跳白**（教学阻断，优先级最高）。`parse_scanf_specs` 此前只提取 `%` 转换符、丢弃格式串中的空白字符，导致 `scanf("%d %c %d", &a, &op, &b)` 读 `3 + 4` 时 `%c` 捕获空格而非 `+`（C11 7.21.6.2 要求空白指令匹配输入中任意数量（含零）的空白字符）。现解析结果改为有序项序列 `ScanfItem::{Spec, Whitespace}`，空白指令只跳白不取参；参数计数改按 `Spec` 项数统计（空白指令不消费指针参数）。scanf/sscanf 共享解析，全族同病同修。`%c` 不自动跳白是既有正确语义，未受影响。
-- **Issue B1/B3：lambda 立即调用编译错与错误码误用**。`[](int a, int b){ return a + b; }(2, 3)` 此前编译失败——`cide_typeck/src/expr/call.rs::resolve_call_ptr` 只处理 callee 为标识符的调用，Lambda 表达式节点的 callee 一路落到"非函数指针"兜底，且误用 `E3045_CompoundAssignType`（复合赋值类型错误），建议文本随之串成"+= -= *= /= 等复合赋值要求操作数类型兼容"。现 typeck 识别 Lambda callee，与变量形式（`auto f = lambda; f(1)`）**共用同一改写函数 `rewrite_lambda_call`**（消除双轨语义）；新增错误码 **`E3066_CallNonFunction`**（含 error_catalog 条目与建议文本），兜底报错改用之。Clang 对照语义：`called object type 'int' is not a function or function pointer`。
+- **Issue B1/B3：lambda 立即调用编译错与错误码误用**。`[](int a, int b){ return a + b; }(2, 3)` 此前编译失败——`vitro_typeck/src/expr/call.rs::resolve_call_ptr` 只处理 callee 为标识符的调用，Lambda 表达式节点的 callee 一路落到"非函数指针"兜底，且误用 `E3045_CompoundAssignType`（复合赋值类型错误），建议文本随之串成"+= -= *= /= 等复合赋值要求操作数类型兼容"。现 typeck 识别 Lambda callee，与变量形式（`auto f = lambda; f(1)`）**共用同一改写函数 `rewrite_lambda_call`**（消除双轨语义）；新增错误码 **`E3066_CallNonFunction`**（含 error_catalog 条目与建议文本），兜底报错改用之。Clang 对照语义：`called object type 'int' is not a function or function pointer`。
 - **Issue B2：lambda 槽位按 0 字节分配，StoreLocal 冲出 1MB 线性内存**。`gen_lambda` 在栈上推的是**闭包对象地址**、lambda 变量槽里存的也是该地址（4 字节），但槽位与闭包对象大小一律按闭包类字段总大小计算——无捕获闭包 size 为 0，于是 `auto f = [](int x){ return x + 100; };` 在帧内根本没有槽位，`StoreLocal` 写到帧外并越出线性内存（实测 `locals_base=1048572`、`operand=4`、`addr=1048576` = MEM_SIZE）。触发条件为"先出现 lambda 立即调用、后声明 lambda 变量"（仅立即调用不触发，仅变量声明也不触发）。修复：新增 `is_lambda_closure_type` 作**单一判定来源**，lambda 变量槽位与闭包对象均保底 4 字节；同时修正实参处理——lambda 一律按 1 word（地址）压栈，不再按字段数补零（**双字段捕获闭包此前会多压 1 word 造成参数错位**，与 B2 同源）。**同源第三处**：`static` lambda 变量走全局区分配（`emit_static_var`），同样按闭包类字段大小占地——两个 static 闭包地址重叠，实测 `printf` 输出乱码（Clang 对照 `s=8 6`），已按同一判定修为一并覆盖。同批实测记录的两项**未实现能力**（文件作用域 lambda 变量、lambda 返回类型非 int）已记入 `native/tests/CPP_FAILURES.md`。
-- **回归测试**：`crash_regression_tests.rs` 扩展 11 个用例（19→30）——Issue A 4 个（空白指令正/反向对照 + 多空白等价 + sscanf 共享语义）、Issue B 7 个（立即调用、实参位置、立即调用后声明变量、有捕获闭包实参、static 变量槽位、变量形式反向对照、E3066 错误码与建议文本断言）。全部期望值取自 Clang/Clang++ 实测 Golden，Cide 输出逐字节一致。
+- **回归测试**：`crash_regression_tests.rs` 扩展 11 个用例（19→30）——Issue A 4 个（空白指令正/反向对照 + 多空白等价 + sscanf 共享语义）、Issue B 7 个（立即调用、实参位置、立即调用后声明变量、有捕获闭包实参、static 变量槽位、变量形式反向对照、E3066 错误码与建议文本断言）。全部期望值取自 Clang/Clang++ 实测 Golden，Vitro 输出逐字节一致。
 
 ### Added (capi 签名评审定稿：SharpTutor API 诉求逐条回应)
-- **新增评审回复文档** `docs/current/CIDE_CAPI_REVIEW_RESPONSE.md`：对 SharpTutor《后端 API 需求与签名评审》逐条回应（§1~§9 全覆盖）+ 六个开放问题的正式回答。核心结论：**整体接受，一处分歧修订为并行**。含三项实证核验——重复编译内存有界（10000 次交替编译 RSS 16.6→18.4MB 平台期，将固化为回归断言）、`MemoryRegionData.alloc_line/alloc_by` 已存在（零成本直通）、frameCache 越窗行为已查证（检查点恢复+正向重放）；SharpTutor 项目实地核验（三进程架构、EndLine/EndCharacter 消费点属实）。
-- **主计划修订（§3.2/§5.3/§6/§7）**：StepPayload schema v0.1 定稿从 Phase 3 **前置到 Phase 1**（第一批 `step_next_json` 输出即 StepPayload，协议不可能晚于消费它的 API）；`cide_set_deterministic` 最小形态（time 固定 + rand 种子固定）提前进 Phase 1，与 Phase 3 完整伪时钟分层（判分确定性 vs 重放确定性）；wasm 与 capi 第二批改为**并行**（Phase 2a/2b，各约一周互不抢资源——wasm 是社区前端生态冷启动开关，不因单一消费者无需求而后置）；capi 第一批扩容（engine_version/last_error/free_string 字符串所有权/set_max_steps/set_call_depth_limit/run_json 判分契约/断点三函数）；serve 增加 id 关联、错误帧同构、session.reset；JIT 断点完整性从 V-P1-2 提级为行为契约。
+- **新增评审回复文档** `docs/current/VITRO_CAPI_REVIEW_RESPONSE.md`：对 SharpTutor《后端 API 需求与签名评审》逐条回应（§1~§9 全覆盖）+ 六个开放问题的正式回答。核心结论：**整体接受，一处分歧修订为并行**。含三项实证核验——重复编译内存有界（10000 次交替编译 RSS 16.6→18.4MB 平台期，将固化为回归断言）、`MemoryRegionData.alloc_line/alloc_by` 已存在（零成本直通）、frameCache 越窗行为已查证（检查点恢复+正向重放）；SharpTutor 项目实地核验（三进程架构、EndLine/EndCharacter 消费点属实）。
+- **主计划修订（§3.2/§5.3/§6/§7）**：StepPayload schema v0.1 定稿从 Phase 3 **前置到 Phase 1**（第一批 `step_next_json` 输出即 StepPayload，协议不可能晚于消费它的 API）；`vitro_set_deterministic` 最小形态（time 固定 + rand 种子固定）提前进 Phase 1，与 Phase 3 完整伪时钟分层（判分确定性 vs 重放确定性）；wasm 与 capi 第二批改为**并行**（Phase 2a/2b，各约一周互不抢资源——wasm 是社区前端生态冷启动开关，不因单一消费者无需求而后置）；capi 第一批扩容（engine_version/last_error/free_string 字符串所有权/set_max_steps/set_call_depth_limit/run_json 判分契约/断点三函数）；serve 增加 id 关联、错误帧同构、session.reset；JIT 断点完整性从 V-P1-2 提级为行为契约。
 
 ### Changed (战略转型：后端独立化与 wasm32 白箱化)
-- **定位转型决策**：Cide 从"跨平台教学 IDE"转型为"教学 C/C++ 子集参考执行引擎（白箱）"。本仓库只做后端，MIT 许可；前端切割给社区（首个外部消费者 SharpTutor/WPF 已提出集成）；原生移动端放弃（"看"场景由 wasm32 + Web 前端的移动浏览器覆盖）。决策依据与完整路线见新增设计文档 `docs/current/CIDE_BACKEND_SPLIT_WASM_WHITEBOX_PLAN.md`（切割清单、capi 分批补全、交互资产两层重构、Phase 0~3 规划与验收标准）。
-- **wasm32 冒烟实证（零修改通过）**：全部 workspace crate（含 cide_native 主 crate）`cargo check --target wasm32-unknown-unknown` 零错误；release 构建产出 3.75MB `cide_native.wasm`；Node 实例化后经 C ABI 全链路验证（session → compile → run → get_output，输出正确）；E3070 栈缓冲区溢出等教学安全检测在 wasm 下正常触发。唯一阻碍点为 FRB 生成代码的 wasm-bindgen import 残留（C API 路径不触碰，stub 验证通过；正式修复为 `#[cfg(not(target_arch = "wasm32"))]` 门控 FRB 模块，随前端切割一并完成）。
+- **定位转型决策**：Vitro 从"跨平台教学 IDE"转型为"教学 C/C++ 子集参考执行引擎（白箱）"。本仓库只做后端，MIT 许可；前端切割给社区（首个外部消费者 SharpTutor/WPF 已提出集成）；原生移动端放弃（"看"场景由 wasm32 + Web 前端的移动浏览器覆盖）。决策依据与完整路线见新增设计文档 `docs/current/VITRO_BACKEND_SPLIT_WASM_WHITEBOX_PLAN.md`（切割清单、capi 分批补全、交互资产两层重构、Phase 0~3 规划与验收标准）。
+- **wasm32 冒烟实证（零修改通过）**：全部 workspace crate（含 vitro_native 主 crate）`cargo check --target wasm32-unknown-unknown` 零错误；release 构建产出 3.75MB `vitro_native.wasm`；Node 实例化后经 C ABI 全链路验证（session → compile → run → get_output，输出正确）；E3070 栈缓冲区溢出等教学安全检测在 wasm 下正常触发。唯一阻碍点为 FRB 生成代码的 wasm-bindgen import 残留（C API 路径不触碰，stub 验证通过；正式修复为 `#[cfg(not(target_arch = "wasm32"))]` 门控 FRB 模块，随前端切割一并完成）。
 - **AGENTS.md 项目概览重写**为三出口一核心架构（capi / wasm32 / cli-serve）+ 架构纪律（新能力先落语言中立层、三出口一套语义、capi 版本化）；旧移动端计划文档头部标注已被新计划取代。
 - **记录外部 Issue（SharpTutor，已核实待修）**：A. scanf/sscanf/fscanf 格式串空白指令不跳白（`"%d %c %d"` 读 `3 + 4` 时 `%c` 捕获空格；根因 `parse_scanf_specs` 丢弃格式串空白字符，教学阻断优先级最高）；B. lambda 调用三缺陷（立即调用误报 E3045 且建议文本串行、任何实参位置调用 lambda 运行时 StoreLocal 越界——与临时槽位家族同构）；C. headless 机器可读边界提案（评估结论：capi 下沉为主 + cli serve JSON-lines，分三批补全，详见新计划 §5.3）。
 
@@ -1451,7 +1472,7 @@ C23 锚定决议下的第一批语言能力（详细口径与差异见 `C_SUBSET
 - **V-P1-6 栈缓冲区溢出检测（E3070）**：此前 `strcpy/strcat/scanf("%s")` 的容量检查只覆盖堆 region，栈上 `char buf[4]` 被静默覆写相邻局部变量——这是教学 IDE 最需要捕获的经典错误。现由编译期登记栈缓冲区表（`FuncMeta.local_buffers`，局部数组声明时填充，经 compile_pipeline 透传至 VM，随 Call 帧克隆），宿主函数经 `check_stack_buffer_capacity` 校验并给出含变量名/容量的教学 trap。strcpy/strcat 的用户侧分发从 Bytecode Libc 路径切回 Host（libc 索引表与预编译产物不变，仅调用分发；Bytecode 版逐字节 StoreMem 无法做整体容量校验）。
 - **V-P1-12 无效 free 分场景诊断**：`free(p+4)`（块内部）、`free(&栈变量)`（完全无效）此前静默"成功"——学生以为释放成功且泄漏报告不出现该块，双重误导。现按三种场景（活跃块内部/已释放块内部/无效地址）给出 E3027/E3061 教学 trap；`realloc(p, 0)` 的 free 分支同构处理。
 - **V-P1-13 scanf 字符流语义**：此前每次调用整行消费（`input_index += 1`），输入 `"1 2\n3 4"` 下第二次 `scanf("%d")` 读到 3（C 流式语义应读同行剩余的 2）。现从 `(input_index, input_char_offset)` 起拼接虚拟字节流（行间补逻辑 `\n`），解析后经映射表按实际消费量推进游标——与 getchar 共享同一游标，未消费字符留给后续输入函数；`%c` 也能读到行尾字符。
-- **delete/delete[] nullptr 判空（V-P1-12 暴露的存量缺陷）**：`cide_vec` 空容器析构 `delete[] data`（data 为 0）时 `ptr-4` wrap 为 `0xFFFFFFFC` 后 free——旧行为被 free 静默忽略掩盖。现 codegen 生成 null 短路（C++ 标准要求 no-op）。
+- **delete/delete[] nullptr 判空（V-P1-12 暴露的存量缺陷）**：`vitro_vec` 空容器析构 `delete[] data`（data 为 0）时 `ptr-4` wrap 为 `0xFFFFFFFC` 后 free——旧行为被 free 静默忽略掩盖。现 codegen 生成 null 短路（C++ 标准要求 no-op）。
 - **第四批 Flutter 首批（U-P0-1 / U-P1-9 / U-P1-10）**：
   - `WatchTab` 迁移为 `ConsumerStatefulWidget`：TextEditingController 不再在 build 中创建（每次 rebuild 泄漏一个 ChangeNotifier 且打断输入）。
   - `EditorPanelV2.dispose` 补 `_cancelLongPress()`：长按 Timer 未取消会在组件销毁后用 defunct context 弹出菜单崩溃。
@@ -1469,27 +1490,27 @@ C23 锚定决议下的第一批语言能力（详细口径与差异见 `C_SUBSET
 - **F-P0-3 enum 初始化器常量折叠**：新增 `eval_enum_const`（负数/四则/位运算/比较），无法求值时报 E1006 而非静默取旧值。修复：`enum { NEG = -1, ZERO, BIG = 1+2 }` 输出 `0 1 2`（应 `-1 0 3`）。
 - **T-P1-1 逻辑运算规范化**：`&&`/`||` 短路结构末尾补 `PushConst 0 / Ne`，结果恒为 0/1（`5&&3` 得 3 → 1），短路语义与浮点操作数不受影响。
 - **64 位临时槽**：新增 `temp_slot_64`（8 字节，按函数重置）承载 double/long long 读-改-写中间值——4 字节槽被 64 位写踩踏曾引入 9 个 baseline 回归（链表/队列类），已在开发中捕获并修复。
-- **固化回归用例** `baseline/codegen_soundness_regression.c`（10 断言组，golden 由 Clang 生成，Cide 输出与 Clang 完全一致）；baseline 防线 314 → 317。
+- **固化回归用例** `baseline/codegen_soundness_regression.c`（10 断言组，golden 由 Clang 生成，Vitro 输出与 Clang 完全一致）；baseline 防线 314 → 317。
 - **顺带修复** `infixEvaluation_default` 模板（自增/自减作数组索引的 codegen 缺陷，曾误记为模板自身栈下溢）：E2E 转绿，`KNOWN_TEMPLATE_FAILURES`（3→2）、shadow `KNOWN_FAILURE_CASES`、E2E_FAILURES.md 三处同步更新——防线 5 双向监控首次实战生效。
 
 ### Fixed (CI 门禁：2026-09-06 代码审查报告第二批 P0 修复)
-- **E-P0-1 Shadow 门禁退出码**：`shadow_verify.py` 此前 `main()` 无任何非零退出路径，防线 1 在 CI 中恒绿。现与 C++ 版 `shadow_verify_cpp.py` 对齐：非预期差异（compile_gap / runtime_gap / output_gap）→ exit 1；match / known_issue / cide_better → 通过。
-- **E-P0-4 Clang 预检 fail fast**：新增 `verify_clang_available()`——Clang 缺失/异常时 exit 2 并给出明确指引（此前 runner 镜像变更导致 clang 不在 PATH 时，所有用例被吞异常归类 `cide_better`，报告反而"更好看"）；Clang 版本串写入 JSON 报告供审计。
+- **E-P0-1 Shadow 门禁退出码**：`shadow_verify.py` 此前 `main()` 无任何非零退出路径，防线 1 在 CI 中恒绿。现与 C++ 版 `shadow_verify_cpp.py` 对齐：非预期差异（compile_gap / runtime_gap / output_gap）→ exit 1；match / known_issue / vitro_better → 通过。
+- **E-P0-4 Clang 预检 fail fast**：新增 `verify_clang_available()`——Clang 缺失/异常时 exit 2 并给出明确指引（此前 runner 镜像变更导致 clang 不在 PATH 时，所有用例被吞异常归类 `vitro_better`，报告反而"更好看"）；Clang 版本串写入 JSON 报告供审计。
 - **门禁化后暴露并处置 4 例存量差异**（此前被恒绿掩盖，非新回归）：
-  - `kr_5_8`（output_gap）：根因是用例自身缺陷——使用 `atof` 却未 `#include <stdlib.h>`，Clang 22 下属非法隐式函数声明，被 `-Wno-implicit-function-declaration` 压制后产生 UB 输出（`0 3.14 42 -1 2.71`，排序错误）；Cide 输出与正确编译的 Clang 完全一致。修复：用例补 `#include <stdlib.h>`，shadow 转为 match。
+  - `kr_5_8`（output_gap）：根因是用例自身缺陷——使用 `atof` 却未 `#include <stdlib.h>`，Clang 22 下属非法隐式函数声明，被 `-Wno-implicit-function-declaration` 压制后产生 UB 输出（`0 3.14 42 -1 2.71`，排序错误）；Vitro 输出与正确编译的 Clang 完全一致。修复：用例补 `#include <stdlib.h>`，shadow 转为 match。
   - `bTree_default` / `infixEvaluation_default` / `spfa_default`（runtime_gap）：E2E 防线 `KNOWN_TEMPLATE_FAILURES` 已记录的模板已知偏差（VM 边界检查比 Clang 严格暴露模板自身越界/空指针缺陷，根因见 `E2E_FAILURES.md`）。shadow 新增 `KNOWN_FAILURE_CASES` 与该常量对齐，归类 known_issue；防线间双向监控：任一防线转绿需同步移除。
 - **E-P0-2 三层对账读取 cargo 退出码**：`ci_three_tier_check.py` 此前只正则解析 `test result:` 行——cargo 编译失败/依赖拉取失败时输出无该行，返回全 0 统计被误判 PASS。现要求 `proc.returncode == 0` 且成功解析到 `test result:` 行，否则 FAIL 并打印输出尾部。
-- **E-P0-3 一致性问题分级计入退出码**：`check_consistency` 拆分 hard/soft——hard（文档声明 `KNOWN_FAILURE` 但测试已全过、失败记录文件缺失）计入 CI 退出码，实现防线 5 声明的「KNOWN_FAILURE 现在通过 → 报错」方向；soft（测试失败时的记录提醒）保持 WARN 不阻塞，因文档为自由文本无法精确匹配用例名（精确对账由 `cide_e2e.rs` 的 `KNOWN_*` 常量闭环承担）。
+- **E-P0-3 一致性问题分级计入退出码**：`check_consistency` 拆分 hard/soft——hard（文档声明 `KNOWN_FAILURE` 但测试已全过、失败记录文件缺失）计入 CI 退出码，实现防线 5 声明的「KNOWN_FAILURE 现在通过 → 报错」方向；soft（测试失败时的记录提醒）保持 WARN 不阻塞，因文档为自由文本无法精确匹配用例名（精确对账由 `vitro_e2e.rs` 的 `KNOWN_*` 常量闭环承担）。
 
 ### Fixed (崩溃止血：2026-09-06 代码审查报告第一批 P0 修复)
 - **F-P0-1 递归深度防护**：深嵌套/粘贴输入不再击穿编译器栈（SIGSEGV 无法被 catch_unwind 捕获，曾导致 IDE 直接崩溃）
-  - `cide_lexer`：`next_token` 的注释/预处理跳过分支由递归改为 `loop` 重派发（2 万行 `//c` 注释曾栈溢出）。
-  - `cide_parser`：新增共享递归深度计数器（`MAX_PARSE_DEPTH = 64`），`parse_statement` / `parse_primary` 入口防护，超限报 `E1006` 并跳到文件尾（6 万层 `{{{{`、5 万层 `((((` 曾栈溢出）。上限取 64 的依据：实测每层括号嵌套消耗 ~3KB 栈（完整优先级链 + 大体积 Expr 帧），300 层即溢出 1MB 线程栈；40 层合法嵌套实测不受影响。
-  - `cide_parser`：`DeclaratorGuard.ptr_count` 新增上限 32（`*` / `&` / `&&` 声明符），超限报 `E1007` 并吞掉剩余修饰符（10 万个 `*` 曾在后续 AST 遍历栈溢出）。
+  - `vitro_lexer`：`next_token` 的注释/预处理跳过分支由递归改为 `loop` 重派发（2 万行 `//c` 注释曾栈溢出）。
+  - `vitro_parser`：新增共享递归深度计数器（`MAX_PARSE_DEPTH = 64`），`parse_statement` / `parse_primary` 入口防护，超限报 `E1006` 并跳到文件尾（6 万层 `{{{{`、5 万层 `((((` 曾栈溢出）。上限取 64 的依据：实测每层括号嵌套消耗 ~3KB 栈（完整优先级链 + 大体积 Expr 帧），300 层即溢出 1MB 线程栈；40 层合法嵌套实测不受影响。
+  - `vitro_parser`：`DeclaratorGuard.ptr_count` 新增上限 32（`*` / `&` / `&&` 声明符），超限报 `E1007` 并吞掉剩余修饰符（10 万个 `*` 曾在后续 AST 遍历栈溢出）。
 - **T-P0-8 自含 struct 环检测**：`struct S { struct S inner; };`（学生写链表节点漏 `*` 的经典错误）曾导致 `compute_type_size` 无限递归栈溢出
-  - `cide_typeck` Pass 1 新增值成员循环包含检测（含数组包裹、struct/union 互相包含），报新增错误码 `E3072_StructSelfContain` 并给出"请改用指针成员"教学提示；指针成员不构成环，合法链表不受影响。
-  - `cide_ast` / `native/src/compiler/ast.rs` 的 `compute_type_size` 引入 `visiting` 路径集合，环出现时返回 0 防崩（双处同步）。
-  - `cide_typeck` 的 `type_contains_resource` / `compute_class_has_resource` 引入 visiting 集合，循环继承（A:B 且 B:A）不再无限递归。
+  - `vitro_typeck` Pass 1 新增值成员循环包含检测（含数组包裹、struct/union 互相包含），报新增错误码 `E3072_StructSelfContain` 并给出"请改用指针成员"教学提示；指针成员不构成环，合法链表不受影响。
+  - `vitro_ast` / `native/src/compiler/ast.rs` 的 `compute_type_size` 引入 `visiting` 路径集合，环出现时返回 0 防崩（双处同步）。
+  - `vitro_typeck` 的 `type_contains_resource` / `compute_class_has_resource` 引入 visiting 集合，循环继承（A:B 且 B:A）不再无限递归。
 - **V-P0-1/2 算术溢出防护**：`INT_MIN % -1`、`LLONG_MIN / -1`、`LLONG_MIN % -1`、`-LLONG_MIN` 在 release 下曾直接 panic（Rust 溢出检查不受构建模式影响）
   - 解释器 `OpCode::Mod` / `DivQ` / `ModQ` / `NegQ` 与 JIT 模板 `tpl_div` / `tpl_mod` / `tpl_neg` 统一补齐 `MIN / -1` 与 `MIN` 取反防护，转为教学 trap 诊断（与 `Div`、`Neg` 既有防护对齐）。
 - **V-P0-3 统一模式 FFI panic 防护**：`run_auto_steps` / `seek_to_step` / `step_next_unified` 三入口补 `catch_unwind`（照抄 `execute_run` 的 B47 模式），panic 不再穿越 FRB 边界（FFI panic 为 UB，曾导致 Flutter 进程 abort），且 panic 后 VM 归还 session 避免状态丢失。
@@ -1505,7 +1526,7 @@ C23 锚定决议下的第一批语言能力（详细口径与差异见 `C_SUBSET
     - Parser：新增 `parse_template_arg_expr`，通过扫描顶层分隔符（逗号/匹配 `>`）并在截取的 token 子流中解析表达式，解决 `>` 被误解析为关系运算符的问题；正确跳过括号、方括号、花括号内的 `>`/`<`。
     - TypeChecker：`try_monomorphize_class` 构建 `type_map` 与 `value_map`；`replace_template_type` 评估 VLA 维度表达式；`replace_template_types_in_expr` 将非类型模板参数标识符替换为整数常量；`evaluate_constexpr` 支持字面量、变量、`sizeof` 与四则运算。
     - 新增 `native/tests/cases/cpp/cpp_nttp_class.cpp` 回归用例（输出 `5`）。
-  - C++ Shadow Verification 扩展至 99 个用例，97 个一致 + 2 个已记录 `clang_compile_fail`（`cpp_cide_vec_class` / `cpp_cide_list_class`）。
+  - C++ Shadow Verification 扩展至 99 个用例，97 个一致 + 2 个已记录 `clang_compile_fail`（`cpp_vitro_vec_class` / `cpp_vitro_list_class`）。
 - **C++ 扩展 Stage D：自定义拷贝构造函数**
   - 支持 `Class(const Class& other)` 用户定义拷贝构造函数；`Class b(a);` 与 `Class b = a;` 两种初始化语法均会调用拷贝构造。
   - TypeChecker：新增 `constructor_mangled_name` / `is_copy_constructor_param` 辅助函数；`resolve_constructor_overload` 按实参类型选择 `__ctor__{Class}__copy`；`try_process_ctor_init` 将拷贝初始化重写为拷贝构造调用；`check_assignable` 允许 `const Class&` 绑定到非 const `Class` 对象。
@@ -1514,36 +1535,36 @@ C23 锚定决议下的第一批语言能力（详细口径与差异见 `C_SUBSET
 - **教学用例库大规模扩展**：继续推进维护计划任务 G，新增 LeetCode / K&R / C++ E2E 用例
   - LeetCode 防线扩展至 128 题（新增 `lc_7` Reverse Integer、`lc_67` Add Binary、`lc_83` Remove Duplicates from Sorted List、`lc_190` Reverse Bits、`lc_191` Number of 1 Bits、`lc_202` Happy Number、`lc_205` Isomorphic Strings、`lc_219` Contains Duplicate II、`lc_231` Power of Two、`lc_263` Ugly Number、`lc_292` Nim Game、`lc_345` Reverse Vowels of a String、`lc_349` Intersection of Two Arrays、`lc_367` Valid Perfect Square、`lc_383` Ransom Note、`lc_389` Find the Difference、`lc_392` Is Subsequence、`lc_401` Binary Watch、`lc_409` Longest Palindrome、`lc_412` Fizz Buzz、`lc_415` Add Strings 等）
   - K&R 新增 5 个变体：`kr_1_hello`、`kr_2_celsius`、`kr_4_atoi`、`kr_5_itoa`、`kr_6_getword`；K&R 防线扩展至 81 个用例
-  - C++ E2E 新增 11 题：`cpp_pair_template`、`cpp_template_func_multi`、`cpp_reference_member`、`cpp_template_array`、`cpp_template_stack`、`cpp_unique_ptr_reset`、`cpp_class_array`、`cpp_ctor_init_list`、`cpp_reference_param_chain`、`cpp_function_overload_template`、`cpp_cide_vec_class`；C++ E2E 防线扩展至 72 题
-  - 诚实记录 Cide C++ 子集当前已支持默认参数、嵌套类 `Outer::Inner` 实例化、类模板非类型模板参数、自定义拷贝构造函数（`cide_vec<T>` / `cide_list<T>` 类类型模板实参已支持）；函数模板显式 `<>` 调用等特性暂不支持
+  - C++ E2E 新增 11 题：`cpp_pair_template`、`cpp_template_func_multi`、`cpp_reference_member`、`cpp_template_array`、`cpp_template_stack`、`cpp_unique_ptr_reset`、`cpp_class_array`、`cpp_ctor_init_list`、`cpp_reference_param_chain`、`cpp_function_overload_template`、`cpp_vitro_vec_class`；C++ E2E 防线扩展至 72 题
+  - 诚实记录 Vitro C++ 子集当前已支持默认参数、嵌套类 `Outer::Inner` 实例化、类模板非类型模板参数、自定义拷贝构造函数（`vitro_vec<T>` / `vitro_list<T>` 类类型模板实参已支持）；函数模板显式 `<>` 调用等特性暂不支持
   - C Shadow Verification 更新为 616/620，C++ Shadow Verification 更新为 100 个用例（98 个一致 + 2 个已记录 `clang_compile_fail`）
-- **CLI `unified` 命令支持 `--max-steps` 选项**：`cide_cli unified <file> [--max-steps <n>]` 可自定义统一模式最大执行步数（默认 100_000），便于教学场景中长程序的时间旅行调试与性能基线测试
+- **CLI `unified` 命令支持 `--max-steps` 选项**：`vitro_cli unified <file> [--max-steps <n>]` 可自定义统一模式最大执行步数（默认 100_000），便于教学场景中长程序的时间旅行调试与性能基线测试
 - **统一模式后端性能基线**：新增 `native/benches/unified_perf_baseline.c`（50 个逆序元素冒泡排序，约 10 万 VM 步）与 `scripts/unified_perf_baseline.py`，生成 `reports/unified_perf_baseline.md` 记录后端吞吐（当前约 18,500 步/秒，release 模式）
 - **统一模式 frameCache 滑动窗口**：为 `UnifiedEngine.frame_cache` 引入有界滑动窗口（默认 2000 帧，超出时丢弃最早的 20%），解决长程序执行时内存无界增长问题
   - Rust 后端：`UnifiedEngine` 新增 `frame_cache_window_size`、`frame_cache_trim_ratio`、`frame_cache_start_step`；`run_batch` 自动截断，`seek_to` 支持窗口外懒加载重放
   - Dart 前端：`UnifiedState` 新增 `frameCacheStartStep`，`UnifiedNotifier` 同步后端窗口；所有读取 `frameCache[currentStep]` 的 Widget 改为按相对索引访问
-  - 传输层：`AutoStepResult` / `StepStreamBatch` 增加 `cache_start_step`，`api/cide.rs` 暴露 `get_frame_cache_start_step()`
+  - 传输层：`AutoStepResult` / `StepStreamBatch` 增加 `cache_start_step`，`api/vitro.rs` 暴露 `get_frame_cache_start_step()`
   - `VarHistoryTab` 改为显示当前窗口内的变量历史，避免遍历全量帧
   - 新增 `native/tests/unified_engine_window_test.rs` 验证窗口化后的公共 API 行为
 - **指针复合赋值运算符全面拓展**：支持指针与整数的 `+=` / `-=` 复合赋值
-  - `cide_typeck`：对 `AddAssign` / `SubAssign` 单独分支，允许左侧为完整对象类型指针（含 `void*`）、右侧为整数；函数指针、指针与指针的运算、其他复合赋值运算符保持清晰报错（`E3045_CompoundAssignType`）。
-  - `cide_codegen`：在 `gen_assign` 中提取 `ptr_step` 并在 `AddAssign` / `SubAssign` 分支中生成 `PushConst step`、`Mul`、`Add`/`Sub` 序列，复用现有标量复合赋值的左值形态处理（局部/全局/静态/解引用/成员/数组索引）。
+  - `vitro_typeck`：对 `AddAssign` / `SubAssign` 单独分支，允许左侧为完整对象类型指针（含 `void*`）、右侧为整数；函数指针、指针与指针的运算、其他复合赋值运算符保持清晰报错（`E3045_CompoundAssignType`）。
+  - `vitro_codegen`：在 `gen_assign` 中提取 `ptr_step` 并在 `AddAssign` / `SubAssign` 分支中生成 `PushConst step`、`Mul`、`Add`/`Sub` 序列，复用现有标量复合赋值的左值形态处理（局部/全局/静态/解引用/成员/数组索引）。
   - 新增 9 个 `baseline/pointer_add_assign*.c` 回归用例，覆盖普通数据指针、`char*`、`double*`、`struct S*`、多级指针 `int**`、负整数偏移、结构体成员指针、`void*` 扩展以及右侧带副作用表达式。
-  - 诚实记录：`void*` 算术按 GCC/Clang 扩展以 1 字节处理，严格 C 标准未定义；复合赋值表达式返回值在 Cide 中为右值指针，与 C 标准左值语义存在差异。
+  - 诚实记录：`void*` 算术按 GCC/Clang 扩展以 1 字节处理，严格 C 标准未定义；复合赋值表达式返回值在 Vitro 中为右值指针，与 C 标准左值语义存在差异。
 - **C11 `_Generic` 泛型选择支持**：为信语言输出的类型分发提供编译期类型选择能力
-  - `cide_lexer`：新增 `TokenType::Generic` 关键字 token，映射 `_Generic`。
-  - `cide_ast`：新增 `Expr::Generic` 节点，包含控制表达式、类型关联列表与可选 `default` 分支。
-  - `cide_parser`：在 `parse_primary` 中解析 `_Generic(assignment-expr, type-name: expr, ..., default: expr)`。
-  - `cide_typeck`：对控制表达式类型执行数组到指针退化后，按精确类型匹配选择关联表达式；无匹配且无 `default` 时报 `E3004_TypeMismatch`。
-  - `cide_codegen`：直接生成选中关联表达式（或 `default`）的字节码，未选中分支不产生任何指令。
+  - `vitro_lexer`：新增 `TokenType::Generic` 关键字 token，映射 `_Generic`。
+  - `vitro_ast`：新增 `Expr::Generic` 节点，包含控制表达式、类型关联列表与可选 `default` 分支。
+  - `vitro_parser`：在 `parse_primary` 中解析 `_Generic(assignment-expr, type-name: expr, ..., default: expr)`。
+  - `vitro_typeck`：对控制表达式类型执行数组到指针退化后，按精确类型匹配选择关联表达式；无匹配且无 `default` 时报 `E3004_TypeMismatch`。
+  - `vitro_codegen`：直接生成选中关联表达式（或 `default`）的字节码，未选中分支不产生任何指令。
   - 新增 `baseline/c11_generic.c` 回归用例，Shadow Verification 与 Clang 输出一致（`10 1 2`）。
   - 诚实记录：当前为精确类型匹配（含数组退化），未完整实现 C11 类型兼容规则（如 `int` 与 `signed int` 兼容、qualifier 忽略等），教学场景常用类型分发足够使用。
 - **C99/C11 复合字面量支持**：为信语言生成的结构体构造提供表达式级初始化能力
-  - `cide_ast`：新增 `Expr::CompoundLiteral` 节点，包含目标类型与初始化列表。
-  - `cide_parser`：在 `parse_primary` 与 `parse_unary` 的 cast 回退中识别 `(type-name) { initializer-list }`，避免与强制转换 `(Type)expr` 冲突。
-  - `cide_typeck`：对结构体/数组/标量复合字面量分别调用 `check_struct_initializer` / `check_array_initializer` / 标量赋值检查；数组未指定大小时由初始化列表长度推断并同步 `array_size` 与 `dims`。
-  - `cide_codegen`：新增 `expr/compound_literal.rs`，在栈帧上分配临时空间、调用现有局部变量初始化逻辑、在栈顶留下临时对象地址；复合字面量作为 lvalue 可用于取地址。
-  - `cide_codegen` 变量声明初始化：识别右侧 `CompoundLiteral`，数组/结构体场景直接展开为对应初始化列表，标量场景从临时地址加载值后存储。
+  - `vitro_ast`：新增 `Expr::CompoundLiteral` 节点，包含目标类型与初始化列表。
+  - `vitro_parser`：在 `parse_primary` 与 `parse_unary` 的 cast 回退中识别 `(type-name) { initializer-list }`，避免与强制转换 `(Type)expr` 冲突。
+  - `vitro_typeck`：对结构体/数组/标量复合字面量分别调用 `check_struct_initializer` / `check_array_initializer` / 标量赋值检查；数组未指定大小时由初始化列表长度推断并同步 `array_size` 与 `dims`。
+  - `vitro_codegen`：新增 `expr/compound_literal.rs`，在栈帧上分配临时空间、调用现有局部变量初始化逻辑、在栈顶留下临时对象地址；复合字面量作为 lvalue 可用于取地址。
+  - `vitro_codegen` 变量声明初始化：识别右侧 `CompoundLiteral`，数组/结构体场景直接展开为对应初始化列表，标量场景从临时地址加载值后存储。
   - 新增 `baseline/compound_literal.c` 回归用例，Shadow Verification 与 Clang 输出一致（`1 5 20 7`）。
   - 诚实记录：复合字面量生命周期简化为当前块结束；未完整实现 C11 所有类型兼容/qualifier 规则；复杂嵌套 designated initializer 按教学子集处理。
 
@@ -1553,11 +1574,11 @@ C23 锚定决议下的第一批语言能力（详细口径与差异见 `C_SUBSET
   - `CodeTemplate` 新增 `ext` 字段；`completeTutorial` 根据模板扩展名将当前文件切换为 `main.c` 或 `main.cpp`，确保 Rust 后端按正确语言模式编译。
   - `IdeState.copyWith` 新增 `clearActiveTutorial` 标志，修复 `activeTutorial: null` 无法清除教程状态的问题；教程模式下隐藏 `ExecutionControlPanel`，避免上一段运行的残留进度条/覆盖率造成“无法退出模板”的错觉。
   - `ExecutionControlPanel._buildCoverageText` 前端过滤超出当前源码行号范围的 heatmap 条目，解决覆盖率显示超过 100%（如 633.3%）的问题。
-    - **诚实记录**：这只是前端绕过，热力图底层仍混有标准库/预编译字节码行号。完整修复需要给 `cide_shared::SourceLoc` 增加文件标识字段，并在 VM 执行层只记录用户主文件行号；~~当前因改动面大、回归风险高而未实施~~ **已实施**，详见 `docs/current/TEMPLATE_GUIDE.md`。
+    - **诚实记录**：这只是前端绕过，热力图底层仍混有标准库/预编译字节码行号。完整修复需要给 `vitro_shared::SourceLoc` 增加文件标识字段，并在 VM 执行层只记录用户主文件行号；~~当前因改动面大、回归风险高而未实施~~ **已实施**，详见 `docs/current/TEMPLATE_GUIDE.md`。
 - **彻底修复覆盖率超过 100% 的绕过问题**：从 VM 层区分用户源码与标准库/预编译字节码行号，移除前端过滤 workaround。
-  - 给 `cide_shared::SourceLoc` 增加 `file_id: i32` 字段（0 为用户主文件，非 0 为外部文件），并通过 `#[serde(default)]` 保持与旧 `bytecode_libc_data.json` 产物的兼容。
-  - `cide_vm::bytecode_libc_loader` 加载预编译产物后，将所有 libc 指令的 `loc.file_id` 置为 1。
-  - `cide_vm::core::executor` 记录 heatmap 时只统计 `file_id == 0` 的指令，从源头避免 Bytecode Libc 行号混入。
+  - 给 `vitro_shared::SourceLoc` 增加 `file_id: i32` 字段（0 为用户主文件，非 0 为外部文件），并通过 `#[serde(default)]` 保持与旧 `bytecode_libc_data.json` 产物的兼容。
+  - `vitro_vm::bytecode_libc_loader` 加载预编译产物后，将所有 libc 指令的 `loc.file_id` 置为 1。
+  - `vitro_vm::core::executor` 记录 heatmap 时只统计 `file_id == 0` 的指令，从源头避免 Bytecode Libc 行号混入。
   - Flutter 端 `ExecutionControlPanel._buildCoverageText` 移除按 `totalLines` 过滤的绕过逻辑；覆盖率百分比现在真实反映用户代码执行情况。
   - 同步清理已知失败：`threadedBinaryTree_default` 已因模板源码修复（标准头节点法遍历）通过，从 `KNOWN_TEMPLATE_FAILURES` 与 `E2E_FAILURES.md` 中移除并归档。
 - **模板源码缺陷修复**
@@ -1572,89 +1593,89 @@ C23 锚定决议下的第一批语言能力（详细口径与差异见 `C_SUBSET
 
 ### Changed (Workspace 模块化拆分)
 - **Rust 后端单 crate 拆分为多 crate workspace**：在 `native/Cargo.toml` 建立 `[workspace]`，将编译器/运行时各阶段下沉为独立 crate，降低编译缓存粒度与模块耦合
-  - 新增 `crates/cide_shared`（`SourceLoc`、`ErrorCode` 等共享基础类型）
-  - 新增 `crates/cide_ast`（AST 节点与类型系统）
-  - 新增 `crates/cide_runtime`（`RuntimeState`/`MemoryState`、符号表、内存布局常量、`unified` 基础数据）
-  - 新增 `crates/cide_vm`（CideVM、host 函数、VFS、JIT、快照）
-  - 新增 `crates/cide_lexer`（词法分析器）
-  - 新增 `crates/cide_parser`（语法分析器）
-  - 新增 `crates/cide_cpp_frontend`（C++ 内置容器布局与类型映射）
-  - 新增 `crates/cide_typeck`（类型检查器）
-  - 新增 `crates/cide_codegen`（字节码生成器）
-  - 新增 `crates/cide_algorithm_steps`（算法步骤语义标注）
-  - `cide_native` 通过 `pub use cide_xxx as xxx;` 保持既有 `crate::compiler::xxx` / `crate::vm::xxx` / `crate::unified::algorithm_steps` 路径兼容
-  - `CheckpointManager` 从 `native/src/unified/checkpoint.rs` 下沉到 `cide_vm::snapshot`，签名去除 `Session`/`StepMeta` 依赖
+  - 新增 `crates/vitro_shared`（`SourceLoc`、`ErrorCode` 等共享基础类型）
+  - 新增 `crates/vitro_ast`（AST 节点与类型系统）
+  - 新增 `crates/vitro_runtime`（`RuntimeState`/`MemoryState`、符号表、内存布局常量、`unified` 基础数据）
+  - 新增 `crates/vitro_vm`（VitroVM、host 函数、VFS、JIT、快照）
+  - 新增 `crates/vitro_lexer`（词法分析器）
+  - 新增 `crates/vitro_parser`（语法分析器）
+  - 新增 `crates/vitro_cpp_frontend`（C++ 内置容器布局与类型映射）
+  - 新增 `crates/vitro_typeck`（类型检查器）
+  - 新增 `crates/vitro_codegen`（字节码生成器）
+  - 新增 `crates/vitro_algorithm_steps`（算法步骤语义标注）
+  - `vitro_native` 通过 `pub use vitro_xxx as xxx;` 保持既有 `crate::compiler::xxx` / `crate::vm::xxx` / `crate::unified::algorithm_steps` 路径兼容
+  - `CheckpointManager` 从 `native/src/unified/checkpoint.rs` 下沉到 `vitro_vm::snapshot`，签名去除 `Session`/`StepMeta` 依赖
   - 引入 `VmContext` 替代部分 `Session` 上帝对象，切断 `vm` 与 `session` 的循环依赖
-  - 受 FRB 孤儿规则与 `Session` 耦合限制，`native/src/unified/`（含 `StepPayload` 等 FRB 导出类型）、`native/src/engine/`、`native/src/api/`、`native/src/diagnostics/` 暂保留在 `cide_native` 内部，已诚实记录为后续拆分障碍
+  - 受 FRB 孤儿规则与 `Session` 耦合限制，`native/src/unified/`（含 `StepPayload` 等 FRB 导出类型）、`native/src/engine/`、`native/src/api/`、`native/src/diagnostics/` 暂保留在 `vitro_native` 内部，已诚实记录为后续拆分障碍
 
 ### Changed (架构重构)
 - **内置容器布局解耦（CPP_BUILTIN_LAYOUT_DECOUPLING_PLAN）**：将 `vector<int>`/`vector<float>`/`vector<char>`/`string`/`list<int>` 的布局与方法签名从 Rust 硬编码迁移到 `.cpp` 接口声明文件
-  - 新建 `native/runtime_libc/cide/{vector_int,vector_float,vector_char,string,list_int}.cpp` 作为唯一真相来源，通过 `clang++ -fsyntax-only` 语法验证
+  - 新建 `native/runtime_libc/vitro/{vector_int,vector_float,vector_char,string,list_int}.cpp` 作为唯一真相来源，通过 `clang++ -fsyntax-only` 语法验证
   - 新增 `scripts/extract_cpp_builtin_layout.py` 轻量解析脚本，从 `.cpp` 提取字段、方法签名并生成 `native/src/compiler/cpp_frontend/builtin_layout_data.json`
   - 重写 `builtin_layout.rs`：改为 `include_str!("builtin_layout_data.json")` + `LazyLock` 加载，零硬编码容器信息
-  - 重写 `type_map.rs`：改为 JSON 加载 `cpp_type_to_cide` / `map_container_method`，零硬编码方法映射
+  - 重写 `type_map.rs`：改为 JSON 加载 `cpp_type_to_vitro` / `map_container_method`，零硬编码方法映射
   - `codegen/mod.rs` 与 `typeck/cpp_class_layout.rs` 中的硬编码 `container_mappings` 列表改为动态遍历 `builtin_class_mappings()`
   - `scripts/precompile_bytecode_libc.py` 扩展 glob 支持 `.cpp`（当前仅识别，不预编译为字节码）
-  - 删除已废弃的 `native/runtime_libc/cide/layouts.toml`
+  - 删除已废弃的 `native/runtime_libc/vitro/layouts.toml`
   - 全部 600+ 测试通过，零回归
 
 ### Fixed (标准库 I/O 行为修复)
-- **修复 `fputs(str, stdout)` 无输出**：`crates/cide_vm/src/host/file.rs` 的 `host_fputs` 现在识别 lexer 预定义的 `stdout`(1)/`stderr`(2) 宏 fd，将字符串直接追加到 `RuntimeState.output_lines`；普通 `FILE*` 文件流写入行为保持不变；新增 `end_to_end_extra_test::test_e2e_fputs_stdout` 回归用例
-- **修复 `fclose` 后 VFS `FILE*` 被误报为内存泄漏**：`crates/cide_vm/src/host/file.rs` 的 `host_fclose` 现在除关闭 VFS 文件描述符外，还会释放 `host_fopen` 在 VM Heap 中为 `FILE*` 结构体分配的 4 字节内存；stdout/stderr 等非堆分配 stream 找不到对应 region 时安全忽略；新增 `native/tests/cases/baseline/fclose_leak.c` 回归用例
+- **修复 `fputs(str, stdout)` 无输出**：`crates/vitro_vm/src/host/file.rs` 的 `host_fputs` 现在识别 lexer 预定义的 `stdout`(1)/`stderr`(2) 宏 fd，将字符串直接追加到 `RuntimeState.output_lines`；普通 `FILE*` 文件流写入行为保持不变；新增 `end_to_end_extra_test::test_e2e_fputs_stdout` 回归用例
+- **修复 `fclose` 后 VFS `FILE*` 被误报为内存泄漏**：`crates/vitro_vm/src/host/file.rs` 的 `host_fclose` 现在除关闭 VFS 文件描述符外，还会释放 `host_fopen` 在 VM Heap 中为 `FILE*` 结构体分配的 4 字节内存；stdout/stderr 等非堆分配 stream 找不到对应 region 时安全忽略；新增 `native/tests/cases/baseline/fclose_leak.c` 回归用例
 
 ### Fixed (VLA 运行时边界检查)
-- **修复 VLA 数组索引缺失边界检查**：`cide_codegen::expr::gen_index` 现在对首维为变量表达式的 VLA 生成运行时边界检查；新增 `TrapBoundsVla` opcode（值为 129），在索引前将 VLA 维度表达式求值并压栈，VM 运行时将索引与该运行时边界比较，越界时触发教学诊断；新增 `native/tests/cases/baseline/vla_bounds.c` 回归用例。参数退化为指针的 VLA 形参仍无法在调用点获知边界，保持跳过。
+- **修复 VLA 数组索引缺失边界检查**：`vitro_codegen::expr::gen_index` 现在对首维为变量表达式的 VLA 生成运行时边界检查；新增 `TrapBoundsVla` opcode（值为 129），在索引前将 VLA 维度表达式求值并压栈，VM 运行时将索引与该运行时边界比较，越界时触发教学诊断；新增 `native/tests/cases/baseline/vla_bounds.c` 回归用例。参数退化为指针的 VLA 形参仍无法在调用点获知边界，保持跳过。
 
 ### Fixed (参数化宏扩展支持)
-- **修复参数化宏调用后带分号无法解析**：`cide_lexer` 在参数化宏展开时，若宏体为大括号块且调用位置后紧跟分号，则动态将宏体包装为 `do { ... } while(0)`，使 `SWAP(int,x,y);` 在 `if/else` 等语句中可正确解析；新增 `native/tests/end_to_end_extra_test.rs::test_e2e_parametric_macro_swap_semicolon` 回归测试。⚠️ 此为 Cide 教学子集扩展，Clang 标准模式仍报"预期表达式"；若需严格兼容 Clang，建议宏体手动使用 `do { ... } while(0)`。
+- **修复参数化宏调用后带分号无法解析**：`vitro_lexer` 在参数化宏展开时，若宏体为大括号块且调用位置后紧跟分号，则动态将宏体包装为 `do { ... } while(0)`，使 `SWAP(int,x,y);` 在 `if/else` 等语句中可正确解析；新增 `native/tests/end_to_end_extra_test.rs::test_e2e_parametric_macro_swap_semicolon` 回归测试。⚠️ 此为 Vitro 教学子集扩展，Clang 标准模式仍报"预期表达式"；若需严格兼容 Clang，建议宏体手动使用 `do { ... } while(0)`。
 
 ### Changed (工程质量)
 - **拆分 `native/src/unified/trace_analyzer.rs` 继续推进维护计划任务 B**：将 838 行的统一模式根因推断模块按运行时陷阱类型拆分为 `trace_analyzer/bounds.rs`（数组越界 / `BoundsCategory` 推断）、`trace_analyzer/use_after_free.rs`、`trace_analyzer/double_free.rs`、`trace_analyzer/div_zero.rs`、`trace_analyzer/null_deref.rs`、`trace_analyzer/utils.rs`（共享工具 / `LoopInfo`）、`trace_analyzer/tests.rs`（单元测试），入口文件 `trace_analyzer/mod.rs` 仅保留 `TraceAnalyzer::analyze_trap` 分发逻辑（55 行）；所有子文件 <800 行，C/C++ Shadow Verification 无新增失败
 - **生产代码 `unwrap`/`expect` 收敛**：继续推进维护计划任务 C，移除 5 处生产路径 `unwrap`
-  - `cide_codegen::lib.rs` 类大小拓扑计算：将 `class_defs.get(class_name).unwrap()` 改为 `if let Some(class)` / `continue`
-  - `cide_codegen::expr::call.rs`：`gen_call` / `gen_call_ptr` 中结构体/类返回值临时偏移从 `ret_temp_offset.unwrap()` 改为 `if let Some(offset)`，删除冗余 `is_struct_ret` 变量
-  - `cide_codegen::expr::struct_.rs`：类方法调用返回值临时偏移同样改为 `if let Some(offset)`
+  - `vitro_codegen::lib.rs` 类大小拓扑计算：将 `class_defs.get(class_name).unwrap()` 改为 `if let Some(class)` / `continue`
+  - `vitro_codegen::expr::call.rs`：`gen_call` / `gen_call_ptr` 中结构体/类返回值临时偏移从 `ret_temp_offset.unwrap()` 改为 `if let Some(offset)`，删除冗余 `is_struct_ret` 变量
+  - `vitro_codegen::expr::struct_.rs`：类方法调用返回值临时偏移同样改为 `if let Some(offset)`
   - 生产代码 `unwrap`/`expect` 从 17 处降至 0 处，全量从 45 处降至 28 处
   - 确认 `templates/bTree/source.c` 的 `bTree_default` 运行时缺口为模板代码访问未初始化子节点指针的已知偏差（`E2E_FAILURES.md` 已记录为 `KNOWN_DIVERGENCE`），与本次 unwrap 收敛无关
 
 ### Added (C++ const 引用参数)
 - **支持 `const T&` 函数/方法参数绑定到右值**：此前 `const int& x` 参数只能绑定左值变量，绑定字面量或表达式右值会在 CodeGen 阶段失败。修复分为 TypeChecker 与 CodeGen 两层：
-  - `cide_typeck::decl.rs` / `expr/mod.rs` / `expr/call.rs`：统一函数调用、方法调用、函数指针调用的参数检查，对 `const T&` 形参允许右值实参隐式取地址；对非 const 引用形参绑定右值给出明确错误诊断。
-  - `cide_codegen::expr::unary.rs`：`UnaryOp::Addr` 对字面量 / 调用返回值等右值表达式自动物化临时局部变量（`StoreLocal`/`StoreLocalD`/`StoreLocalQ`），再返回临时变量地址，使被调用函数可通过引用安全读取。
-  - `cide_ast::types.rs` 新增 `is_const_reference()` 辅助方法；const 判断同时兼容 `const int&`（const 在 base）与 `int const&`（const 在引用）两种写法。
+  - `vitro_typeck::decl.rs` / `expr/mod.rs` / `expr/call.rs`：统一函数调用、方法调用、函数指针调用的参数检查，对 `const T&` 形参允许右值实参隐式取地址；对非 const 引用形参绑定右值给出明确错误诊断。
+  - `vitro_codegen::expr::unary.rs`：`UnaryOp::Addr` 对字面量 / 调用返回值等右值表达式自动物化临时局部变量（`StoreLocal`/`StoreLocalD`/`StoreLocalQ`），再返回临时变量地址，使被调用函数可通过引用安全读取。
+  - `vitro_ast::types.rs` 新增 `is_const_reference()` 辅助方法；const 判断同时兼容 `const int&`（const 在 base）与 `int const&`（const 在引用）两种写法。
   - 新增 `native/tests/cases/cpp/cpp_const_reference_param.cpp` 回归用例，覆盖字面量、变量、表达式右值三种绑定场景。
 
 ### Added (C++ 内置容器类类型模板实参)
-- **支持 `cide_vec<T>` / `cide_list<T>` 类类型模板实参**：`crates/cide_typeck/src/cpp_monomorph.rs` 新增 `try_synthesize_builtin_container_class` / `synthesize_vec_class` / `synthesize_list_class`，当内置容器 `cide_vec<T>` / `cide_list<T>` 的模板实参为类类型时，合成走普通类模板路径的容器实例化
-  - `cide_vec<T>`：默认构造、析构、`size()`、`get(int)`、`push_back(T)`，自动扩容与元素拷贝/析构
-  - `cide_list<T>`：合成辅助节点类 `cide_list_node<T>`，支持默认构造、析构、`size()`、`get(int)`、`push_back(T)`、自动节点释放
-  - `crates/cide_codegen/src/expr/new_delete.rs` 修复 `delete[]` 释放逻辑：无论元素类型是否有显式析构函数，都必须释放 `new[]` 返回地址前 4 字节处的 `base` 地址，避免类类型数组泄漏
-  - `crates/cide_codegen/src/lib.rs` 修复类大小拓扑计算：字段类型为类类型时，必须等依赖类大小计算完成后才计算当前类，避免合成嵌套类（如 `cide_list_node<T>`）时因依赖类尚未入 `class_sizes` 导致大小为 0
-  - `crates/cide_parser/src/cpp.rs` 透传类类型模板实参
-  - 新增 `native/tests/cases/cpp/cpp_cide_vec_class.cpp` / `cpp_cide_list_class.cpp` 与 golden，验证 `push_back` / `get` / 自动构造析构
-  - `scripts/shadow_verify_cpp.py` 支持首行 `// category: gap` 标记，用于 Clang++ 无法直接编译的 Cide 内置容器用例
+- **支持 `vitro_vec<T>` / `vitro_list<T>` 类类型模板实参**：`crates/vitro_typeck/src/cpp_monomorph.rs` 新增 `try_synthesize_builtin_container_class` / `synthesize_vec_class` / `synthesize_list_class`，当内置容器 `vitro_vec<T>` / `vitro_list<T>` 的模板实参为类类型时，合成走普通类模板路径的容器实例化
+  - `vitro_vec<T>`：默认构造、析构、`size()`、`get(int)`、`push_back(T)`，自动扩容与元素拷贝/析构
+  - `vitro_list<T>`：合成辅助节点类 `vitro_list_node<T>`，支持默认构造、析构、`size()`、`get(int)`、`push_back(T)`、自动节点释放
+  - `crates/vitro_codegen/src/expr/new_delete.rs` 修复 `delete[]` 释放逻辑：无论元素类型是否有显式析构函数，都必须释放 `new[]` 返回地址前 4 字节处的 `base` 地址，避免类类型数组泄漏
+  - `crates/vitro_codegen/src/lib.rs` 修复类大小拓扑计算：字段类型为类类型时，必须等依赖类大小计算完成后才计算当前类，避免合成嵌套类（如 `vitro_list_node<T>`）时因依赖类尚未入 `class_sizes` 导致大小为 0
+  - `crates/vitro_parser/src/cpp.rs` 透传类类型模板实参
+  - 新增 `native/tests/cases/cpp/cpp_vitro_vec_class.cpp` / `cpp_vitro_list_class.cpp` 与 golden，验证 `push_back` / `get` / 自动构造析构
+  - `scripts/shadow_verify_cpp.py` 支持首行 `// category: gap` 标记，用于 Clang++ 无法直接编译的 Vitro 内置容器用例
 
 ### Fixed (变参函数支持)
 - **修复 `va_list` / `va_start` / `va_arg` / `va_end` 自定义变参函数不支持**：
-  - 根因是 Parser 将函数调用统一解析为 `Expr::CallPtr`，而 `cide_codegen::expr::call` 仅在 `gen_call` 中处理变参 `CallVar`，导致变参调用走普通 `Call` 指令，只弹出命名参数；修复方案为在 `gen_call_ptr` 中同步识别变参函数并生成 `PushConst total_arg_words` + `CallVar`。
+  - 根因是 Parser 将函数调用统一解析为 `Expr::CallPtr`，而 `vitro_codegen::expr::call` 仅在 `gen_call` 中处理变参 `CallVar`，导致变参调用走普通 `Call` 指令，只弹出命名参数；修复方案为在 `gen_call_ptr` 中同步识别变参函数并生成 `PushConst total_arg_words` + `CallVar`。
   - 修复 `CallVar` 总参数 word 数计算：对变参实参按实际 `type_size` 计算 word 数（支持 `double`/`long long` 等 8 字节类型），并对 `float` 等类型应用 C 默认实参提升（`float` → `double`，`char` → `int`）。
   - 修复 `double`/`long long` 变参在栈帧中的存储顺序：codegen 对变参 callee 的 8 字节实参使用 `StoreLocalD/Q` + 高低 32 位分段加载，保证 VM `do_call_inner` 顺序存储后内存为小端布局。
-  - 调整 `stdarg.h` 与 lexer 预定义宏：`__cide_va_arg` 返回 `void*`，`va_arg(ap, type)` 宏展开为 `*(type*)__cide_va_arg(&(ap), sizeof(type))`，从而直接按目标类型位模式读取内存。
+  - 调整 `stdarg.h` 与 lexer 预定义宏：`__vitro_va_arg` 返回 `void*`，`va_arg(ap, type)` 宏展开为 `*(type*)__vitro_va_arg(&(ap), sizeof(type))`，从而直接按目标类型位模式读取内存。
   - 修复 `gen_expr_with_cast` 对 `long long` 目标类型的错误截断：原实现对所有非浮点目标都把 `LongLong` 表达式截断为 `int`，导致 `long long total = total + x;` 等赋值只保留低 32 位；改为传递完整目标类型，仅在目标为 `int`/`char` 时才截断。
   - 修复复合赋值（`+=`/`-=`/`*=`/`/=`）对 `long long` 使用 32 位指令的问题：在 `gen_assign` 的复合赋值闭包中为 `left_is_long_long` 分支添加 `AddQ`/`SubQ`/`MulQ`/`DivQ`。
   - 新增 `native/tests/cases/baseline/variadic.c` 回归用例，覆盖 `int`/`double`/`long long` 变参求和。
 
 ### Fixed (类型系统行为修复)
-- **修复函数返回 `double` 值异常**：根因是 `return` 语句未对返回值表达式插入隐式类型转换，`return 2.5;` 中的 `2.5` 被解析为 `float` 字面量，导致返回类型为 `double` 时生成 `PushConstF` 而非 `PushConstD`。修复方案为 `cide_typeck::decl.rs` 在 `return` 语句 `check_assignable` 成功后调用 `insert_implicit_cast`，并新增 `native/tests/cases/baseline/float_func_return.c` 回归用例；`native/tests/cases/leetcode/lc_4.c` 恢复为原始 `double` 返回实现
+- **修复函数返回 `double` 值异常**：根因是 `return` 语句未对返回值表达式插入隐式类型转换，`return 2.5;` 中的 `2.5` 被解析为 `float` 字面量，导致返回类型为 `double` 时生成 `PushConstF` 而非 `PushConstD`。修复方案为 `vitro_typeck::decl.rs` 在 `return` 语句 `check_assignable` 成功后调用 `insert_implicit_cast`，并新增 `native/tests/cases/baseline/float_func_return.c` 回归用例；`native/tests/cases/leetcode/lc_4.c` 恢复为原始 `double` 返回实现
 
 ### Fixed (标准库 I/O 行为修复)
-- **修复 `scanf`/`sscanf` 的 `%s` 格式符不支持**：`crates/cide_vm/src/host/io.rs` 的 `host_scanf_n`/`host_sscanf` 现在处理 `'s'` 格式符，跳过前导空白、读取非空白字符序列并以 `'\0'` 结尾写入目标缓冲区；新增 `native/tests/cases/baseline/scanf_string.c` 回归用例
+- **修复 `scanf`/`sscanf` 的 `%s` 格式符不支持**：`crates/vitro_vm/src/host/io.rs` 的 `host_scanf_n`/`host_sscanf` 现在处理 `'s'` 格式符，跳过前导空白、读取非空白字符序列并以 `'\0'` 结尾写入目标缓冲区；新增 `native/tests/cases/baseline/scanf_string.c` 回归用例
 
 ### Fixed (代码生成行为修复)
-- **修复复合副作用数组索引触发 NULL 指针陷阱**：形如 `a[++i] = b[j--]` 的表达式在 Clang/GCC 下正确，但 Cide 运行时访问 NULL 指针区域。根因是 `crates/cide_codegen/src/expr/unary.rs` 的 `gen_mem_inc_dec` 与 `gen_assign` 的 Index 赋值复用 `temp_slot0`，右侧索引副作用覆盖了左侧地址临时变量。修复方案为 `gen_mem_inc_dec` 改用 `temp_slot3` 保存新值；新增 `native/tests/cases/baseline/side_effect_index.c` 回归用例
+- **修复复合副作用数组索引触发 NULL 指针陷阱**：形如 `a[++i] = b[j--]` 的表达式在 Clang/GCC 下正确，但 Vitro 运行时访问 NULL 指针区域。根因是 `crates/vitro_codegen/src/expr/unary.rs` 的 `gen_mem_inc_dec` 与 `gen_assign` 的 Index 赋值复用 `temp_slot0`，右侧索引副作用覆盖了左侧地址临时变量。修复方案为 `gen_mem_inc_dec` 改用 `temp_slot3` 保存新值；新增 `native/tests/cases/baseline/side_effect_index.c` 回归用例
 
 ### Fixed (自定义头文件 include 支持)
-- **修复 `#include` 非标准库路径不支持**：`#include "header.h"` 现在可基于源文件所在目录加载自定义头文件；`Lexer` 新增 `base_path` 字段与 `with_mode_and_path` 构造函数，`compile_pipeline.rs` 从首个编译单元文件名提取目录传入；`shadow_verify.py` 与 `cide_e2e.rs` 改用真实源文件路径调用 `cide_compile_unit`，使 Shadow Verification 与 E2E 测试中的 include 行为与 Clang 一致。新增 `native/tests/cases/baseline/include_custom_header.c` / `include_custom_header.h` 回归用例
+- **修复 `#include` 非标准库路径不支持**：`#include "header.h"` 现在可基于源文件所在目录加载自定义头文件；`Lexer` 新增 `base_path` 字段与 `with_mode_and_path` 构造函数，`compile_pipeline.rs` 从首个编译单元文件名提取目录传入；`shadow_verify.py` 与 `vitro_e2e.rs` 改用真实源文件路径调用 `vitro_compile_unit`，使 Shadow Verification 与 E2E 测试中的 include 行为与 Clang 一致。新增 `native/tests/cases/baseline/include_custom_header.c` / `include_custom_header.h` 回归用例
 
 ### Fixed (Shadow Verification 完整修复)
 - **C Shadow 匹配率从 498/511 提升至 505/511（98.8%）**：编译缺口与输出差异归零
@@ -1663,8 +1684,8 @@ C23 锚定决议下的第一批语言能力（详细口径与差异见 `C_SUBSET
   - **支持 `typeof(expr)` 类型说明符**：`parser/mod.rs` 识别 `typeof`/`__typeof__`/`__typeof` 并解析表达式；`ast.rs` 新增 `Type::Typeof`；`typeck/decl.rs` 在变量声明时根据初始化表达式推断实际类型
   - **按需注入 Clang 前向声明修复 `kr_5_8`**：`shadow_verify.py` 的 `make_clang_header` 仅对源码中实际使用的 `atof`/`atoi`/`atol`/`exit` 注入最小前向声明，避免完整 `stdlib.h` 与 K&R 自定义 `itoa`/`qsort` 冲突
   - **完整实现 VFS Windows 文本模式换行转换**：`native/src/vm/vfs.rs` 区分 `"r"`/`"w"` 与 `"rb"`/`"wb"`；写入时 `\n` → `\r\n`，读取时 `\r\n` → `\n`；`fseek`/`ftell` 区分逻辑/物理光标以匹配 Windows CRT 行为
-  - **Shadow Verification 用例间文件隔离**：每次用例运行前重置 `test.txt`/`numbers.txt` 为 Cide 注入的预设内容，避免 Clang 读取上一个用例遗留文件
-  - **诚实记录剩余 3 个运行时差异**：`bTree_default`（未初始化指针）、`infixEvaluation_default`（栈下溢）、`spfa_default`（队列越界）已更新为模板代码缺陷分类，Cide 的边界/NULL 检测作为教学核心特性保持不变
+  - **Shadow Verification 用例间文件隔离**：每次用例运行前重置 `test.txt`/`numbers.txt` 为 Vitro 注入的预设内容，避免 Clang 读取上一个用例遗留文件
+  - **诚实记录剩余 3 个运行时差异**：`bTree_default`（未初始化指针）、`infixEvaluation_default`（栈下溢）、`spfa_default`（队列越界）已更新为模板代码缺陷分类，Vitro 的边界/NULL 检测作为教学核心特性保持不变
 
 ### Fixed (代码审查报告推进)
 - **移除生产代码中的调试输出**：删除 `capi/mod.rs` 中 `CAPI: calling run_multi_file_pipeline` 与 `DUMP: VarDecl` 的 `println!`，以及 `engine/compile_pipeline.rs` 中对 `dump_var_decls` 的调用，避免污染程序 stdout 导致 Shadow Verification 误判
@@ -1694,17 +1715,17 @@ C23 锚定决议下的第一批语言能力（详细口径与差异见 `C_SUBSET
 - **CI Windows 构建修复**：`.github/workflows/ci.yml` 在 `flutter build windows` 前清理 `build/windows/x64` 缓存，避免 CMake 使用缓存中的 `Visual Studio 16 2019` generator 导致在仅有 VS2022 的 runner 上失败
 - **Rust 测试 warnings 清理**：`native/tests/b10_new_array_rollback.rs` 移除未使用导入；`native/tests/test_utils.rs` 添加 `#![allow(dead_code)]`
 - **失败记录同步**：`bellmanFord_default` 从 `KNOWN_TEMPLATE_FAILURES` 移除；`kr_5_16` 从 `KNOWN_KR_FAILURES` 移除；更新 `E2E_FAILURES.md` / `KR_FAILURES.md`
-- **修复 CLI 诊断级别显示错误**：`native/src/bin/cide_cli.rs` 将 `Diagnostic.severity` 映射修正为 `0=错误/1=警告/2=提示`，与后端 `push_diagnostics/push_warnings/push_hints` 及 Flutter 前端 `DiagnosticInfo` 语义一致
+- **修复 CLI 诊断级别显示错误**：`native/src/bin/vitro_cli.rs` 将 `Diagnostic.severity` 映射修正为 `0=错误/1=警告/2=提示`，与后端 `push_diagnostics/push_warnings/push_hints` 及 Flutter 前端 `DiagnosticInfo` 语义一致
 - **抑制 W3052 数组 decay 过度 warning**：`native/src/compiler/typeck/mod.rs` 移除对正常数组到指针隐式转换的 warning，仅保留 `sizeof(数组参数)` 场景下的专门 warning，避免 K&R 标准代码产生噪音诊断
-- **确认 K&R `kr_5_8` / `kr_5_14` 已恢复匹配**：经 Clang 与 Cide 单独 Shadow 验证，两者均为 `match`；原代码审查报告将其标为 `unknown` 编译缺口的状态已过时
+- **确认 K&R `kr_5_8` / `kr_5_14` 已恢复匹配**：经 Clang 与 Vitro 单独 Shadow 验证，两者均为 `match`；原代码审查报告将其标为 `unknown` 编译缺口的状态已过时
 - **VFS 文本模式换行转换列为已知限制**：不在虚拟文件系统中模拟 Windows CRT 的 `\n` ↔ `\r\n` 转换，`vfs_io_extensions` / `file_fread` 的输出差异保留为诚实记录
 - **修复全局变量区与字符串字面量区内存重叠**：`native/src/compiler/codegen/mod.rs` 延迟分配全局初始化中的 `StringLiteral` 地址；`stmt.rs` / `expr.rs` 的字符串分配改用 `next_global_offset`，确保字符串区位于全局变量区之后
   - 修复 K&R `kr_6_1` 中 `struct key keytab[]` 的 `char*` 成员被字符串内容覆盖的问题
   - 将 `kr_6_1` 从 `KNOWN_KR_FAILURES` 移除并更新 `KR_FAILURES.md`
-- **新增 `cide_set_input_mode` C API**：支持批量/交互输入模式切换；Shadow Verification 脚本统一设 Batch 模式，使 `getchar` 在输入耗尽后返回 EOF，与 Clang 在无输入时行为一致
+- **新增 `vitro_set_input_mode` C API**：支持批量/交互输入模式切换；Shadow Verification 脚本统一设 Batch 模式，使 `getchar` 在输入耗尽后返回 EOF，与 Clang 在无输入时行为一致
   - 解锁 `kr_1_*`、`kr_4_*`、`kr_5_*`、`kr_6_*` 等 31 个 K&R 运行时缺口用例
 - **精简 Shadow Verification 的 Clang 头文件注入**：`CLANG_HEADER` 不再包含 `stdlib.h` / `string.h`，避免 K&R 示例中用户自定义 `itoa` / `qsort` 与标准库声明冲突
-  - 消除 `kr_3_4`、`kr_3_6`、`kr_4_9`、`kr_4_10` 的 `cide_better` 差异
+  - 消除 `kr_3_4`、`kr_3_6`、`kr_4_9`、`kr_4_10` 的 `vitro_better` 差异
 - **Parser 支持函数指针类型转换（cast）的抽象声明符**：`parser/expr.rs` 的 `parse_type_only` 改为调用 `parse_abstract_declarator`，使 `(int (*)(void *, void *))func` 这类类型转换可被正确解析
   - 解锁 K&R `kr_5_8`（函数指针 qsort 比较器）与 `kr_5_14`（排序字段选项）
   - `kr_5_8` 的 `cases_golden/knr/kr_5_8.out` 已按 Clang + `<stdlib.h>` 重新生成
@@ -1713,19 +1734,19 @@ C23 锚定决议下的第一批语言能力（详细口径与差异见 `C_SUBSET
   - 新增 `OpCode::PushArgc` / `PushArgv`，VM 在全局数据区后为 argv 分配内存并记录地址
   - `compiler/codegen/mod.rs` 的入口包装代码根据 `main` 参数个数自动推送 `argc`/`argv`
   - `engine/compile_pipeline.rs` 的 `setup_vm` 调用 `vm.setup_argv`
-  - `flutter_bridge.rs` 新增 `set_argv`，`capi/mod.rs` 新增 `cide_set_argv`
-  - `cide_cli run` 支持 `-- arg1 arg2 ...` 传递命令行参数
+  - `flutter_bridge.rs` 新增 `set_argv`，`capi/mod.rs` 新增 `vitro_set_argv`
+  - `vitro_cli run` 支持 `-- arg1 arg2 ...` 传递命令行参数
   - 解锁 K&R `kr_5_10`（echo 命令行参数）；单独 Shadow 验证为 `match`
   - 新增 `end_to_end_extra_test.rs` 回归测试 `test_e2e_main_args` / `test_e2e_main_no_args`
 - **Shadow Verification 状态更新**：匹配数从 412 提升至 415；编译缺口从 5 降至 3（仅剩 `inline_asm`/`static_assert`/`typeof_operator` 三个已知不支持特性）；运行时缺口从 31 降至 30
 - **K&R 失败记录更新**：`KR_FAILURES.md` 中 `kr_5_8`/`kr_5_10`/`kr_5_14` 标记为已修复；剩余已知失败仅 `kr_6_1`
 - **清除 MAUI 前端遗留的死 C API 代码**：`native/src/capi/mod.rs` 从 1384 行精简至约 290 行
-  - 删除未使用的会话快照/恢复：`SessionSnapshot`、`cide_session_save`、`cide_session_load`
-  - 删除未使用的 buf 版本错误获取：`cide_get_compile_errors_buf`、`cide_get_runtime_error_buf`
-  - 删除未使用的单步/状态查询 API：`cide_step_next`、`cide_get_current_line`、`cide_callstack_count`、`cide_callstack_get`、`cide_breakpoint_add`/`remove`/`clear`、`cide_input_count`
-  - 删除未使用的内存/变量/可视化/算法诊断 API：`cide_memory_region_count`/`get`、`cide_memory_get_value`/`pointer_target`、`cide_diagnostic_count`/`get`/`get_fix`、`cide_sourcemap_lookup`、`cide_trace_count`/`get`、`cide_variable_count`/`get`/`get_type`/`find_by_addr`/`get_field`、`cide_vis_event_count`/`get`/`get_ex`/`clear`、`cide_algorithm_match_count`/`get`/`vis_event_count`/`vis_event_get`
-  - 保留的 API（Shadow Verification + 测试实际使用）：`cide_session_create`/`destroy`、`cide_compile`/`compile_unit`/`compile_all`、`cide_get_compile_errors`、`cide_set_argv`、`cide_run`、`cide_get_runtime_error`、`cide_set_input`、`cide_is_waiting_input`、`cide_provide_input_line`、`cide_get_output_length`/`get_output`
-  - 移除因此变为死代码的辅助函数 `write_str` 和未使用的 `CideVM`/`setup_vm`/`reset_runtime_for_step`/`inject_preset_files` 导入
+  - 删除未使用的会话快照/恢复：`SessionSnapshot`、`vitro_session_save`、`vitro_session_load`
+  - 删除未使用的 buf 版本错误获取：`vitro_get_compile_errors_buf`、`vitro_get_runtime_error_buf`
+  - 删除未使用的单步/状态查询 API：`vitro_step_next`、`vitro_get_current_line`、`vitro_callstack_count`、`vitro_callstack_get`、`vitro_breakpoint_add`/`remove`/`clear`、`vitro_input_count`
+  - 删除未使用的内存/变量/可视化/算法诊断 API：`vitro_memory_region_count`/`get`、`vitro_memory_get_value`/`pointer_target`、`vitro_diagnostic_count`/`get`/`get_fix`、`vitro_sourcemap_lookup`、`vitro_trace_count`/`get`、`vitro_variable_count`/`get`/`get_type`/`find_by_addr`/`get_field`、`vitro_vis_event_count`/`get`/`get_ex`/`clear`、`vitro_algorithm_match_count`/`get`/`vis_event_count`/`vis_event_get`
+  - 保留的 API（Shadow Verification + 测试实际使用）：`vitro_session_create`/`destroy`、`vitro_compile`/`compile_unit`/`compile_all`、`vitro_get_compile_errors`、`vitro_set_argv`、`vitro_run`、`vitro_get_runtime_error`、`vitro_set_input`、`vitro_is_waiting_input`、`vitro_provide_input_line`、`vitro_get_output_length`/`get_output`
+  - 移除因此变为死代码的辅助函数 `write_str` 和未使用的 `VitroVM`/`setup_vm`/`reset_runtime_for_step`/`inject_preset_files` 导入
 
 ### Fixed (代码审查报告继续推进)
 - **删除 `InitElement` 的 `Deref`/`DerefMut`（B25）**：`native/src/compiler/ast.rs`
@@ -1771,7 +1792,7 @@ C23 锚定决议下的第一批语言能力（详细口径与差异见 `C_SUBSET
   - 保留 `mangle_name() -> String` 作为便捷封装，内部调用 `mangle_name_into`
   - 模板实例化、函数指针、多维数组等复杂类型的命名生成分配显著下降
 - **VM 单步回退快照 buffer 复用**：`native/src/vm/vm/mod.rs` + `native/src/unified/engine.rs`
-  - 新增 `CideVM::snapshot_into(&self, session, target: &mut VMSnapshot)`，复用 `target` 已有的 1MB `Vec<u8>`，仅执行 `copy_from_slice`，避免 `run_batch` 每步分配新 1MB buffer
+  - 新增 `VitroVM::snapshot_into(&self, session, target: &mut VMSnapshot)`，复用 `target` 已有的 1MB `Vec<u8>`，仅执行 `copy_from_slice`，避免 `run_batch` 每步分配新 1MB buffer
   - `UnifiedEngine` 新增私有字段 `pre_step_snap: Option<VMSnapshot>`，首次 step 分配后后续复用
   - `CheckpointManager` 已有的 `snapshot_incremental` 检查点策略保持不变；本优化专门解决 Trap 回退快照的分配热点
   - 统一模式长程序（如 10 万步排序可视化）的堆分配流量不再随步数线性增长 1MB/步
@@ -1839,14 +1860,14 @@ C23 锚定决议下的第一批语言能力（详细口径与差异见 `C_SUBSET
   - 核心语言（16）：class / ctor / dtor / 引用 / auto / 范围 for / 模板 / 虚函数 / this / 方法重载
   - 容器与算法（15）：自实现 vector<int/float/char> / list<int> / string / 排序 / 栈 / 队列 / 链表 / 二叉树
   - 教学/OJ 题目（29）：Two Sum / 去重 / 移除元素 / 二分 / 最大子数组 / 股票 / 单数 / 多数 / 旋转 / 移动零 / 回文 / 括号 / 反转链表 / 合并链表 / 树深度 / 相同树 / 翻转树 / 爬楼梯 / 帕斯卡 / 平方根 / 罗马数字 / 缺失数字 / 公共前缀 / 首个唯一字符等
-- **C++ E2E 测试框架**：扩展 `native/tests/cide_e2e.rs`
-  - `compile_and_run_cpp` 通过 `cide_compile_unit(..., "main.cpp", ...)` 自动启用 C++ 模式
+- **C++ E2E 测试框架**：扩展 `native/tests/vitro_e2e.rs`
+  - `compile_and_run_cpp` 通过 `vitro_compile_unit(..., "main.cpp", ...)` 自动启用 C++ 模式
   - `load_cpp_cases` / `run_cpp_case` 支持 `.cpp` 用例与 `.in` 输入文件
-  - `test_cide_e2e_cpp` / `test_cide_e2e_cpp_known_failures` 及 `KNOWN_CPP_FAILURES` 监控
+  - `test_vitro_e2e_cpp` / `test_vitro_e2e_cpp_known_failures` 及 `KNOWN_CPP_FAILURES` 监控
   - `TEST_REPORT.md` 生成已汇总 C++ 统计
-- **Golden 来源**：所有 60 个 `.out` 文件由 Clang++ (`-std=c++14 -O0`) 生成，Cide 输出与之逐行对比，目前 60/60 全绿
+- **Golden 来源**：所有 60 个 `.out` 文件由 Clang++ (`-std=c++14 -O0`) 生成，Vitro 输出与之逐行对比，目前 60/60 全绿
 - **单元测试扩展**：parser_cpp_unit_test（33）、typeck_cpp_unit_test（28）、bytecode_gen_cpp_unit_test（38）全部通过
-- **诚实记录子集边界**：`native/tests/CPP_FAILURES.md` 新增 M6 过程中识别的 Cide C++ 子集边界（如类字段逗号多声明、指针逻辑运算、模板类方法引用参数等），用例已规避，无已知失败
+- **诚实记录子集边界**：`native/tests/CPP_FAILURES.md` 新增 M6 过程中识别的 Vitro C++ 子集边界（如类字段逗号多声明、指针逻辑运算、模板类方法引用参数等），用例已规避，无已知失败
 
 ### Fixed (C++ 子集边界消除)
 - **指针逻辑运算 `&&` / `||` 支持指针/数组**：`typeck/expr.rs` 放宽 `And`/`Or` 操作数类型检查；`UnaryOp::Not` 同时支持数组
@@ -1881,7 +1902,7 @@ C23 锚定决议下的第一批语言能力（详细口径与差异见 `C_SUBSET
 ### Added (C++ 扩展 Stage 6 — `unique_ptr<T>` dogfooding 与构造函数初始化语法)
 - **`unique_ptr<T>` 简化版全管线跑通**：模板类 `unique_ptr<T>`（单 `T*` 字段）支持构造、`get()`、`release()`、`reset()`、析构，以及 `std::move` 触发的隐式移动构造转移所有权并置空源对象
   - 新增 `native/tests/cpp_dogfooding_test.rs::test_cpp_unique_ptr_int_dogfooding_runs` 作为 M5 dogfooding 用例
-  - 同步更新 `native/runtime_libc/cide/unique_ptr_int.{c,cpp}` 运行时布局与 `bytecode_libc_sig.rs` 签名（内置 `unique_ptr<int>` 容器走 Bytecode Libc 路径）
+  - 同步更新 `native/runtime_libc/vitro/unique_ptr_int.{c,cpp}` 运行时布局与 `bytecode_libc_sig.rs` 签名（内置 `unique_ptr<int>` 容器走 Bytecode Libc 路径）
 - **构造函数初始化语法 `Type name(args);`**：Parser `parse_var_decl_stmt` 识别类/模板类变量后的 `(...)` 为构造参数列表，生成占位 `__ctor__{Class}__{N}`；TypeChecker 解析为实际 mangled 构造函数并在参数列表前插入 `&name` 作为 `this`
 - **构造函数重载与隐式默认构造**：
   - 显式构造函数按参数数量编码为 `__ctor__{Class}__{N}`，零参数保持 `__ctor__{Class}`
@@ -1907,8 +1928,8 @@ C23 锚定决议下的第一批语言能力（详细口径与差异见 `C_SUBSET
 
 ### Added (C++ 扩展 Stage 0.5 — Phase 3 收口)
 - **容器库编译器支持补全**：
-  - `builtin_layout.rs` 新增 `cide_list_int` 布局；`layouts.toml` 新增 `[vector_char]`、`[list_int]`
-  - `type_map.rs` 新增 `cide_list_int` 方法映射（push_back/push_front/pop_back/size/get/destroy）
+  - `builtin_layout.rs` 新增 `vitro_list_int` 布局；`layouts.toml` 新增 `[vector_char]`、`[list_int]`
+  - `type_map.rs` 新增 `vitro_list_int` 方法映射（push_back/push_front/pop_back/size/get/destroy）
   - `list_int.c` / `vec_char.c` / `sort_int.c` 已预编译为 Bytecode Libc（索引 1000~1059）
 - **C++ 容器端到端测试 +3**：`test_cpp_container_vec_char`、`test_cpp_container_list_int`、`test_cpp_sort_int`
   - 覆盖空容器/越界/重复 destroy 边界；22/22 C++ BytecodeGen 端到端测试全绿
@@ -1940,17 +1961,17 @@ C23 锚定决议下的第一批语言能力（详细口径与差异见 `C_SUBSET
   - `stdio.h`：`fflush`/`perror`/`clearerr`/`remove`/`rename`
   - `string.h`：`strerror`/`strpbrk`/`strspn`/`strcspn`
   - `time.h`：`time`/`clock` + `time_t`/`clock_t` typedef + `CLOCKS_PER_SEC` 宏
-  - `assert.h`：`assert` 宏展开为 `if (!(expr)) __cide_assert_fail()`
+  - `assert.h`：`assert` 宏展开为 `if (!(expr)) __vitro_assert_fail()`
   - `errno.h`：`extern int errno` + `EINVAL`/`ERANGE`/`EDOM`/`ENOENT`/`EACCES` 宏，Host Func 支持通过符号表写入
   - `float.h`：`FLT_MAX`/`DBL_MAX`/`FLT_EPSILON`/`DBL_EPSILON` 等宏
   - `stdint.h`/`stddef.h`：`int8_t`~`uint64_t`、`size_t`/`ptrdiff_t` typedef
 - **新增 23 个 Host Contract 测试**：覆盖全部新增函数边界条件
 - **VFS 扩展**：`VfsDesc` 新增 `error` 字段，支持 `fflush`/`clearerr`/`remove`/`rename`
-- **CideVM 公开 API**：新增 `is_finished()`/`exit_code()` getter，供测试框架查询 VM 终止状态
+- **VitroVM 公开 API**：新增 `is_finished()`/`exit_code()` getter，供测试框架查询 VM 终止状态
 
 ### Fixed (标准库拓展中发现并修复的 Bug — 2026-06-07)
 - **严重：7 个新增 Host Func 参数 pop 顺序错误**
-  - 根因：新增 Host Func 实现时 `vm.pop()` 顺序错误，与 Cide 编译器「从右到左压栈」约定不匹配
+  - 根因：新增 Host Func 实现时 `vm.pop()` 顺序错误，与 Vitro 编译器「从右到左压栈」约定不匹配
   - 影响函数：`strtol`/`strtod`/`strpbrk`/`strspn`/`strcspn`/`rename`/`atan2`
   - 后果：这些函数在实际 C 代码中被调用时，所有参数全部错位；由于此前无端到端测试覆盖，bug 一直隐藏
   - 修复：调整 `vm.pop()` 顺序，使第一个 pop 得到第一个参数（栈顶）
@@ -1965,7 +1986,7 @@ C23 锚定决议下的第一批语言能力（详细口径与差异见 `C_SUBSET
   - `algorithm_detector` shift 模式：宽松 `contains('[')` → 精确 `arr[x+1]=arr[x]` 结构匹配
 - **性能**：
   - VM 热点路径 `LoadLocal`/`StoreLocal`/`LoadGlobal`/`StoreGlobal` O(n) 符号查找 → O(1) `HashMap`
-    - `VMSymbol` 新增 `func_name` 字段，`CideVM` 新增 `local_sym_map`/`global_sym_map`
+    - `VMSymbol` 新增 `func_name` 字段，`VitroVM` 新增 `local_sym_map`/`global_sym_map`
     - 函数调用/返回时自动重建局部变量映射
   - `Call`/`CallPtr` 帧设置逻辑提取 `do_call` 辅助方法，消除 ~100 行重复
 - **代码质量 / DRY**：
@@ -1979,7 +2000,7 @@ C23 锚定决议下的第一批语言能力（详细口径与差异见 `C_SUBSET
   - `do_call` 中 `frame_size > MEM_SIZE` 改为 `> STACK_START - NULL_TRAP_SIZE`，更精确反映可用栈空间
 - **工程化**：
   - `SessionSnapshot` 增加 `#[serde(deny_unknown_fields)]`，防止加载不兼容数据
-  - `cide_session_load` 硬编码 `test.txt`/`numbers.txt` → 从 snapshot 序列化/恢复 VFS 预设文件
+  - `vitro_session_load` 硬编码 `test.txt`/`numbers.txt` → 从 snapshot 序列化/恢复 VFS 预设文件
   - `UnifiedEngine::seek_to` 正向重放时检查 `is_cancelled`，支持长时间 seek 中断
   - `UnifiedEngine::max_steps` 默认 10,000 → 100,000，减少长程序过早终止
   - `lexer` 十六进制解析：`u64::from_str_radix` + 手动溢出检查 → `u32::from_str_radix`，利用类型系统防溢出
@@ -1999,7 +2020,7 @@ C23 锚定决议下的第一批语言能力（详细口径与差异见 `C_SUBSET
 - **Flutter `UnifiedNotifier` 覆盖 `dispose()`**，取消 StreamSubscription 防止内存泄漏
 - **Flutter `main.dart` 添加应用生命周期监听**，桌面端窗口关闭时释放 VM Session
 - **Flutter CI `flutter-action` 启用 `cache: true`**，减少 CI 构建时间
-- **预编译脚本 `precompile_bytecode_libc.py` 适配 `cide/` 目录扫描**
+- **预编译脚本 `precompile_bytecode_libc.py` 适配 `vitro/` 目录扫描**
 
 ### Fixed (2026-05-18 审查报告修复)
 - **Rust 后端 P0 Bug（5 个严重问题）**：
@@ -2010,7 +2031,7 @@ C23 锚定决议下的第一批语言能力（详细口径与差异见 `C_SUBSET
   - `PushConstF` 符号扩展：`operand as u64` → `operand as u32 as u64`，修复负 float 值损坏
 - **VM 安全加固**：
   - `TrapBounds`：栈为空时 `trap` 而非静默返回 0
-  - C API `cide_get_call_frame`：`vm.as_ref().unwrap()` → 安全匹配
+  - C API `vitro_get_call_frame`：`vm.as_ref().unwrap()` → 安全匹配
   - `write_cstring`：移除 `#[allow(clippy::int_plus_one)]`，改写边界条件
 - **代码质量与重构**：
   - 统一宿主函数名→ID 映射：`host_func_id::by_user_name()` / `is_builtin()` 消除 3 处重复
@@ -2024,7 +2045,7 @@ C23 锚定决议下的第一批语言能力（详细口径与差异见 `C_SUBSET
   - 检查点内存上限：默认最大 50 个快照，防止长程序内存无限增长
   - 字符串字面量上限：`0x8000` (32KB) → `MEM_SIZE / 16` (64KB)
   - CI 新增 Release 构建验证 + Flutter 测试
-  - Android `applicationId`：`com.example.cide` → `com.cide.app`
+  - Android `applicationId`：`com.example.vitro` → `com.vitro.app`
   - `re_editor` 锁定确切版本 `0.8.0`，添加私有 API 依赖注释
   - NDK 配置添加环境变量说明
 - **文档同步**：
@@ -2075,12 +2096,12 @@ C23 锚定决议下的第一批语言能力（详细口径与差异见 `C_SUBSET
 - **Flutter frontend modularization**: extracted all tab widgets (`AlgorithmTab`, `WatchTab`, `PointerVisTab`, `ArrayVisTab`, `MemoryTab`, `VariablesTab`, `CallstackTab`, `KnowledgeCardTab`), visualizers (`ArrayVisualizer`, `KnowledgeCardItem`), and layout components (`Toolbar`, `SymbolBar`, `TemplateBar`, `HeightResizablePanel`, `DraggablePanelTab`) from `ide_screen.dart` (2004 → 471 lines).
 - **Flutter provider split**: extracted `IdeNotifier` to `providers/ide_notifier.dart` (`ide_provider.dart` 726 → 7 lines).
 - **数组排序实时条形图可视化**（Flutter + Rust）：
-  - Rust: `CideVM::get_array_snapshots()` 遍历符号表识别 `Type::Array`，从 VM 内存逐元素读取（支持 int/char/float/double/long long）。
+  - Rust: `VitroVM::get_array_snapshots()` 遍历符号表识别 `Type::Array`，从 VM 内存逐元素读取（支持 int/char/float/double/long long）。
   - `StepPayload` 新增 `array_snapshots: Vec<ArraySnapshot>`，`StepCollector` 每步自动收集。
   - Flutter: `ArrayVisTab` 从 `unifiedProvider` 零延迟读取；`ArrayVisualizer` 绘制条形图，高度表示数值，负值红色/正值蓝色。
   - VisEvent 比较事件（如 `arr[i]:arr[j]`）自动高亮对应条形（琥珀色 + 发光阴影）。
 - **变量级高亮（读/写标记）**（Flutter + Rust）：
-  - Rust: `CideVM::step()` 中 `LoadLocal`/`StoreLocal`/`LoadGlobal`/`StoreGlobal` 自动记录 `VariableAccess`（Read/Write）。
+  - Rust: `VitroVM::step()` 中 `LoadLocal`/`StoreLocal`/`LoadGlobal`/`StoreGlobal` 自动记录 `VariableAccess`（Read/Write）。
   - `StepPayload` 新增 `accessed_vars`。
   - Flutter: `VariablesTab` 被读取变量显示蓝色边框+「读」徽章，被写入显示橙色边框+「写」徽章。
 - **编辑器行号区域变量访问指示**：统一模式下当前执行行的行号旁追加 `a=W b=R` 标记。
@@ -2114,8 +2135,8 @@ C23 锚定决议下的第一批语言能力（详细口径与差异见 `C_SUBSET
 - Comma-separated multi-variable array declarations now preserve per-variable dimensions (`int a[10], b[20];`). `parse_declarator()` extracted; `Stmt::VarDecl.extra_vars` changed to `Vec<(Type, String, Option<Expr>)>`.
 - `unsigned char` no longer mapped to `unsigned int`; now correctly preserves `TypeKind::Char` with `is_unsigned: true`.
 - Flutter `IdeNotifier.reset()` is now `async` and properly `await`s `rust.resetSession()`, eliminating the race condition.
-- `cide_get_runtime_error()` now uses `error_buffer` snapshot pattern (same as `cide_get_compile_errors()`), eliminating dangling pointer risk across FFI boundary.
-- `cide_session_load` now restores VM state via `setup_vm()` instead of overwriting with a blank VM.
+- `vitro_get_runtime_error()` now uses `error_buffer` snapshot pattern (same as `vitro_get_compile_errors()`), eliminating dangling pointer risk across FFI boundary.
+- `vitro_session_load` now restores VM state via `setup_vm()` instead of overwriting with a blank VM.
 - `call_user_function` no longer incorrectly pops stack value on `Trap`; returns `None` instead.
 - Hex literal overflow check relaxed from `i32::MAX` to `u32::MAX` (`0x80000000` now accepted).
 - Algorithm detector now collects all matching patterns per function instead of returning only the first match.
@@ -2124,7 +2145,7 @@ C23 锚定决议下的第一批语言能力（详细口径与差异见 `C_SUBSET
 - `malloc(0)` emits a pedagogical warning about implementation-defined behavior.
 - Lexer `make_token` column calculation now uses `text.chars().count()` instead of `text.len()`, fixing multi-byte UTF-8 character inaccuracy.
 - **统一模式下断点暂停支持**（Rust + Flutter）：`AutoStepResult` 新增 `paused` 字段；`UnifiedEngine::run_batch` 正确传递 `self.is_paused`；Flutter 端 `_collectBatch` 检测到 `paused` 后取消 Timer 并切换到 `paused` 状态。
-- **算法可视化事件 context 修复**（Rust）：`vm.rs` 中 `StepEvent` 生成 `VisEvent` 时 `context` 为空；`CideVM.vis_event_lines` 扩展为 `Vec<(i32, i32, String)>` 保留 context，`compile_pipeline.rs` 传递 `ev.context` 到 VM。
+- **算法可视化事件 context 修复**（Rust）：`vm.rs` 中 `StepEvent` 生成 `VisEvent` 时 `context` 为空；`VitroVM.vis_event_lines` 扩展为 `Vec<(i32, i32, String)>` 保留 context，`compile_pipeline.rs` 传递 `ev.context` 到 VM。
 - `cargo clippy` 8 处警告自动修复（`useless_format!` → `.to_string()`，`manual_range_contains` → `(32..=126).contains(&b)`）。
 
 ### Changed
@@ -2139,7 +2160,7 @@ C23 锚定决议下的第一批语言能力（详细口径与差异见 `C_SUBSET
 ## [0.1.0] - 2026-05-14
 
 ### Added
-- **Full C subset compiler pipeline** (Lexer → Parser → TypeChecker → BytecodeGen → CideVM).
+- **Full C subset compiler pipeline** (Lexer → Parser → TypeChecker → BytecodeGen → VitroVM).
 - **Float type support** across the entire pipeline (Lexer/Parser/TypeChecker/BytecodeGen/VM).
 - **Host functions**: `printf`, `scanf`, `malloc`, `free`, `realloc`, `strlen`, `strcpy`, `strcmp`, `strcat`, `memset`, `getchar`, `putchar`, `rand`, `srand`, `atoi`, `exit`, `fprintf`, `qsort`.
 - **C language features**: `struct`/`typedef struct`, `enum`, arrays (multi-dimensional), pointers (arithmetic, dereference, cast), `#define` macros, function forward declarations, `sizeof`, explicit casts, compound assignments (`+=`, `-=`, etc.), ternary operator, bitwise operators (`& | ^ ~ << >>`).
@@ -2159,7 +2180,7 @@ C23 锚定决议下的第一批语言能力（详细口径与差异见 `C_SUBSET
 - `printf`/`fprintf` format modifiers (`%6d`, `%.2f`, `%ld`) no longer cause stack unbalance.
 - Comma-separated multi-variable array declarations (`int a[10], b[20];`) now preserve per-variable dimensions.
 - `unsigned char` no longer incorrectly mapped to `unsigned int`.
-- `cide_get_runtime_error` dangling pointer: now uses buffer snapshot pattern.
+- `vitro_get_runtime_error` dangling pointer: now uses buffer snapshot pattern.
 - `call_user_function` return_ip uses `HOST_CALLBACK_SENTINEL` instead of `code.len()`.
 - `session.rs` removed misleading `#![forbid(unsafe_code)]`.
 - `host_realloc` in-place shrink when old block is at heap boundary.
@@ -2183,11 +2204,11 @@ C23 锚定决议下的第一批语言能力（详细口径与差异见 `C_SUBSET
 - `push_one()` unifies `push_diagnostics`/`push_warnings`/`push_hints`.
 - `TypeChecker::visit_call()` split into 19 `check_builtin_xxx()` methods + `check_user_func()`.
 - `format_type()` in `capi/mod.rs` removed; uses `Type::to_string()` instead.
-- FRB duplicate data structures unified: `VisEvent`/`AlgorithmMatch`/`CompileResult`/`RunResult`/`StepResult`/`StepStatus` now single-source in `session.rs`, re-exported by `api/cide.rs`.
+- FRB duplicate data structures unified: `VisEvent`/`AlgorithmMatch`/`CompileResult`/`RunResult`/`StepResult`/`StepStatus` now single-source in `session.rs`, re-exported by `api/vitro.rs`.
 - `OpCode::from_u8` auto-generated via `define_opcode!` macro, eliminating manual repr/match maintenance.
 - `Lexer::new` takes `&str` instead of `String`, removing `.to_string()` clones in compile pipeline and all tests.
 - `flutter_bridge.rs` breakpoint API batchified: `setBreakpoints(Vec<i32>)` replaces N+1 FFI calls.
-- `api/cide.rs` now re-exports FRB types from `session.rs`, eliminating duplicate struct definitions between `flutter_bridge.rs` and `api/cide.rs`.
+- `api/vitro.rs` now re-exports FRB types from `session.rs`, eliminating duplicate struct definitions between `flutter_bridge.rs` and `api/vitro.rs`.
 
 ### Security
 - `compile_pipeline.rs` unsafe string write bounds validated.
@@ -2198,7 +2219,7 @@ C23 锚定决议下的第一批语言能力（详细口径与差异见 `C_SUBSET
 ## Migration History
 
 - **Phase 0** (2025-10): Rust skeleton + C API stubs.
-- **Phase 1** (2025-10): VM migration (CideVM + host functions).
+- **Phase 1** (2025-10): VM migration (VitroVM + host functions).
 - **Phase 2** (2025-11): Compiler frontend migration (Lexer/Parser/TypeChecker/BytecodeGen).
 - **Phase 3–5** (2025-11): C# frontend E2E tests, Android builds, C++/CMake cleanup.
 - **Phase 6–8** (2025-12–2026-01): Warning cleanup, float support, diagnostic system expansion.

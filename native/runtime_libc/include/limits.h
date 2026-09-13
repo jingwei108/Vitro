@@ -1,1 +1,1 @@
-/* Cide limits.h stub — macros predefined in lexer */
+/* Vitro limits.h stub — macros predefined in lexer */

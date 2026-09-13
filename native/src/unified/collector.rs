@@ -2,14 +2,14 @@ use crate::session::Session;
 use crate::unified::types::{
     AccessedVar, ApiFrameInfo, ApiVariableSnapshot, PointerSnapshot, PointerStatus, StepPayload,
 };
-use crate::vm::core::CideVM;
-use cide_algorithm_steps::infer_algorithm_step;
+use crate::vm::core::VitroVM;
+use vitro_algorithm_steps::infer_algorithm_step;
 
 /// 每步数据收集器：从 VM 和 Session 中提取轻量 `StepPayload`。
 pub struct StepCollector;
 
 impl StepCollector {
-    pub fn collect(vm: &mut CideVM, session: &mut Session, step_index: i32) -> StepPayload {
+    pub fn collect(vm: &mut VitroVM, session: &mut Session, step_index: i32) -> StepPayload {
         let code_line = vm.get_current_line();
         let func_name = vm.get_call_stack().last().map(|f| f.func_name.clone()).unwrap_or_default();
 
@@ -49,7 +49,7 @@ impl StepCollector {
                     addr: v.addr,
                     is_local: v.is_local,
                     // P2-7c：C 风格可读类型名（此前是 `format!("{:?}", ty)` 的内部枚举结构）
-                    ty_name: cide_runtime::type_display_name(&v.ty),
+                    ty_name: vitro_runtime::type_display_name(&v.ty),
                     value: value_str,
                 }
             })
@@ -85,10 +85,10 @@ impl StepCollector {
             session.unified_last_line = code_line;
         }
         let algorithm_step = {
-            let ctx: &dyn cide_algorithm_steps::AlgorithmContext = session;
-            let algo_vars: Vec<cide_algorithm_steps::VariableSnapshot> = local_vars
+            let ctx: &dyn vitro_algorithm_steps::AlgorithmContext = session;
+            let algo_vars: Vec<vitro_algorithm_steps::VariableSnapshot> = local_vars
                 .iter()
-                .map(|v| cide_algorithm_steps::VariableSnapshot {
+                .map(|v| vitro_algorithm_steps::VariableSnapshot {
                     name: v.name.clone(),
                     value: v.value.clone(),
                 })
@@ -107,7 +107,7 @@ impl StepCollector {
                     lookahead.push(0x0A as char);
                 }
             }
-            let env = cide_algorithm_steps::InferEnv {
+            let env = vitro_algorithm_steps::InferEnv {
                 prev_vars: &session.unified_row_entry_vars,
                 at_callee_entry,
                 caller_is_main,
@@ -165,7 +165,7 @@ impl StepCollector {
 /// 当前帧快照里没有这两个符号，只看当前帧就永远是空串。
 /// 两级顺序保留既有"当前帧优先"的可读性（同名变量时内层更贴近学生视角）。
 fn collect_pointer_snapshots(
-    vm: &CideVM,
+    vm: &VitroVM,
     session: &Session,
     local_vars: &[ApiVariableSnapshot],
 ) -> Vec<PointerSnapshot> {
@@ -181,7 +181,7 @@ fn collect_pointer_snapshots(
 
         let status = if target_addr == 0 {
             PointerStatus::Null
-        } else if !(cide_runtime::NULL_TRAP_SIZE..cide_runtime::MEM_SIZE).contains(&target_addr) {
+        } else if !(vitro_runtime::NULL_TRAP_SIZE..vitro_runtime::MEM_SIZE).contains(&target_addr) {
             PointerStatus::Dangling
         } else if is_freed_heap(&session.memory.regions, target_addr) {
             PointerStatus::Freed
@@ -280,7 +280,7 @@ fn parse_addr(value: &str) -> Option<u32> {
     }
 }
 
-fn is_freed_heap(regions: &[cide_runtime::MemoryRegionData], addr: u32) -> bool {
+fn is_freed_heap(regions: &[vitro_runtime::MemoryRegionData], addr: u32) -> bool {
     regions.iter().any(|r| r.is_heap && r.addr == addr && r.is_freed)
 }
 
@@ -293,7 +293,7 @@ fn find_var_name_at_addr(local_vars: &[ApiVariableSnapshot], addr: u32) -> Strin
     String::new()
 }
 
-fn format_value(v: &cide_runtime::VariableSnapshotData) -> String {
+fn format_value(v: &vitro_runtime::VariableSnapshotData) -> String {
     use crate::compiler::ast::TypeKind;
     match v.ty.kind() {
         TypeKind::Double => {

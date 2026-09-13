@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use cide_native::compiler::ast::{TemplateArg, Type};
+use vitro_native::compiler::ast::{TemplateArg, Type};
 
 fn ptr(ty: Type) -> Type {
     Type::Pointer {

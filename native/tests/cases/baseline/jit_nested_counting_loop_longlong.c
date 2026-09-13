@@ -5,8 +5,8 @@
  * pure-int case (jit_nested_counting_loop.c) failed identically. This case
  * keeps the "long long is not the trigger" fact anchored in the corpus.
  *
- * Expected  (clang + `cide_cli unified`): outer=200 inner=40000 sum=40000 i=200 j=200
- * Bug (before fix, `cide_cli run` executor + JIT): outer=200 inner=20200 sum=20200 i=200 j=0
+ * Expected  (clang + `vitro_cli unified`): outer=200 inner=40000 sum=40000 i=200 j=200
+ * Bug (before fix, `vitro_cli run` executor + JIT): outer=200 inner=20200 sum=20200 i=200 j=0
  *
  * Trigger conditions (all three were required):
  *   1. outer-loop back-edge count reaches JIT_THRESHOLD(100);

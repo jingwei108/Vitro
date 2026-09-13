@@ -1,10 +1,10 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use cide_native::vm::core::{CideVM, NULL_TRAP_SIZE};
+use vitro_native::vm::core::{VitroVM, NULL_TRAP_SIZE};
 
 #[test]
 fn test_write_cstring_basic() {
-    let mut vm = CideVM::default();
+    let mut vm = VitroVM::default();
     let addr = NULL_TRAP_SIZE;
     vm.write_cstring(addr, "hello");
     assert_eq!(&vm.memory_ref()[addr as usize..addr as usize + 6], b"hello\0");
@@ -12,7 +12,7 @@ fn test_write_cstring_basic() {
 
 #[test]
 fn test_write_cstring_at_offset() {
-    let mut vm = CideVM::default();
+    let mut vm = VitroVM::default();
     let addr = NULL_TRAP_SIZE + 10;
     vm.write_cstring(addr, "world");
     assert_eq!(&vm.memory_ref()[addr as usize..addr as usize + 6], b"world\0");
@@ -22,7 +22,7 @@ fn test_write_cstring_at_offset() {
 
 #[test]
 fn test_write_cstring_exact_fit() {
-    let mut vm = CideVM::default();
+    let mut vm = VitroVM::default();
     let addr = NULL_TRAP_SIZE + 100;
     vm.write_cstring(addr, "hello");
     // "hello" is 5 bytes + null = 6
@@ -32,7 +32,7 @@ fn test_write_cstring_exact_fit() {
 
 #[test]
 fn test_write_cstring_boundary_rejected() {
-    let mut vm = CideVM::default();
+    let mut vm = VitroVM::default();
     let addr = (vm.get_memory_size() - 2) as usize; // 只剩 2 字节空间
     let before = vm.memory_ref()[addr..].to_vec();
     vm.write_cstring(addr as u32, "hello"); // 5+1=6 字节，超出边界
@@ -42,7 +42,7 @@ fn test_write_cstring_boundary_rejected() {
 
 #[test]
 fn test_write_cstring_offset_boundary() {
-    let mut vm = CideVM::default();
+    let mut vm = VitroVM::default();
     let addr = (vm.get_memory_size() - 3) as usize;
     let before = vm.memory_ref()[addr..].to_vec();
     // addr + 6 > MEM_SIZE, should not write
@@ -52,7 +52,7 @@ fn test_write_cstring_offset_boundary() {
 
 #[test]
 fn test_write_cstring_empty_string() {
-    let mut vm = CideVM::default();
+    let mut vm = VitroVM::default();
     let addr = NULL_TRAP_SIZE;
     vm.write_cstring(addr, "");
     // empty string writes just '\0' at addr
@@ -61,7 +61,7 @@ fn test_write_cstring_empty_string() {
 
 #[test]
 fn test_write_cstring_null_trap_rejected() {
-    let mut vm = CideVM::default();
+    let mut vm = VitroVM::default();
     let before = vm.memory_ref()[0..16].to_vec();
     vm.write_cstring(0, "hello"); // NULL 区应拒绝写入
     assert_eq!(&vm.memory_ref()[0..16], &before[..]);
@@ -69,7 +69,7 @@ fn test_write_cstring_null_trap_rejected() {
 
 #[test]
 fn test_write_cstring_chinese() {
-    let mut vm = CideVM::default();
+    let mut vm = VitroVM::default();
     let s = "你好";
     let addr = NULL_TRAP_SIZE;
     vm.write_cstring(addr, s);

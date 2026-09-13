@@ -1,5 +1,5 @@
 // @category: baseline
-// E2：守卫 + 双 include（Clang 由守卫保证单次定义；Cide 额外内置 include-once）
+// E2：守卫 + 双 include（Clang 由守卫保证单次定义；Vitro 额外内置 include-once）
 #include <stdio.h>
 #include "e2_guarded_helper.h"
 #include "e2_guarded_helper.h"

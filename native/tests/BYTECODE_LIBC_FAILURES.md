@@ -1,6 +1,6 @@
 # Bytecode Libc 自举一致性测试失败记录
 
-> **原则**：NO_CODE_DISTORTION — Bytecode Libc 的 C 源码不得为了通过 Cide 编译器而改写。如果 Cide 编译失败，那是编译器的缺口，记录为 `compile_gap`。
+> **原则**：NO_CODE_DISTORTION — Bytecode Libc 的 C 源码不得为了通过 Vitro 编译器而改写。如果 Vitro 编译失败，那是编译器的缺口，记录为 `compile_gap`。
 
 ---
 
@@ -19,9 +19,9 @@
       memcpy(dest, src, 6);  // E3038: 函数 'memcpy' 第 1/2 个参数类型不匹配
   }
   ```
-- **根因分析**: Cide TypeChecker 虽然对 `void*` 到具体指针的赋值有隐式转换提示（`H3057_ImplicitConversionHint`），但在**函数调用参数匹配**时，`char[]` / `char*` 到 `void*` 的转换未正确生效，导致类型检查失败。
+- **根因分析**: Vitro TypeChecker 虽然对 `void*` 到具体指针的赋值有隐式转换提示（`H3057_ImplicitConversionHint`），但在**函数调用参数匹配**时，`char[]` / `char*` 到 `void*` 的转换未正确生效，导致类型检查失败。
 - **修复**: 在 `typeck/mod.rs::check_pointer_assignable` 中补充规则：当目标类型为 `void*` 且值类型为任意指针或数组时，允许隐式转换并给出 `H3057` 提示。
-- **是否 Cide 限制**: ~~是~~ → 否（已修复）
+- **是否 Vitro 限制**: ~~是~~ → 否（已修复）
 - **是否标准库实现偏差**: 否
 - **学生影响评级**: P1 → P0（修复后 `memcpy`/`memmove` 可作为 Bytecode Libc 正常编译运行）
 
@@ -39,13 +39,13 @@
       return (int)((seed >> 16) & 0x7fff);
   }
   ```
-- **根因分析**: Cide VM 的 `OpCode::Mul` 对所有 32 位乘法执行有符号溢出检查，若乘积超出 `i32` 范围则 Trap。C 标准中 `unsigned int` 的溢出应定义为模 2^32 回绕，但 Cide 的 codegen 对 `unsigned` 类型的加法和乘法未生成对应的 `UAdd`/`UMul` 指令，而是错误地使用了带溢出检查的 `Add`/`Mul`。
+- **根因分析**: Vitro VM 的 `OpCode::Mul` 对所有 32 位乘法执行有符号溢出检查，若乘积超出 `i32` 范围则 Trap。C 标准中 `unsigned int` 的溢出应定义为模 2^32 回绕，但 Vitro 的 codegen 对 `unsigned` 类型的加法和乘法未生成对应的 `UAdd`/`UMul` 指令，而是错误地使用了带溢出检查的 `Add`/`Mul`。
 - **修复**:
   1. 在 `opcode.rs` 中新增 `UAdd = 122`、`UMul = 123`；
   2. 在 `executor.rs` 中实现 `UAdd`/`UMul`（`wrapping_add`/`wrapping_mul`）；
   3. 在 `codegen/mod.rs` 的 `BinaryOp::Add`/`Mul` 以及 compound assignment（`+=`、`-=`、`*=`）中添加 `is_unsigned` 分支，生成对应的 unsigned 指令；
   4. 在 `jit_templates.rs` 中映射 `UAdd`/`UMul` 到对应的 JIT 模板。
-- **是否 Cide 限制**: ~~是~~ → 否（已修复）
+- **是否 Vitro 限制**: ~~是~~ → 否（已修复）
 - **是否标准库实现偏差**: 否
 - **学生影响评级**: P2 → P0（修复后 `rand`/`srand` 可作为 Bytecode Libc 正常编译运行；同时所有 `unsigned int` 的加减乘运算均获得正确的回绕语义）
 

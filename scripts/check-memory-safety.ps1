@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Memory safety pre-commit check script for Cide project.
+    Memory safety pre-commit check script for Vitro project.
 .DESCRIPTION
     Scans Rust source files for common memory safety anti-patterns.
     Returns exit code 0 if clean, 1 if violations found.

@@ -11,7 +11,7 @@
 - `native/tests/cases_golden/leetcode/` 已创建
 - 当前已填充 **48** 道 LeetCode 简单题 + **20** 道中等题源码
 - 当前通过 **68** 道，已知失败 **0** 道
-- 在填充过程中发现 1 处 Cide 与 Clang 行为差异，已通过改写源码规避，详见下方"实施过程发现"章节
+- 在填充过程中发现 1 处 Vitro 与 Clang 行为差异，已通过改写源码规避，详见下方"实施过程发现"章节
 
 ## 已覆盖用例
 
@@ -54,7 +54,7 @@
 | lc_20 | Valid Parentheses | 栈 | 通过 | 数组模拟栈 |
 | lc_155 | Min Stack | 栈 | 通过 | 结构体封装 |
 | lc_225 | Implement Stack using Queues | 栈 | 通过 | 数组模拟队列 |
-| lc_232 | Implement Queue using Stacks | 队列 | 通过 | 原始复合副作用写法触发 Cide 差异，已改写规避 |
+| lc_232 | Implement Queue using Stacks | 队列 | 通过 | 原始复合副作用写法触发 Vitro 差异，已改写规避 |
 | lc_206 | Reverse Linked List | 链表 | 通过 | |
 | lc_21 | Merge Two Sorted Lists | 链表 | 通过 | |
 | lc_141 | Linked List Cycle | 链表 | 通过 | 构造环状链表 |
@@ -88,7 +88,7 @@
 | lc_31 | Next Permutation | 数组 | 通过 | 从右向左找拐点，交换后反转后缀 |
 | lc_34 | Find First and Last Position of Element in Sorted Array | 数组/二分 | 通过 | 两次二分分别找左右边界 |
 | lc_15 | 3Sum | 数组/双指针 | 通过 | 排序后双指针去重找三元组 |
-| lc_39 | Combination Sum | 回溯 | 通过 | 全局递归回溯，避免 Cide 不支持嵌套函数 |
+| lc_39 | Combination Sum | 回溯 | 通过 | 全局递归回溯，避免 Vitro 不支持嵌套函数 |
 | lc_46 | Permutations | 回溯 | 通过 | 全局递归回溯，used 数组标记访问 |
 | lc_75 | Sort Colors | 数组 | 通过 | 荷兰国旗三指针原地分类 |
 | lc_198 | House Robber | DP | 通过 | 滚动变量保存前两个状态最大值 |
@@ -110,29 +110,29 @@
 
 ## 实施过程发现
 
-### lc_232：复合副作用数组索引表达式触发 Cide 差异
+### lc_232：复合副作用数组索引表达式触发 Vitro 差异
 
 - **来源**: LeetCode 232 — Implement Queue using Queues
 - **发现时间**: 2026-06-14
-- **现象**: 原始实现使用 `obj->out[++obj->outTop] = obj->in[obj->inTop--];` 时，Cide 运行时报告"访问了 NULL 指针区域（地址 0x0000）。NULL 指针不能解引用"；同一份代码在 Clang 下正常执行。
-- **是否 Cide 限制**: 是
+- **现象**: 原始实现使用 `obj->out[++obj->outTop] = obj->in[obj->inTop--];` 时，Vitro 运行时报告"访问了 NULL 指针区域（地址 0x0000）。NULL 指针不能解引用"；同一份代码在 Clang 下正常执行。
+- **是否 Vitro 限制**: 是
 - **是否代码本身问题**: 否（代码在 Clang/GCC 下行为正确）
 - **是否环境差异**: 否
 - **涉及语法特性**: 数组索引表达式中同时包含对两个不同对象的 `++`/`--` 副作用
 - **学生影响评级**: P1
 - **修复时间**: 2026-06-25
-- **是否 Cide 限制**: 是（已修复）
+- **是否 Vitro 限制**: 是（已修复）
 - **根因**: `gen_mem_inc_dec`（`++`/`--` 内存操作）使用 `temp_slot0` 保存新值，而 `gen_assign` 的 Index 赋值也使用 `temp_slot0` 保存左侧地址；右侧索引表达式的副作用在赋值完成前覆盖了左侧地址临时变量，导致最后读取赋值表达式返回值时访问错误地址。
 - **修复方案**: `gen_mem_inc_dec` 改用 `temp_slot3` 保存新值；新增 `baseline/side_effect_index.c` 回归用例。
 - **当前处理**: 原 `lc_232.c` 已保留拆分写法以兼容旧版本；新增 `baseline/side_effect_index.c` 专门验证复合副作用数组索引修复。
 
-### lc_4：函数返回 `double` 值在 Cide VM 下异常（已修复）
+### lc_4：函数返回 `double` 值在 Vitro VM 下异常（已修复）
 
 - **来源**: LeetCode 4 — Median of Two Sorted Arrays
 - **发现时间**: 2026-06-18
 - **修复时间**: 2026-06-24
-- **现象**: 原始实现使用 `double findMedianSortedArrays(...)` 返回值，在 Clang 下正确输出 `2.00000`、`2.50000`、`1.00000`；在 Cide VM 下调用该函数后 `printf("%.5f", ...)` 输出全为 `0.00000`。进一步简化测试表明：`double x = 2.5; printf(...)` 正常，但 `printf(..., f())`（`f` 返回 `double`）输出 `0.0`，说明问题集中在函数 double 返回路径。
-- **是否 Cide 限制**: 是（已修复）
+- **现象**: 原始实现使用 `double findMedianSortedArrays(...)` 返回值，在 Clang 下正确输出 `2.00000`、`2.50000`、`1.00000`；在 Vitro VM 下调用该函数后 `printf("%.5f", ...)` 输出全为 `0.00000`。进一步简化测试表明：`double x = 2.5; printf(...)` 正常，但 `printf(..., f())`（`f` 返回 `double`）输出 `0.0`，说明问题集中在函数 double 返回路径。
+- **是否 Vitro 限制**: 是（已修复）
 - **是否代码本身问题**: 否（代码在 Clang/GCC 下行为正确）
 - **是否环境差异**: 否
 - **涉及语法特性**: 函数返回值类型为 `double` 时的传值语义
@@ -151,7 +151,7 @@
 - **来源**: LeetCode XXX
 - **失败原因**: <编译错误 / 运行时错误 / 输出不匹配 / 超时>
 - **最小复现**: <关键代码片段>
-- **是否 Cide 限制**: 是/否
+- **是否 Vitro 限制**: 是/否
 - **是否代码本身问题**: 是/否
 - **是否环境差异**: 是/否
 - **涉及语法特性**: <如 long long, 递归深度, qsort 回调>
@@ -170,6 +170,6 @@ LeetCode 用例已纳入 `shadow_verify.py` 扫描范围，生成专项报告 `n
 
 ## 后续计划
 
-1. 持续观察新增用例是否暴露其他 Cide 与 Clang 行为差异。
+1. 持续观察新增用例是否暴露其他 Vitro 与 Clang 行为差异。
 2. LeetCode 中等题已填充至 30 道，并继续 all in 扩展 15 道混合难度题，当前 LeetCode 用例总数 92 道；后续可评估困难题或 K&R 进阶覆盖。
 3. 将 shadow 报告路径纳入 CI artifact 上传。

@@ -1,11 +1,11 @@
 use crate::engine::completion::CompletionSnapshot;
-use crate::vm::core::CideVM;
+use crate::vm::core::VitroVM;
 use crate::vm::vfs::VirtualFileSystem;
-use cide_runtime::instruction::Instruction;
+use vitro_runtime::instruction::Instruction;
 use std::collections::HashMap;
 use std::ffi::CString;
 
-pub use cide_runtime::{
+pub use vitro_runtime::{
     CodeFile, CompileUnit, FreeBlock, FuncMeta, InputMode, MemoryState, RuntimeState, Symbol, GLOBAL_START, HEAP_START,
     MAX_STACK_DEPTH, MEM_SIZE, NULL_TRAP_SIZE, SNAPSHOT_INTERVAL, STACK_START,
 };
@@ -41,7 +41,7 @@ pub struct AlgorithmMatch {
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct CompileState {
     pub errors: String,
-    /// 最近一次 `cide_get_compile_errors` 返回的 C 字符串缓存，避免返回 `String` 内部指针导致悬垂。
+    /// 最近一次 `vitro_get_compile_errors` 返回的 C 字符串缓存，避免返回 `String` 内部指针导致悬垂。
     pub last_errors_cstring: Option<CString>,
     pub compile_units: Vec<CompileUnit>,
     pub compiled: bool,
@@ -51,7 +51,7 @@ pub struct CompileState {
     pub f64_constants: Vec<f64>,
     pub i64_constants: Vec<i64>,
     pub diagnostics: Vec<Diagnostic>,
-    pub source_map: Vec<(u32, cide_shared::source_loc::SourceLoc)>,
+    pub source_map: Vec<(u32, vitro_shared::source_loc::SourceLoc)>,
     pub func_table: HashMap<String, FuncMeta>,
     pub func_index: HashMap<String, i32>,
     pub string_data: Vec<(u32, String)>,
@@ -111,7 +111,7 @@ impl Session {
 
     /// 步数保险丝（会话级）：**与 VM 是否已创建解耦**。
     ///
-    /// 此前 capi 的 `cide_set_max_steps` 与 serve 的 `config.set` 都写成
+    /// 此前 capi 的 `vitro_set_max_steps` 与 serve 的 `config.set` 都写成
     /// `if let Some(vm) = session.vm.as_mut() { vm.set_max_steps(..) }` 并返回"成功" ——
     /// 会话尚未编译（`vm == None`）时配置被**静默丢弃**。实测：serve 里把
     /// `config.set {"max_steps": 2000}` 写在 `compile` 之前，程序一路跑到默认的
@@ -120,13 +120,13 @@ impl Session {
     /// 现在无 VM 时先建立一个承载配置的 VM：`compile` → `run` 会 take 它，
     /// `setup_vm` 内部的 `reset()` 保留会话级保险丝。
     pub fn set_max_steps(&mut self, max: i32) {
-        let vm = self.vm.get_or_insert_with(CideVM::default);
+        let vm = self.vm.get_or_insert_with(VitroVM::default);
         vm.set_max_steps(max.max(1));
     }
 
     /// 调用深度保险丝（会话级）：同 [`Session::set_max_steps`]，与 VM 是否已创建解耦。
     pub fn set_call_depth_limit(&mut self, limit: usize) {
-        let vm = self.vm.get_or_insert_with(CideVM::default);
+        let vm = self.vm.get_or_insert_with(VitroVM::default);
         vm.set_call_depth_limit(limit);
     }
 }
@@ -137,8 +137,8 @@ pub struct TraceEntry {
     pub operation: String,
 }
 
-impl From<cide_runtime::TraceEntryData> for TraceEntry {
-    fn from(value: cide_runtime::TraceEntryData) -> Self {
+impl From<vitro_runtime::TraceEntryData> for TraceEntry {
+    fn from(value: vitro_runtime::TraceEntryData) -> Self {
         Self {
             line: value.line,
             operation: value.operation,
@@ -146,7 +146,7 @@ impl From<cide_runtime::TraceEntryData> for TraceEntry {
     }
 }
 
-impl From<TraceEntry> for cide_runtime::TraceEntryData {
+impl From<TraceEntry> for vitro_runtime::TraceEntryData {
     fn from(value: TraceEntry) -> Self {
         Self {
             line: value.line,
@@ -160,12 +160,12 @@ pub struct VariableSnapshot {
     pub name: String,
     pub addr: u32,
     pub is_local: bool,
-    pub ty: cide_ast::Type,
+    pub ty: vitro_ast::Type,
     pub value: i64,
 }
 
-impl From<cide_runtime::VariableSnapshotData> for VariableSnapshot {
-    fn from(value: cide_runtime::VariableSnapshotData) -> Self {
+impl From<vitro_runtime::VariableSnapshotData> for VariableSnapshot {
+    fn from(value: vitro_runtime::VariableSnapshotData) -> Self {
         Self {
             name: value.name,
             addr: value.addr,
@@ -176,7 +176,7 @@ impl From<cide_runtime::VariableSnapshotData> for VariableSnapshot {
     }
 }
 
-impl From<VariableSnapshot> for cide_runtime::VariableSnapshotData {
+impl From<VariableSnapshot> for vitro_runtime::VariableSnapshotData {
     fn from(value: VariableSnapshot) -> Self {
         Self {
             name: value.name,
@@ -198,8 +198,8 @@ pub struct VisEvent {
     pub context: String,
 }
 
-impl From<cide_runtime::VisEventData> for VisEvent {
-    fn from(value: cide_runtime::VisEventData) -> Self {
+impl From<vitro_runtime::VisEventData> for VisEvent {
+    fn from(value: vitro_runtime::VisEventData) -> Self {
         Self {
             ty: value.ty,
             line: value.line,
@@ -211,7 +211,7 @@ impl From<cide_runtime::VisEventData> for VisEvent {
     }
 }
 
-impl From<VisEvent> for cide_runtime::VisEventData {
+impl From<VisEvent> for vitro_runtime::VisEventData {
     fn from(value: VisEvent) -> Self {
         Self {
             ty: value.ty,
@@ -225,7 +225,7 @@ impl From<VisEvent> for cide_runtime::VisEventData {
 }
 
 /// 执行路径热力图：记录每行源代码被执行的次数。
-pub use cide_runtime::ExecutionHeatmap;
+pub use vitro_runtime::ExecutionHeatmap;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct MemoryRegion {
@@ -248,8 +248,8 @@ fn default_memory_region_kind() -> String {
     "heap".to_string()
 }
 
-impl From<cide_runtime::MemoryRegionData> for MemoryRegion {
-    fn from(value: cide_runtime::MemoryRegionData) -> Self {
+impl From<vitro_runtime::MemoryRegionData> for MemoryRegion {
+    fn from(value: vitro_runtime::MemoryRegionData) -> Self {
         Self {
             addr: value.addr,
             size: value.size,
@@ -264,7 +264,7 @@ impl From<cide_runtime::MemoryRegionData> for MemoryRegion {
     }
 }
 
-impl From<MemoryRegion> for cide_runtime::MemoryRegionData {
+impl From<MemoryRegion> for vitro_runtime::MemoryRegionData {
     fn from(value: MemoryRegion) -> Self {
         Self {
             addr: value.addr,
@@ -286,8 +286,8 @@ pub struct MemoryFragment {
     pub size: i32,
 }
 
-impl From<cide_runtime::MemoryFragmentData> for MemoryFragment {
-    fn from(value: cide_runtime::MemoryFragmentData) -> Self {
+impl From<vitro_runtime::MemoryFragmentData> for MemoryFragment {
+    fn from(value: vitro_runtime::MemoryFragmentData) -> Self {
         Self {
             addr: value.addr,
             size: value.size,
@@ -295,7 +295,7 @@ impl From<cide_runtime::MemoryFragmentData> for MemoryFragment {
     }
 }
 
-impl From<MemoryFragment> for cide_runtime::MemoryFragmentData {
+impl From<MemoryFragment> for vitro_runtime::MemoryFragmentData {
     fn from(value: MemoryFragment) -> Self {
         Self {
             addr: value.addr,
@@ -318,8 +318,8 @@ pub struct HeapStats {
     pub fragmentation_rate: i32,
 }
 
-impl From<cide_runtime::HeapStatsData> for HeapStats {
-    fn from(value: cide_runtime::HeapStatsData) -> Self {
+impl From<vitro_runtime::HeapStatsData> for HeapStats {
+    fn from(value: vitro_runtime::HeapStatsData) -> Self {
         Self {
             heap_base: value.heap_base,
             total_heap: value.total_heap,
@@ -330,7 +330,7 @@ impl From<cide_runtime::HeapStatsData> for HeapStats {
     }
 }
 
-impl From<HeapStats> for cide_runtime::HeapStatsData {
+impl From<HeapStats> for vitro_runtime::HeapStatsData {
     fn from(value: HeapStats) -> Self {
         Self {
             heap_base: value.heap_base,
@@ -362,10 +362,10 @@ pub struct Session {
     pub compile: CompileState,
     pub runtime: RuntimeState,
     pub memory: MemoryState,
-    pub vm: Option<CideVM>,
+    pub vm: Option<VitroVM>,
     pub vfs: VirtualFileSystem,
-    /// 统一模式（时间旅行）引擎。由 `cide_step_begin` 初始化，
-    /// 供 `cide_step_next_json` / `cide_get_step_payloads_json` 消费。
+    /// 统一模式（时间旅行）引擎。由 `vitro_step_begin` 初始化，
+    /// 供 `vitro_step_next_json` / `vitro_get_step_payloads_json` 消费。
     pub unified: Option<crate::unified::engine::UnifiedEngine>,
     /// U1#1 P0-1：serve step.next 的一帧发布缓冲——流式协议下"行末帧"
     /// 判定需要未来信息（下一帧是否同行），故当前帧暂存，下一帧到来时
@@ -377,8 +377,8 @@ pub struct Session {
     /// 变量存入 row_entry_vars，供"展示运算过程"的 phase 取语句执行前
     /// 操作数（gcd mod 的 48 % 18 而非行末的 48 % 12）。
     pub unified_last_line: i32,
-    pub unified_last_frame_vars: Vec<cide_algorithm_steps::VariableSnapshot>,
-    pub unified_row_entry_vars: Vec<cide_algorithm_steps::VariableSnapshot>,
+    pub unified_last_frame_vars: Vec<vitro_algorithm_steps::VariableSnapshot>,
+    pub unified_row_entry_vars: Vec<vitro_algorithm_steps::VariableSnapshot>,
 }
 
 impl Session {
@@ -398,7 +398,7 @@ impl Default for Session {
             compile: CompileState::default(),
             runtime: RuntimeState::default(),
             memory: MemoryState::default(),
-            vm: Some(CideVM::default()),
+            vm: Some(VitroVM::default()),
             vfs: VirtualFileSystem::new(),
             unified: None,
             unified_pending: None,
@@ -409,18 +409,18 @@ impl Default for Session {
     }
 }
 
-impl cide_algorithm_steps::AlgorithmContext for Session {
+impl vitro_algorithm_steps::AlgorithmContext for Session {
     fn source_line(&self, line: i32) -> Option<String> {
         // P0-4：统一走多文件安全的行号定位（此前固定查第一个编译单元）
         self.source_line_at(line).map(|s| s.trim().to_string())
     }
 
-    fn find_algorithm(&self, func_name: &str) -> Option<cide_algorithm_steps::AlgorithmMatch> {
+    fn find_algorithm(&self, func_name: &str) -> Option<vitro_algorithm_steps::AlgorithmMatch> {
         self.compile
             .algorithm_matches
             .iter()
             .find(|m| m.func_name == func_name)
-            .map(|m| cide_algorithm_steps::AlgorithmMatch {
+            .map(|m| vitro_algorithm_steps::AlgorithmMatch {
                 name: m.name.clone(),
                 display_name: m.display_name.clone(),
                 func_name: m.func_name.clone(),

@@ -1,7 +1,0 @@
-[package]
-name = "cide_lexer"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-cide_shared = { path = "../cide_shared" }

@@ -2,7 +2,7 @@
  "baseline_shadow": {
   "match": 643,
   "known_issue": 3,
-  "cide_better": 16,
+  "vitro_better": 16,
   "gate_pass": true,
   "unexpected": null
  },
@@ -16,14 +16,14 @@
    "id": "M1-ALGO-LABEL",
    "facet": "教学内容层（算法标注 description / semantic_label）",
    "desc": "重引入已修复的 P0-1「冒泡趟数教反」：第 k 趟显示第 n-k 大（埋雷验证）",
-   "file": "native/crates/cide_algorithm_steps/src/sorting.rs",
+   "file": "native/crates/vitro_algorithm_steps/src/sorting.rs",
    "patch_applied": true,
    "build_exit": 0,
    "build_wall_s": 13.2,
    "shadow": {
     "match": 643,
     "known_issue": 3,
-    "cide_better": 16,
+    "vitro_better": 16,
     "gate_pass": true,
     "unexpected": null
    },
@@ -53,7 +53,7 @@
    "shadow": {
     "match": 643,
     "known_issue": 3,
-    "cide_better": 16,
+    "vitro_better": 16,
     "gate_pass": true,
     "unexpected": null
    },
@@ -74,14 +74,14 @@
    "id": "M3-TEMP-SLOT",
    "facet": "codegen 槽位系统（批量正确性）",
    "desc": "4 个临时槽塌缩为 1 个（历史 3 起槽位 bug 的病灶形态）",
-   "file": "native/crates/cide_codegen/src/lib.rs",
+   "file": "native/crates/vitro_codegen/src/lib.rs",
    "patch_applied": true,
    "build_exit": 0,
    "build_wall_s": 16.7,
    "shadow": {
     "match": 612,
     "known_issue": 3,
-    "cide_better": 16,
+    "vitro_better": 16,
     "gate_pass": false,
     "unexpected": null
    },
@@ -104,14 +104,14 @@
    "id": "M4-DIAG-TEXT",
    "facet": "诊断内容层（错误文案）",
    "desc": "E3023 诊断文案改写（错误码不变，仅文案）",
-   "file": "native/crates/cide_typeck/src/expr/var.rs",
+   "file": "native/crates/vitro_typeck/src/expr/var.rs",
    "patch_applied": true,
    "build_exit": 0,
    "build_wall_s": 19.8,
    "shadow": {
     "match": 643,
     "known_issue": 3,
-    "cide_better": 16,
+    "vitro_better": 16,
     "gate_pass": true,
     "unexpected": null
    },
@@ -134,14 +134,14 @@
    "id": "M5-LEXER-DECIMAL",
    "facet": "词法（十进制整数字面量值）",
    "desc": "每个十进制整数字面量 +1（词法层语义破坏）",
-   "file": "native/crates/cide_lexer/src/number.rs",
+   "file": "native/crates/vitro_lexer/src/number.rs",
    "patch_applied": true,
    "build_exit": 0,
    "build_wall_s": 19.5,
    "shadow": {
     "match": 129,
     "known_issue": 4,
-    "cide_better": 16,
+    "vitro_better": 16,
     "gate_pass": false,
     "unexpected": null
    },
@@ -214,7 +214,7 @@
    "shadow": {
     "match": 643,
     "known_issue": 3,
-    "cide_better": 16,
+    "vitro_better": 16,
     "gate_pass": true,
     "unexpected": null
    },
@@ -237,7 +237,7 @@
   "shadow": {
    "match": 643,
    "known_issue": 3,
-   "cide_better": 16,
+   "vitro_better": 16,
    "gate_pass": true,
    "unexpected": null
   },

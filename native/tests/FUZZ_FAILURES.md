@@ -14,7 +14,7 @@
 - **失败原因**: 安全检查失效
 - **最小复现**:
   ```rust
-  let mut vm = CideVM::new();
+  let mut vm = VitroVM::new();
   let mut session = Session::default();
   vm.push(64); host_malloc(&mut vm, &mut session);
   let addr = vm.pop() as u32;
@@ -24,10 +24,10 @@
   // 预期: 触发 E3060 UAF trap
   // 实际: 无 trap，数据被静默写入已释放内存
   ```
-- **是否 Cide 限制**: 否
+- **是否 Vitro 限制**: 否
 - **是否标准库实现偏差**: **是** — VM 的 public API 与 executor 指令层的安全策略不一致
 - **学生影响评级**: P0（误导学生）— UAF 检测是核心安全特性，如果 public API 绕过检查，学生会看到"程序正常写入已释放内存"的错误暗示
-- **根因**: `CideVM::load_i32`/`store_i32`/`load_i64`/`store_i64`/`load_i8`/`store_i8` 以及 `write_memory`/`copy_memory` 只调用 `check_mem_access`，未调用 `check_uaf`。executor.rs 中的 `OpCode::LoadMem`/`StoreMem` 等指令在调用这些方法前单独检查 UAF，但直接调用 public API 的代码（如 Host Functions、测试、CLI）绕过了 UAF 检测。
+- **根因**: `VitroVM::load_i32`/`store_i32`/`load_i64`/`store_i64`/`load_i8`/`store_i8` 以及 `write_memory`/`copy_memory` 只调用 `check_mem_access`，未调用 `check_uaf`。executor.rs 中的 `OpCode::LoadMem`/`StoreMem` 等指令在调用这些方法前单独检查 UAF，但直接调用 public API 的代码（如 Host Functions、测试、CLI）绕过了 UAF 检测。
 - **修复**: 在上述所有 public 内存读写方法中，于 `check_mem_access` 通过后、实际内存操作前，插入 `check_uaf` 调用。若检测到 UAF，调用 `self.trap()` 并返回。
 - **修复提交**: Phase E 实施中同步修复
 
@@ -44,7 +44,7 @@
   char *q = malloc(100); // 可能重用 p 的地址，清理 freed_logs
   char *r = realloc(q, 200); // 从 free_list 分配新地址，该地址可能仍在 freed_logs 中
   ```
-- **是否 Cide 限制**: 否
+- **是否 Vitro 限制**: 否
 - **是否标准库实现偏差**: **是**
 - **学生影响评级**: P0（误导学生）— `realloc` 合法调用被误报为 UAF，会严重干扰正常教学代码
 - **根因**: `host_realloc` 在分配 `new_addr` 后，先通过 `vm.store_i8` 拷贝旧数据，然后在释放 `old_addr` 后才清理 `freed_logs` 中与新分配重叠的记录。如果 `new_addr` 之前被释放过（来自 `free_list`），其 `freed_log` 在 `store_i8` 时仍然存在，导致 UAF 误报。

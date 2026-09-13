@@ -2,8 +2,8 @@
 
 mod test_utils;
 
-use cide_native::session::Session;
-use cide_native::vm::core::CideVM;
+use vitro_native::session::Session;
+use vitro_native::vm::core::VitroVM;
 
 #[test]
 fn test_new_array_rollback_on_ctor_trap() {
@@ -28,13 +28,13 @@ int main() {
 "#;
     let output = test_utils::compile_cpp_bytecode(src).expect("compile should succeed");
 
-    let mut vm = CideVM::new();
+    let mut vm = VitroVM::new();
     vm.load_program(output.code.clone());
     for (name, meta) in &output.func_table {
         if let Some(&idx) = output.func_index.get(name) {
             vm.register_function(
                 idx as u32,
-                cide_native::vm::core::FuncMeta {
+                vitro_native::vm::core::FuncMeta {
                     ip: meta.ip,
                     arg_count: meta.arg_count,
                     param_count: meta.param_count,
@@ -54,7 +54,7 @@ int main() {
         output
             .symbols
             .iter()
-            .map(|s| cide_native::vm::core::VMSymbol {
+            .map(|s| vitro_native::vm::core::VMSymbol {
                 name: s.name.clone(),
                 addr: s.addr,
                 is_local: s.is_local,

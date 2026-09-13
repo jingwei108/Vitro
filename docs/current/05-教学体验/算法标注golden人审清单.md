@@ -241,7 +241,7 @@ TreeNode* 判据，成本高）。**建议 ①**。
 > 的"完全未实现"（后者需检测分支 + 步骤模板双写，成本高一个量级）。
 
 **档 B · 步骤模板已实现但检测分支缺失（对接成本）**：
-`bst_insert` / `bst_search` 的步骤模板（`cide_algorithm_steps/src/tree.rs`）已实现
+`bst_insert` / `bst_search` 的步骤模板（`vitro_algorithm_steps/src/tree.rs`）已实现
 ——与档 A 同一根因。**本档描述的是算法而非模板**，故不计入 44 的模板计数。
 
 **档 C · 完全未实现（需检测分支 + 步骤模板双写）**：

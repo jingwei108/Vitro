@@ -4,8 +4,8 @@
 //!
 //! 这些测试不依赖真实 VM/Session，仅验证窗口化后的公共状态与方法行为。
 
-use cide_native::unified::engine::UnifiedEngine;
-use cide_native::unified::types::StepPayload;
+use vitro_native::unified::engine::UnifiedEngine;
+use vitro_native::unified::types::StepPayload;
 
 fn dummy_payload(step: i32) -> StepPayload {
     StepPayload {

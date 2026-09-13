@@ -1,12 +1,12 @@
-# Cide C++14 教学子集拓展实施计划
+# Vitro C++14 教学子集拓展实施计划
 
 **版本**: 2.9（2026-09-11 现状对齐；正文 Stage 章节与历史记录保持原样）  
 **日期**: 2026-09-11  
-**状态**: **Phase 34~41 已完成，Phase 42 进行中**。C++ 容器收口（Phase 34）、栈对象 RAII（35）、`new[]/delete[]`（36）、引用语义（37）、隐式移动构造（38）、`unique_ptr<T>` dogfooding（39）、M6 测试防线收尾（40）、内置容器布局解耦（41）均已落地；**Phase 42（P0 语法/标准库拓展 + 代码审查报告推进 + 性能优化 + `cide_vec<T>` 类类型模板实参支持）🚧 进行中**，其中 lambda 相关批次（批次 H：lambda 返回类型推断、文件作用域 lambda 变量）已修复并有回归测试 `native/tests/cpp_lambda_test.rs`，详见 [`ARCHIVE_代码审查复核20260911.md`](../../archive/ARCHIVE_代码审查复核20260911.md §批次 H。  
-**可核实指标（2026-09-11 实测）**: `native/tests/cases/cpp/` **78 个 `.cpp` 文件**；C++ Shadow Verification **100 个用例**（98 个与 Clang++ 一致 + 2 个已记录的 `clang_compile_fail`：`cpp_cide_vec_class` / `cpp_cide_list_class` 使用 Cide 内置容器，无法被 Clang++ 直接编译）——口径以 `AGENTS.md` 防线 1 为准；C 侧模板生成用例 82 个（`native/tests/cases_template_generated/*.c`，按 `AGENTS.md` 防线 2 口径 78 绿 / 4 已知失败；`cide_e2e.rs` 的 `KNOWN_TEMPLATE_FAILURES` 常量当前列 2 项：`bTree_default` / `spfa_default`——两者口径差异见 §对上述历史条目的更正第 3 点）。  
+**状态**: **Phase 34~41 已完成，Phase 42 进行中**。C++ 容器收口（Phase 34）、栈对象 RAII（35）、`new[]/delete[]`（36）、引用语义（37）、隐式移动构造（38）、`unique_ptr<T>` dogfooding（39）、M6 测试防线收尾（40）、内置容器布局解耦（41）均已落地；**Phase 42（P0 语法/标准库拓展 + 代码审查报告推进 + 性能优化 + `vitro_vec<T>` 类类型模板实参支持）🚧 进行中**，其中 lambda 相关批次（批次 H：lambda 返回类型推断、文件作用域 lambda 变量）已修复并有回归测试 `native/tests/cpp_lambda_test.rs`，详见 [`ARCHIVE_代码审查复核20260911.md`](../../archive/ARCHIVE_代码审查复核20260911.md §批次 H。  
+**可核实指标（2026-09-11 实测）**: `native/tests/cases/cpp/` **78 个 `.cpp` 文件**；C++ Shadow Verification **100 个用例**（98 个与 Clang++ 一致 + 2 个已记录的 `clang_compile_fail`：`cpp_vitro_vec_class` / `cpp_vitro_list_class` 使用 Vitro 内置容器，无法被 Clang++ 直接编译）——口径以 `AGENTS.md` 防线 1 为准；C 侧模板生成用例 82 个（`native/tests/cases_template_generated/*.c`，按 `AGENTS.md` 防线 2 口径 78 绿 / 4 已知失败；`vitro_e2e.rs` 的 `KNOWN_TEMPLATE_FAILURES` 常量当前列 2 项：`bTree_default` / `spfa_default`——两者口径差异见 §对上述历史条目的更正第 3 点）。  
 **前置依赖**: `C语言子集规范.md` P0/P1 阶段完成、Phase 31~33 C++ Parser/TypeChecker/BytecodeGen 完成
 
-> **历史状态（v2.8 / 2026-06-13，原文保留）**: **M7 Beta Readiness 已就绪**：M6 + Stage 2b 已完成，`native/tests/cases/cpp/` 61 个 C++ E2E 用例全部通过，C++ Shadow Verification 83/83 一致、0 gap；全量 `cargo test` 719 passed、clippy 0 警告；`scripts/ci_three_tier_check.py` 误报已修复；同参数个数不同类型的构造函数重载已报告 `E4031` 而不是静默错误。已新增 5 个 C++ 教学模板（`cpp_hello` / `cpp_class_basic` / `cpp_vector_int` / `cpp_unique_ptr` / `cpp_range_for`）与学生版 `C++子集规范.md`。内置容器已全面迁移为 `runtime_libc/cide/*.cpp` 标准模板实现。详见 `docs/archive/ARCHIVE_M7_BETA_READINESS.md`。**当前目标：启动内部试用并收集反馈。**
+> **历史状态（v2.8 / 2026-06-13，原文保留）**: **M7 Beta Readiness 已就绪**：M6 + Stage 2b 已完成，`native/tests/cases/cpp/` 61 个 C++ E2E 用例全部通过，C++ Shadow Verification 83/83 一致、0 gap；全量 `cargo test` 719 passed、clippy 0 警告；`scripts/ci_three_tier_check.py` 误报已修复；同参数个数不同类型的构造函数重载已报告 `E4031` 而不是静默错误。已新增 5 个 C++ 教学模板（`cpp_hello` / `cpp_class_basic` / `cpp_vector_int` / `cpp_unique_ptr` / `cpp_range_for`）与学生版 `C++子集规范.md`。内置容器已全面迁移为 `runtime_libc/vitro/*.cpp` 标准模板实现。详见 `docs/archive/ARCHIVE_M7_BETA_READINESS.md`。**当前目标：启动内部试用并收集反馈。**
 >
 > **对上述历史条目的三点现状更正（2026-09-11，不改动原文）**:
 > 1. **统计口径已过时**：61 个 C++ E2E / 83 个 Shadow 已被 Phase 34~42 的用例扩充取代，当前口径见上方"可核实指标"。
@@ -14,7 +14,7 @@
 > 3. **模板失败计数存在三套不一致口径（诚实记录，2026-09-11 核实）**：
 >    - `AGENTS.md` 防线 2 记 "82 个，78 绿，**4 已知失败**"（未列出是哪 4 个）；
 >    - `native/tests/cases_template_generated/E2E_FAILURES.md` 当前列 **3** 条 `KNOWN_DIVERGENCE`：`bTree_default` / `infixEvaluation_default` / `spfa_default`；
->    - 代码常量只列 **2** 条：`native/tests/cide_e2e.rs::KNOWN_TEMPLATE_FAILURES` 与 `scripts/shadow_verify/main.go::KNOWN_FAILURE_CASES`（D5 迁移后位置，原 Python 驱动已退役） 均为 `bTree_default` / `spfa_default`——**`infixEvaluation_default` 未进入任一常量**（CI 双向对账因此存在盲点）。
+>    - 代码常量只列 **2** 条：`native/tests/vitro_e2e.rs::KNOWN_TEMPLATE_FAILURES` 与 `scripts/shadow_verify/main.go::KNOWN_FAILURE_CASES`（D5 迁移后位置，原 Python 驱动已退役） 均为 `bTree_default` / `spfa_default`——**`infixEvaluation_default` 未进入任一常量**（CI 双向对账因此存在盲点）。
 >    本文件不擅自统一这三套口径，仅如实记录差异；精确对账机制见 `AGENTS.md` 防线 5。
 
 ---
@@ -25,7 +25,7 @@
 |------|------|------|
 | 前置条件状态 | 将 static、goto、#ifdef、volatile、qsort 等标记为"待实现" | **已修正为"已实现"**（代码事实） |
 | 错误码范围 | 声称保护 E1001~E3061 | **已修正为 E1001~E3071**，C++ 预留 E4001~E4999 |
-| 容器库策略 | 直接复制 klib 头文件 | **Stage 0：手写 C 容器（临时）→ Stage 1：Dogfooding 用 Cide C++ 编译器编译 C++ 容器源码 → Stage 2：替换为 C++ 实现** |
+| 容器库策略 | 直接复制 klib 头文件 | **Stage 0：手写 C 容器（临时）→ Stage 1：Dogfooding 用 Vitro C++ 编译器编译 C++ 容器源码 → Stage 2：替换为 C++ 实现** |
 | 容器库时机 | 全部前置 | **类型布局前置（硬编码），算法实现后置** |
 | 依赖问题 | 示例使用 `lazy_static!`（不在 Cargo.toml） | **改为 `std::sync::LazyLock`（Rust 1.95 已支持）或普通函数** |
 | 内部矛盾 | Dogfooding 示例出现被排除的 `operator[]` | **已删除运算符重载示例** |
@@ -37,13 +37,13 @@
 
 ### 1.1 为什么需要 C++
 
-Cide 的 C 子集已覆盖 95% 教学场景，但国内考研/竞赛/工程教学的绝对主流语言是 **C++14**。不支持 Lambda、移动语义、`unique_ptr`、`auto`、`范围 for` 的子集没有竞争力。
+Vitro 的 C 子集已覆盖 95% 教学场景，但国内考研/竞赛/工程教学的绝对主流语言是 **C++14**。不支持 Lambda、移动语义、`unique_ptr`、`auto`、`范围 for` 的子集没有竞争力。
 
 ### 1.2 核心约束（铁律）
 
 | 约束 | 说明 |
 |------|------|
-| **零改动 VM** | CideVM（1MB 线性内存、栈式字节码）不做任何修改 |
+| **零改动 VM** | VitroVM（1MB 线性内存、栈式字节码）不做任何修改 |
 | **不复用 Clang** | 不引入 libclang 或任何外部 C++ 编译器，保持自研可控 |
 | **BytecodeGen 线性扩展** | TypeChecker 直接处理 C++ 语义，BytecodeGen 新增 C++ 节点分支 |
 | **诊断体系保护** | E1001~E3071 错误码、知识图谱、UAF/DF 检测、堆内存可视化不得破坏 |
@@ -95,7 +95,7 @@ int main() {
 ```
 
 ```cpp
-// ===== Cide 编译器内部处理（直接生成）=====
+// ===== Vitro 编译器内部处理（直接生成）=====
 // 1. 头文件映射: <vector> → 编译器内置类型
 // 2. 命名空间擦除: using namespace std; → 删除, std::vector → vector
 // 3. 语法处理:
@@ -118,7 +118,7 @@ std::thread t([]{ ... });                             // [E4004] 不支持多线
 | 维度 | 能做到 | 做不到 |
 |------|--------|--------|
 | `std::` 前缀 | ✅ 自动擦除 | |
-| 标准头文件名 | ✅ 映射到 cide 头文件 | |
+| 标准头文件名 | ✅ 映射到 vitro 头文件 | |
 | Lambda / auto / 范围 for | ✅ 完全一致 | |
 | 模板基本语法 | ✅ 一致（受限） | ❌ SFINAE / 特化 / 元编程 |
 | class 语法 | ✅ 基本一致 | ❌ 运算符重载 |
@@ -129,10 +129,10 @@ std::thread t([]{ ... });                             // [E4004] 不支持多线
 
 > **不是"假装是 C++"，而是"诚实标注这是教学子集"。**
 
-- 文件扩展名：`.cidecpp`（可选）或 `.cpp`，IDE 标题栏显示 "Cide C++ 子集"
+- 文件扩展名：`.vitrocpp`（可选）或 `.cpp`，IDE 标题栏显示 "Vitro C++ 子集"
 - 每个特性文档标注 `[标准 C++ 差异]`
 - `--show-lowered` 让学生看到 `vector<int>` 底层是什么
-- 教材最后一章："从 Cide C++ 到标准 C++"
+- 教材最后一章："从 Vitro C++ 到标准 C++"
 
 ---
 
@@ -166,7 +166,7 @@ C++ 拓展**不可**在以下工作完成前启动：
 | `volatile` 成员函数 | N/A（C 无成员函数） | **不支持** | 明确排除，遇 `volatile` 成员函数报 `E4006_VolatileMemberNotSupported` |
 | 模板参数中的 `volatile` | N/A | **不支持** | `volatile T` 作为模板参数实例化后保留修饰符，但无特殊代码生成 |
 
-**结论**：`volatile` 在 Cide C++ 子集中仅作为**类型修饰符标记**存在，不生成特殊内存屏障指令，与 C 模式保持完全一致。
+**结论**：`volatile` 在 Vitro C++ 子集中仅作为**类型修饰符标记**存在，不生成特殊内存屏障指令，与 C 模式保持完全一致。
 
 ---
 
@@ -198,7 +198,7 @@ C++ 拓展**不可**在以下工作完成前启动：
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                轻量降解层（仅容器 + 语法糖）                  │
-│     • vector.push_back → __cide_vec_push_int               │
+│     • vector.push_back → __vitro_vec_push_int               │
 │     • 范围 for → 索引循环 AST                                │
 │     • Lambda → 闭包 struct + 函数（AST 变换）                │
 │     • unique_ptr/shared_ptr → struct + 手动 destroy          │
@@ -217,21 +217,21 @@ C++ 拓展**不可**在以下工作完成前启动：
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                现有 VM（零改动）                             │
-│              CideVM（1MB 线性内存，栈式字节码）               │
+│              VitroVM（1MB 线性内存，栈式字节码）               │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ### 3.1 容器库基座：参照 klib 手写 C 实现
 
-**不是直接引入 klib 头文件，而是参照 klib 的算法设计，手写 Cide-C 子集兼容的 `.c` 文件**。
+**不是直接引入 klib 头文件，而是参照 klib 的算法设计，手写 Vitro-C 子集兼容的 `.c` 文件**。
 
 | 误区 | 正解 |
 |------|------|
-| "直接复制 klib `.h` 文件" | klib 是头文件宏泛型（`kvec_t(int)`），Cide 预编译脚本只编译 `.c` 文件 |
-| "klib 零修改即可使用" | klib 宏泛型与 Cide `Type` 枚举没有"宏展开"概念，TypeChecker 无法直接理解 |
-| "用 C++ 写容器给 Cide 用" | Cide 编译器目前不支持 C++ 语法，`cide_cli` 只能编译 `.c` 文件 |
+| "直接复制 klib `.h` 文件" | klib 是头文件宏泛型（`kvec_t(int)`），Vitro 预编译脚本只编译 `.c` 文件 |
+| "klib 零修改即可使用" | klib 宏泛型与 Vitro `Type` 枚举没有"宏展开"概念，TypeChecker 无法直接理解 |
+| "用 C++ 写容器给 Vitro 用" | Vitro 编译器目前不支持 C++ 语法，`vitro_cli` 只能编译 `.c` 文件 |
 
-**核心洞察**：参照 klib 的极简算法（kvec 核心仅 3 个字段 + realloc 扩容），手写每种容器×每种类型的 `.c` 文件，直接放入 `runtime_libc/cide/` 预编译。
+**核心洞察**：参照 klib 的极简算法（kvec 核心仅 3 个字段 + realloc 扩容），手写每种容器×每种类型的 `.c` 文件，直接放入 `runtime_libc/vitro/` 预编译。
 
 ### 3.2 编译器双模式
 
@@ -242,13 +242,13 @@ C++ 拓展**不可**在以下工作完成前启动：
 
 ---
 
-## 四、H1 详细方案：Cide 容器库（参照 klib 自研）
+## 四、H1 详细方案：Vitro 容器库（参照 klib 自研）
 
 ### 4.1 Dogfooding 路线：C 基底 → C++ 替换
 
-> **手写 C 容器是临时方案（Stage 0），最终目标是用 Cide C++ 编译器编译 C++ 容器源码（Stage 1 Dogfooding），验证通过后替换 C 实现（Stage 2）。**
+> **手写 C 容器是临时方案（Stage 0），最终目标是用 Vitro C++ 编译器编译 C++ 容器源码（Stage 1 Dogfooding），验证通过后替换 C 实现（Stage 2）。**
 
-**注意**：Cide 编译器本身用 Rust 编写，不存在"自举"（编译器不能用自身编译）。此处是用 Cide C++ 编译器去编译 C++ 容器库，属于 **Dogfooding**（开发团队用自己的产品解决自己的问题），是验证编译器正确性的终极手段。
+**注意**：Vitro 编译器本身用 Rust 编写，不存在"自举"（编译器不能用自身编译）。此处是用 Vitro C++ 编译器去编译 C++ 容器库，属于 **Dogfooding**（开发团队用自己的产品解决自己的问题），是验证编译器正确性的终极手段。
 
 **时序约束（关键）**：Stage 1 必须在 C++ 编译器核心（Parser→TypeChecker→BytecodeGen）全部完成后才能启动，不存在循环依赖：
 1. **Stage 0** 现在就能做：手写 C 容器，预编译为字节码，学生代码立即调用
@@ -259,7 +259,7 @@ C++ 拓展**不可**在以下工作完成前启动：
 ```
 Stage 0（现在 ──→ Phase 1-3 ──→ Stage 1 ──→ Stage 2）
   C 容器（手写）    编译器核心      C++ 容器源码      C++ 容器（运行时）
-  预编译为 BC Libc  （Parser/       用 Cide C++       完全替换 C 实现
+  预编译为 BC Libc  （Parser/       用 Vitro C++       完全替换 C 实现
   学生代码调用      TypeChecker/    编译器编译
                     BytecodeGen）   字节码对比验证
 ```
@@ -267,53 +267,53 @@ Stage 0（现在 ──→ Phase 1-3 ──→ Stage 1 ──→ Stage 2）
 | 阶段 | 容器实现语言 | 编译方式 | 用途 | 时机 |
 |------|-------------|----------|------|------|
 | **Stage 0** | C（手写极简） | `precompile_bytecode_libc.py` | 学生代码运行时调用 | **现在** |
-| **Stage 1** | Cide C++ 子集 | Cide C++ 编译器 | Dogfooding + 教学源码展示 | **C++ 编译器核心完成后** |
-| **Stage 2** | Cide C++ 子集 | Cide C++ 编译器 | **完全替换 Stage 0** | **Dogfooding 验证通过后** |
+| **Stage 1** | Vitro C++ 子集 | Vitro C++ 编译器 | Dogfooding + 教学源码展示 | **C++ 编译器核心完成后** |
+| **Stage 2** | Vitro C++ 子集 | Vitro C++ 编译器 | **完全替换 Stage 0** | **Dogfooding 验证通过后** |
 
 **Stage 1 的验证方法**：
-1. 用 Cide C++ 子集写 `cide::vector<int>`（class template + 构造函数 + push_back）
-2. 用 Cide C++ 编译器编译 → 生成字节码 A
+1. 用 Vitro C++ 子集写 `vitro::vector<int>`（class template + 构造函数 + push_back）
+2. 用 Vitro C++ 编译器编译 → 生成字节码 A
 3. 对比 Stage 0 的 C 版本预编译字节码 B
 4. 如果 A ≡ B（逐指令一致）→ 编译器正确，可进入 Stage 2（Dogfooding 通过）
 
 ### 4.2 设计原则
 
 - **Stage 0 参照 klib 算法**：数据结构设计和扩容策略与 klib 保持一致（已验证的工业级算法）
-- **Cide-C 子集编写**：使用项目已支持的 C 语法（`runtime_libc/src/string.c` 和 `stdlib.c` 的风格）
+- **Vitro-C 子集编写**：使用项目已支持的 C 语法（`runtime_libc/src/string.c` 和 `stdlib.c` 的风格）
 - **预编译友好**：每个容器类型是独立的 `.c` 文件，直接由 `scripts/precompile_bytecode_libc.py` 编译
 - **标准库后置**：容器算法实现（`.c` 文件）在编译器核心完成后补充，但类型布局信息前置硬编码
 - **为未来替换留接口**：C 容器的函数签名和内存布局与目标 C++ 容器一致，确保 Stage 1/2 平滑替换
 
 ### 4.2 容器组件
 
-| 组件 | 参照来源 | 对应 C++ STL | Cide 优先级 | 说明 |
+| 组件 | 参照来源 | 对应 C++ STL | Vitro 优先级 | 说明 |
 |------|----------|-------------|------------|------|
-| `cide_vec` | kvec.h | `vector` | ✅ P0 | 动态数组，核心结构 `{ int n, m; T *a; }` |
-| `cide_list` | klist.h | `list` / `forward_list` | ✅ P0 | 单向链表，简化版（不做内存池） |
-| `cide_string` | kstring.h | `string` | ✅ P0 | 动态字符串，简化版（不做 printf/vsprintf） |
-| `cide_deque` | kdq.h | `deque` | ⚠️ P2 | 双端队列 |
-| `cide_hash` | khash.h | `unordered_map` / `unordered_set` | ⚠️ P3 | 开放寻址哈希表 |
-| `cide_sort` | ksort.h | `algorithm::sort` | ✅ P1 | 内省/归并/堆排序 |
+| `vitro_vec` | kvec.h | `vector` | ✅ P0 | 动态数组，核心结构 `{ int n, m; T *a; }` |
+| `vitro_list` | klist.h | `list` / `forward_list` | ✅ P0 | 单向链表，简化版（不做内存池） |
+| `vitro_string` | kstring.h | `string` | ✅ P0 | 动态字符串，简化版（不做 printf/vsprintf） |
+| `vitro_deque` | kdq.h | `deque` | ⚠️ P2 | 双端队列 |
+| `vitro_hash` | khash.h | `unordered_map` / `unordered_set` | ⚠️ P3 | 开放寻址哈希表 |
+| `vitro_sort` | ksort.h | `algorithm::sort` | ✅ P1 | 内省/归并/堆排序 |
 
 ### 4.3 参照实现示例（vector<int>）
 
 ```c
-// native/runtime_libc/cide/vec_int.c
-// 参照 kvec.h 算法，用 Cide-C 子集重写
+// native/runtime_libc/vitro/vec_int.c
+// 参照 kvec.h 算法，用 Vitro-C 子集重写
 
 typedef struct {
     int n;      /* 当前元素数 */
     int m;      /* 容量 */
     int *a;     /* 数据指针 */
-} cide_vec_int;
+} vitro_vec_int;
 
-void cide_vec_init_int(cide_vec_int *v) {
+void vitro_vec_init_int(vitro_vec_int *v) {
     v->n = 0;
     v->m = 0;
     v->a = 0;
 }
 
-void cide_vec_push_int(cide_vec_int *v, int x) {
+void vitro_vec_push_int(vitro_vec_int *v, int x) {
     if (v->n == v->m) {
         v->m = v->m ? v->m << 1 : 2;
         v->a = (int *)realloc(v->a, sizeof(int) * v->m);
@@ -321,23 +321,23 @@ void cide_vec_push_int(cide_vec_int *v, int x) {
     v->a[v->n++] = x;
 }
 
-int cide_vec_pop_int(cide_vec_int *v) {
+int vitro_vec_pop_int(vitro_vec_int *v) {
     return v->a[--v->n];
 }
 
-int cide_vec_size_int(cide_vec_int *v) {
+int vitro_vec_size_int(vitro_vec_int *v) {
     return v->n;
 }
 
-int cide_vec_get_int(cide_vec_int *v, int i) {
+int vitro_vec_get_int(vitro_vec_int *v, int i) {
     return v->a[i];
 }
 
-void cide_vec_clear_int(cide_vec_int *v) {
+void vitro_vec_clear_int(vitro_vec_int *v) {
     v->n = 0;
 }
 
-void cide_vec_destroy_int(cide_vec_int *v) {
+void vitro_vec_destroy_int(vitro_vec_int *v) {
     free(v->a);
 }
 ```
@@ -346,13 +346,13 @@ void cide_vec_destroy_int(cide_vec_int *v) {
 
 | klib 宏 | 参照实现函数 |
 |---|---|
-| `kvec_t(int)` | `cide_vec_int` |
-| `kv_init(v)` | `cide_vec_init_int(&v)` |
-| `kv_push(int, v, x)` | `cide_vec_push_int(&v, x)` |
-| `kv_pop(v)` | `cide_vec_pop_int(&v)` |
-| `kv_size(v)` | `cide_vec_size_int(&v)` |
-| `kv_A(v, i)` | `cide_vec_get_int(&v, i)` |
-| `kv_destroy(v)` | `cide_vec_destroy_int(&v)` |
+| `kvec_t(int)` | `vitro_vec_int` |
+| `kv_init(v)` | `vitro_vec_init_int(&v)` |
+| `kv_push(int, v, x)` | `vitro_vec_push_int(&v, x)` |
+| `kv_pop(v)` | `vitro_vec_pop_int(&v)` |
+| `kv_size(v)` | `vitro_vec_size_int(&v)` |
+| `kv_A(v, i)` | `vitro_vec_get_int(&v, i)` |
+| `kv_destroy(v)` | `vitro_vec_destroy_int(&v)` |
 
 ### 4.4 集成目录结构（Stage 2b 已更新）
 
@@ -360,28 +360,28 @@ void cide_vec_destroy_int(cide_vec_int *v) {
 native/runtime_libc/
 ├── include/                    # 已有：stdio.h / stdlib.h / ctype.h / math.h / string.h
 ├── src/                        # 已有：ctype.c / stdlib.c / string.c
-└── cide/                       # Cide 内置容器库（.cpp 文件，标准模板 C++ 实现）
-    ├── vector.cpp              # template <class T> class cide_vec<T>；显式实例化 int/float/char
-    ├── list.cpp                # template <class T> class cide_list<T>；显式实例化 int
-    ├── string.cpp              # template <class T> class cide_string<T>；显式实例化 char
-    └── sort_int.cpp            # 函数模板 cide_sort_int<T>
+└── vitro/                       # Vitro 内置容器库（.cpp 文件，标准模板 C++ 实现）
+    ├── vector.cpp              # template <class T> class vitro_vec<T>；显式实例化 int/float/char
+    ├── list.cpp                # template <class T> class vitro_list<T>；显式实例化 int
+    ├── string.cpp              # template <class T> class vitro_string<T>；显式实例化 char
+    └── sort_int.cpp            # 函数模板 vitro_sort_int<T>
 ```
 
 > 历史：Stage 0 使用手写 `.c` 文件；Stage 2b 已全部替换为 `.cpp` 模板实现，并删除旧 `.c` 文件。
 
 ### 4.5 预编译流程
 
-复用并扩展 `scripts/precompile_bytecode_libc.py`：脚本同时编译 `runtime_libc/src/*.c` 与 `runtime_libc/cide/*.cpp`，统一生成 `bytecode_libc_data.json`。Stage 2b 中已增加对 `.cpp` 文件及模板显式实例化的支持。
+复用并扩展 `scripts/precompile_bytecode_libc.py`：脚本同时编译 `runtime_libc/src/*.c` 与 `runtime_libc/vitro/*.cpp`，统一生成 `bytecode_libc_data.json`。Stage 2b 中已增加对 `.cpp` 文件及模板显式实例化的支持。
 
 ```python
 # scripts/precompile_bytecode_libc.py（无需修改逻辑，只需扩展路径）
 # 现有：编译 runtime_libc/src/*.c
-# 新增：编译 runtime_libc/cide/*.c
+# 新增：编译 runtime_libc/vitro/*.c
 # 统一生成 bytecode_libc_data.json
-# 索引 key 格式: "cide_vec_init_int", "cide_vec_push_int", ...
+# 索引 key 格式: "vitro_vec_init_int", "vitro_vec_push_int", ...
 ```
 
-**事实依据**：现有脚本第 62-63 行遍历 `.c` 文件，第 71 行调用 `cide_cli export`。`.cide/*.c` 文件与现有 `.src/*.c` 文件在编译流程上无差异。
+**事实依据**：现有脚本第 62-63 行遍历 `.c` 文件，第 71 行调用 `vitro_cli export`。`.vitro/*.c` 文件与现有 `.src/*.c` 文件在编译流程上无差异。
 
 ### 4.6 类型映射表（编译器内置）
 
@@ -394,35 +394,35 @@ use std::sync::LazyLock;
 
 static KLIB_TYPE_MAP: LazyLock<HashMap<&'static str, &'static str>> = LazyLock::new(|| {
     let mut m = HashMap::new();
-    m.insert("vector<int>", "cide_vec_int");
-    m.insert("vector<float>", "cide_vec_float");
-    m.insert("vector<char>", "cide_vec_char");
-    m.insert("list<int>", "cide_list_int");
-    m.insert("string", "cide_string");
+    m.insert("vector<int>", "vitro_vec_int");
+    m.insert("vector<float>", "vitro_vec_float");
+    m.insert("vector<char>", "vitro_vec_char");
+    m.insert("list<int>", "vitro_list_int");
+    m.insert("string", "vitro_string");
     m
 });
 ```
 
 ### 4.7 方法映射表
 
-| Cide C++ 语法 | 映射为容器库调用 | 说明 |
+| Vitro C++ 语法 | 映射为容器库调用 | 说明 |
 |--------------|----------------|------|
-| `vector<int> v;` | `cide_vec_int v; cide_vec_init_int(&v);` | 构造 = struct 定义 + init 调用 |
-| `v.push_back(x);` | `cide_vec_push_int(&v, x);` | 插入，自动扩容 |
-| `v[i]` | `cide_vec_get_int(&v, i)` | 索引访问（无边界检查） |
-| `v.size()` | `cide_vec_size_int(&v)` | 元素个数 |
-| `v.pop_back()` | `cide_vec_pop_int(&v)` | 尾部弹出 |
-| `v.clear()` | `cide_vec_clear_int(&v)` | 逻辑清空 |
-| `list<int> l;` | `cide_list_int l;` | 链表 |
-| `l.push_back(x);` | `cide_list_push_back_int(&l, x);` | 尾部插入 |
-| `l.push_front(x);` | `cide_list_push_front_int(&l, x);` | 头部插入 |
+| `vector<int> v;` | `vitro_vec_int v; vitro_vec_init_int(&v);` | 构造 = struct 定义 + init 调用 |
+| `v.push_back(x);` | `vitro_vec_push_int(&v, x);` | 插入，自动扩容 |
+| `v[i]` | `vitro_vec_get_int(&v, i)` | 索引访问（无边界检查） |
+| `v.size()` | `vitro_vec_size_int(&v)` | 元素个数 |
+| `v.pop_back()` | `vitro_vec_pop_int(&v)` | 尾部弹出 |
+| `v.clear()` | `vitro_vec_clear_int(&v)` | 逻辑清空 |
+| `list<int> l;` | `vitro_list_int l;` | 链表 |
+| `l.push_back(x);` | `vitro_list_push_back_int(&l, x);` | 尾部插入 |
+| `l.push_front(x);` | `vitro_list_push_front_int(&l, x);` | 头部插入 |
 
 ### 4.8 内存适配
 
-容器库使用 `malloc`/`realloc`/`free`。Cide 已将这些映射为 VM Host Call（`HostMalloc`/`HostFree`），**无需修改容器库源码**。
+容器库使用 `malloc`/`realloc`/`free`。Vitro 已将这些映射为 VM Host Call（`HostMalloc`/`HostFree`），**无需修改容器库源码**。
 
 **VM 内存模型事实**：
-- `size_t` 在 Cide 中为 `unsigned int`（32 位，`runtime_libc/include/stdlib.h` 行 1）
+- `size_t` 在 Vitro 中为 `unsigned int`（32 位，`runtime_libc/include/stdlib.h` 行 1）
 - `malloc` 参数类型为 `int`（`stdlib.h` 行 3：`void* malloc(int size)`）
 - 容器库中统一使用 `int` 表示大小和容量，与 VM 字长一致
 
@@ -441,7 +441,7 @@ static KLIB_TYPE_MAP: LazyLock<HashMap<&'static str, &'static str>> = LazyLock::
 类型布局从外部 TOML 配置文件加载，避免在 Rust 中硬编码 16+ 条目：
 
 ```toml
-# runtime_libc/cide/layouts.toml
+# runtime_libc/vitro/layouts.toml
 
 [vector_int]
 size = 12
@@ -486,7 +486,7 @@ pub struct MethodSig {
 }
 
 static BUILTIN_LAYOUTS: LazyLock<HashMap<String, ClassLayout>> = LazyLock::new(|| {
-    let toml_str = include_str!("../../../runtime_libc/cide/layouts.toml");
+    let toml_str = include_str!("../../../runtime_libc/vitro/layouts.toml");
     parse_layouts_toml(toml_str)
 });
 
@@ -498,9 +498,9 @@ pub fn builtin_class_layout(name: &str) -> Option<ClassLayout> {
 ### 5.3 后置内容（容器算法实现）
 
 容器库的 `.c` 文件在编译器核心稳定后补充。补充流程：
-1. 手写 `runtime_libc/cide/vec_int.c`
+1. 手写 `runtime_libc/vitro/vec_int.c`
 2. 运行 `python scripts/precompile_bytecode_libc.py`
-3. 将预编译函数名从 `__cide_vec_push_int_stub` 替换为真实的 `cide_vec_push_int`
+3. 将预编译函数名从 `__vitro_vec_push_int_stub` 替换为真实的 `vitro_vec_push_int`
 
 **注意**：内置布局表中的方法签名必须与后置的 `.c` 实现严格一致。
 
@@ -834,7 +834,7 @@ impl TypeChecker {
         if let Expr::MemberCall { object, method, args, .. } = expr {
             if is_builtin_vector(&object.ty()) && method == "push_back" {
                 let elem_ty = object.ty().type_param(0);
-                let host_func = format!("cide_vec_push_{}", elem_ty.mangle());
+                let host_func = format!("vitro_vec_push_{}", elem_ty.mangle());
                 *expr = Expr::Call {
                     func: Box::new(Expr::Identifier(host_func)),
                     args: vec![
@@ -874,7 +874,7 @@ Stmt::RangeFor { var, var_type, iter, body, loc } => {
             op: BinaryOp::Lt,
             left: Box::new(Expr::Identifier(index_var.clone())),
             right: Box::new(Expr::Call {
-                func: Box::new(Expr::Identifier("cide_vec_size_int".to_string())),
+                func: Box::new(Expr::Identifier("vitro_vec_size_int".to_string())),
                 args: vec![iter.clone()],
                 loc,
                 ty: Type::Int,
@@ -889,7 +889,7 @@ Stmt::RangeFor { var, var_type, iter, body, loc } => {
                 name: var,
                 var_type: var_type,
                 init: Some(Expr::Call {
-                    func: Box::new(Expr::Identifier("cide_vec_get_int".to_string())),
+                    func: Box::new(Expr::Identifier("vitro_vec_get_int".to_string())),
                     args: vec![iter.clone(), Expr::Identifier(index_var)],
                     loc,
                     ty: var_type,
@@ -1283,7 +1283,7 @@ void bar() {
 
 | 周 | 任务 | 产出 |
 |----|------|------|
-| W10 | 参照 klib 手写 vec_int / vec_float / string | `runtime_libc/cide/*.c` |
+| W10 | 参照 klib 手写 vec_int / vec_float / string | `runtime_libc/vitro/*.c` |
 | W11 | 预编译容器库 + 方法映射替换 | `bytecode_libc_data.json` 含容器函数 |
 | W12 | 容器方法调用一致性测试 | `tests/cpp_container/` |
 
@@ -1309,13 +1309,13 @@ void bar() {
 
 ## 九、测试防线
 
-延续 Cide 的五层测试防线：
+延续 Vitro 的五层测试防线：
 
 ### 9.1 第一层：轻量降解审计测试
 
 ```cpp
 // tests/cpp_light_lower/test_vector_basic.cpp
-#include <cide_vector>
+#include <vitro_vector>
 
 int main() {
     vector<int> v;
@@ -1331,11 +1331,11 @@ int main() {
 验证：
 1. `--show-lowered` 输出轻量降解产物（范围 for 展开、Lambda 闭包 struct）
 2. 轻量降解产物与手写等价 C 代码**逐字节一致**
-3. TypeChecker 容器方法映射正确（`v.push_back` → `cide_vec_push_int`）
+3. TypeChecker 容器方法映射正确（`v.push_back` → `vitro_vec_push_int`）
 
 ### 9.2 第二层：Bytecode Consistency 测试
 
-同一 C++ 源码在 Cide 编译两次，生成的字节码逐指令一致。
+同一 C++ 源码在 Vitro 编译两次，生成的字节码逐指令一致。
 
 ### 9.3 第三层：Differential 测试
 
@@ -1347,7 +1347,7 @@ v.push_back(4);
 sort(v.begin(), v.end());
 ```
 
-对比：Cide 编译执行结果 vs GCC -O0 编译执行结果。数组顺序必须一致。
+对比：Vitro 编译执行结果 vs GCC -O0 编译执行结果。数组顺序必须一致。
 
 ### 9.4 第四层：错误诊断测试
 
@@ -1360,48 +1360,48 @@ auto x = v[100];   // 越界访问 → E3001 TrapBounds
 
 ### 9.5 第五层：教材回归测试
 
-选取国内主流教材/ OJ 题目（洛谷、PTA、LeetCode 简单题），用 Cide C++ 子集重写，验证通过。
+选取国内主流教材/ OJ 题目（洛谷、PTA、LeetCode 简单题），用 Vitro C++ 子集重写，验证通过。
 
 ---
 
 ## 十、Dogfooding 与 C++ 容器验证
 
-> **当前状态（2026-06-13）**：Stage 0/1/2 全部完成。`runtime_libc/cide/*.c` 已在提交 `a16b489` 中全部替换为标准模板 C++ 实现（`.cpp`），旧 `.c` 文件已删除，force-instantiate 桩已删除。Stage 2 栈 RAII 已完成；Stage 3 `new[]/delete[]` 元素构造析构已完成；Stage 4 引用语义已完成；Stage 5 隐式移动构造已完成；Stage 6 `unique_ptr<T>` dogfooding 已完成。Stage 2b 内置容器全面迁移：`vector<int/float/char>` 合并为 `vector.cpp`，`list<int>` 合并为 `list.cpp`，`string` 改写为模板，通过 `template class cide_vec<int>;` 显式实例化导出方法，`method_map` 指向 mangled 方法名。Dogfooding 测试 28 个全部通过；C++ E2E 60 个全部通过；C++ Shadow Verification 82 用例全部一致、0 gap；Parser/TypeChecker/BytecodeGen CPP 单元测试 104 个全部通过；clippy 0 警告。原 3 个 `compile_gap`（`cpp_rvalue_ref`、`cpp_const_ref_rvalue`、`cpp_range_for_ref_modify`）已消除。
+> **当前状态（2026-06-13）**：Stage 0/1/2 全部完成。`runtime_libc/vitro/*.c` 已在提交 `a16b489` 中全部替换为标准模板 C++ 实现（`.cpp`），旧 `.c` 文件已删除，force-instantiate 桩已删除。Stage 2 栈 RAII 已完成；Stage 3 `new[]/delete[]` 元素构造析构已完成；Stage 4 引用语义已完成；Stage 5 隐式移动构造已完成；Stage 6 `unique_ptr<T>` dogfooding 已完成。Stage 2b 内置容器全面迁移：`vector<int/float/char>` 合并为 `vector.cpp`，`list<int>` 合并为 `list.cpp`，`string` 改写为模板，通过 `template class vitro_vec<int>;` 显式实例化导出方法，`method_map` 指向 mangled 方法名。Dogfooding 测试 28 个全部通过；C++ E2E 60 个全部通过；C++ Shadow Verification 82 用例全部一致、0 gap；Parser/TypeChecker/BytecodeGen CPP 单元测试 104 个全部通过；clippy 0 警告。原 3 个 `compile_gap`（`cpp_rvalue_ref`、`cpp_const_ref_rvalue`、`cpp_range_for_ref_modify`）已消除。
 
 ### 10.1 Stage 0：验证 BytecodeGen（已完成 ✅）
 
-开发团队用 Cide C++ 子集写一个 class template 封装，调用 Stage 0 的 C 容器函数：
+开发团队用 Vitro C++ 子集写一个 class template 封装，调用 Stage 0 的 C 容器函数：
 
 ```cpp
 // tests/dogfooding/stage0_vec_cpp_wrapper.h
-// 验证 Cide C++ BytecodeGen 是否能正确生成对 C 容器的调用
+// 验证 Vitro C++ BytecodeGen 是否能正确生成对 C 容器的调用
 
 template<class T>
 class vector {
 public:
-    vector() { cide_vec_init(this); }
-    void push_back(T x) { cide_vec_push(this, x); }
-    T get(size_t i) { return cide_vec_get(this, i); }
-    size_t size() { return cide_vec_size(this); }
-    ~vector() { cide_vec_destroy(this); }
+    vector() { vitro_vec_init(this); }
+    void push_back(T x) { vitro_vec_push(this, x); }
+    T get(size_t i) { return vitro_vec_get(this, i); }
+    size_t size() { return vitro_vec_size(this); }
+    ~vector() { vitro_vec_destroy(this); }
 };
 ```
 
 **注意**：不使用运算符重载（已排除），使用显式 `get()` 方法。
 
 **验证流程**：
-1. 用 Cide C++ 编译器编译 `stage0_vec_cpp_wrapper.h` → 生成字节码 A
-2. 手写等价的 C 代码（直接调用 `cide_vec_*`）→ 生成字节码 B
+1. 用 Vitro C++ 编译器编译 `stage0_vec_cpp_wrapper.h` → 生成字节码 A
+2. 手写等价的 C 代码（直接调用 `vitro_vec_*`）→ 生成字节码 B
 3. 对比 A ≡ B（逐指令一致）→ 证明 BytecodeGen 正确
 
 ### 10.2 Stage 1：Dogfooding 验证（已完成 ✅）
 
-当 Cide C++ 编译器成熟后，用 Cide C++ 子集写**不依赖 C 容器函数**的纯 C++ 容器：
+当 Vitro C++ 编译器成熟后，用 Vitro C++ 子集写**不依赖 C 容器函数**的纯 C++ 容器：
 
 ```cpp
 // tests/dogfooding/stage1_vec_cpp.h
-// 目标：用 Cide C++ 子集实现一个自包含的 vector<int>
-// 不调用任何 cide_vec_* C 函数，完全用 C++ 语法实现
+// 目标：用 Vitro C++ 子集实现一个自包含的 vector<int>
+// 不调用任何 vitro_vec_* C 函数，完全用 C++ 语法实现
 
 template<class T>
 class vector {
@@ -1414,9 +1414,9 @@ public:
     void push_back(T x) {
         if (size_ >= capacity_) {
             int new_cap = capacity_ == 0 ? 4 : capacity_ * 2;
-            T* new_data = new T[new_cap];  // Cide new → HostMalloc
+            T* new_data = new T[new_cap];  // Vitro new → HostMalloc
             for (int i = 0; i < size_; i++) new_data[i] = data[i];
-            delete[] data;                 // Cide delete → HostFree
+            delete[] data;                 // Vitro delete → HostFree
             data = new_data;
             capacity_ = new_cap;
         }
@@ -1431,10 +1431,10 @@ public:
 ```
 
 **Dogfooding 验证流程**：
-1. 用 Cide C++ 编译器编译 `stage1_vec_cpp.h` → 生成字节码 C
+1. 用 Vitro C++ 编译器编译 `stage1_vec_cpp.h` → 生成字节码 C
 2. 对比 C ≡ B（Stage 0 的 C 版本字节码）
-3. 如果 C ≡ B → **Dogfooding 通过**，Cide C++ 编译器可以正确编译 C++ 项目（容器库）
-4. 进入 Stage 2：用 `stage1_vec_cpp.h` 替换 `cide_vec_int.c`，删除 C 实现（已于提交 `a16b489` 完成）
+3. 如果 C ≡ B → **Dogfooding 通过**，Vitro C++ 编译器可以正确编译 C++ 项目（容器库）
+4. 进入 Stage 2：用 `stage1_vec_cpp.h` 替换 `vitro_vec_int.c`，删除 C 实现（已于提交 `a16b489` 完成）
 
 **Dogfooding 完成结论**：
 - `vector<int/float/char>`、`string`、`list<int>`、`sort_int` 的 C++ 模板实现运行时 stdout 与 C 基线完全一致。
@@ -1474,12 +1474,12 @@ public:
 | **M6：测试防线完成** | **T+16 周** | **✅ 五层测试防线全部通过，59 道 C++ 教材/OJ 题目回归通过（超过计划的 50 道）** |
 | M7：Beta 发布 | T+18 周 | 内部试用，收集反馈 |
 | M8：正式发布 | T+22 周 | 文档完整，教学场景验证通过 |
-| **M9：容器 Dogfooding（Stage 1）** | **T+26 周** | **✅ 用 Cide C++ 编译器编译 C++ 容器源码，运行时 stdout 与 C 版本一致，`get`/`size` 等方法逐指令等价** |
+| **M9：容器 Dogfooding（Stage 1）** | **T+26 周** | **✅ 用 Vitro C++ 编译器编译 C++ 容器源码，运行时 stdout 与 C 版本一致，`get`/`size` 等方法逐指令等价** |
 | **M10：全面迁移（Stage 2）** | **T+30 周** | **✅ 运行时库全部替换为 C++ 实现，删除所有手写 C 容器；`method_map` 指向 mangled 方法名** |
 
 ---
 
-## 十三、Cide 平台内用户体验保障
+## 十三、Vitro 平台内用户体验保障
 
 ### 13.1 SourceLoc 天然保留
 
@@ -1505,18 +1505,18 @@ Expr::MemberCall { object, method, is_virtual: true, loc, .. } => {
 
 ```bash
 # C 用户：零变化
-cide_cli compile hello.c
-cide_cli run hello.c
-cide_cli step hello.c
+vitro_cli compile hello.c
+vitro_cli run hello.c
+vitro_cli step hello.c
 
 # C++ 用户：扩展名自动检测，命令完全一致
-cide_cli compile hello.cpp        # 自动启用 C++ 模式
-cide_cli run hello.cpp            # 运行
-cide_cli step hello.cpp           # 源码级调试
+vitro_cli compile hello.cpp        # 自动启用 C++ 模式
+vitro_cli run hello.cpp            # 运行
+vitro_cli step hello.cpp           # 源码级调试
 
 # 教学专用
-cide_cli compile hello.cpp --show-lowered   # 显示降解产物
-cide_cli compile hello.cpp --show-ast       # 显示 C++ AST
+vitro_cli compile hello.cpp --show-lowered   # 显示降解产物
+vitro_cli compile hello.cpp --show-ast       # 显示 C++ AST
 ```
 
 ---
@@ -1558,16 +1558,16 @@ cide_cli compile hello.cpp --show-ast       # 显示 C++ AST
 > 记录时间：2026-06-13  
 > 记录位置：`docs/current/03-语言子集/C++拓展实施计划.md`
 
-`native/runtime_libc/cide/*.c` 手写容器迁移为纯 C++ 实现的工作已完成（提交 `a16b489`）。本节记录迁移过程中遇到/曾遇到的编译器/工具链约束，以及最终采用的解决方案。
+`native/runtime_libc/vitro/*.c` 手写容器迁移为纯 C++ 实现的工作已完成（提交 `a16b489`）。本节记录迁移过程中遇到/曾遇到的编译器/工具链约束，以及最终采用的解决方案。
 
 ### 15.1 最终目录结构
 
 ```
-native/runtime_libc/cide/
-├── vector.cpp   # template <class T> class cide_vec<T>；显式实例化 int/float/char
-├── list.cpp     # template <class T> class cide_list<T> / cide_list_node<T>；显式实例化 int
-├── string.cpp   # template <class T> class cide_string<T>；显式实例化 char
-└── sort_int.cpp # 自由函数模板 cide_sort_int<T>（仍用调用桩触发实例化）
+native/runtime_libc/vitro/
+├── vector.cpp   # template <class T> class vitro_vec<T>；显式实例化 int/float/char
+├── list.cpp     # template <class T> class vitro_list<T> / vitro_list_node<T>；显式实例化 int
+├── string.cpp   # template <class T> class vitro_string<T>；显式实例化 char
+└── sort_int.cpp # 自由函数模板 vitro_sort_int<T>（仍用调用桩触发实例化）
 ```
 
 已删除：所有 `.c` 实现（`vec_int.c` / `vec_float.c` / `vec_char.c` / `list_int.c` / `string.c` / `sort_int.c`）以及早期 `.cpp` 单类型实现（`vector_int.cpp` 等）。
@@ -1585,23 +1585,23 @@ native/runtime_libc/cide/
 | 约束 | 说明 | 当前缓解写法 |
 |------|------|--------------|
 | `T()` 值初始化不被支持 | Parser 将 `T()` 解析为对非函数指针的调用 | 使用 `(T)0` 对 POD 类型做零初始化 |
-| 函数模板显式实例化不支持 | 仅类模板显式实例化已支持 | `sort_int.cpp` 保留 `__cide_force_instantiate_cide_sort_int()` 调用桩 |
+| 函数模板显式实例化不支持 | 仅类模板显式实例化已支持 | `sort_int.cpp` 保留 `__vitro_force_instantiate_vitro_sort_int()` 调用桩 |
 | 同一模板类不能跨文件重复定义 | Bytecode Libc 多文件一起编译 | `vector<int/float/char>` 合并到单个 `vector.cpp` |
-| 嵌套模板类需显式实例化 | TypeChecker 不会自动注册隐式实例化的节点类 | `list.cpp` 末尾同时写 `template class cide_list_node<int>;` |
+| 嵌套模板类需显式实例化 | TypeChecker 不会自动注册隐式实例化的节点类 | `list.cpp` 末尾同时写 `template class vitro_list_node<int>;` |
 | `method_map` 必须指向 mangled 方法名 | MemberCall 路径生成 `Class__method` | `extract_cpp_builtin_layout.py` 已输出 mangled 名；`bytecode_libc_sig.rs` 已同步 |
 
 ### 15.4 布局提取与预编译流程
 
 1. `extract_cpp_builtin_layout.py` 从 `.cpp` 提取类布局，输出 `native/src/compiler/cpp_frontend/builtin_layout_data.json`。
 2. 脚本已升级为 brace-aware，能正确区分 class 顶层字段与方法体内的局部变量。
-3. 脚本内置 `FILE_RULES`，将 `cide_vec`/`cide_list`/`cide_string` 等模板基名映射到用户可见名（`vector<int>` / `list<int>` / `string`）。
-4. `precompile_bytecode_libc.py` 编译 `runtime_libc/cide/*.cpp`，生成 `bytecode_libc_data.json` / `bytecode_libc_index.rs`。
-5. 由于 `cide_cli export` 会链接已嵌入的 Bytecode Libc，迁移过程中需删除旧 `.c` 文件后重新预编译，确保产物干净。
+3. 脚本内置 `FILE_RULES`，将 `vitro_vec`/`vitro_list`/`vitro_string` 等模板基名映射到用户可见名（`vector<int>` / `list<int>` / `string`）。
+4. `precompile_bytecode_libc.py` 编译 `runtime_libc/vitro/*.cpp`，生成 `bytecode_libc_data.json` / `bytecode_libc_index.rs`。
+5. 由于 `vitro_cli export` 会链接已嵌入的 Bytecode Libc，迁移过程中需删除旧 `.c` 文件后重新预编译，确保产物干净。
 
 ### 15.5 验证结果
 
 - **Dogfooding 测试**：28 个全部通过（`cargo test --test cpp_dogfooding_test`）
-- **C++ E2E 测试**：81 个全部通过（`cargo test --test cide_e2e cpp`）
+- **C++ E2E 测试**：81 个全部通过（`cargo test --test vitro_e2e cpp`）
 - **C++ Shadow Verification**：97 个用例（95 一致 + 2 个已记录 `clang_compile_fail`），0 gap（原 3 个 gap 已消除）
 - **Parser/TypeChecker/BytecodeGen CPP 单元测试**：33 + 28 + 40 = 101 个全部通过
 - **clippy**：0 警告

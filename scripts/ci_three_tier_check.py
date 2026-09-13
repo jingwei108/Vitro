@@ -39,7 +39,7 @@ TIER_TESTS = [
     ("Phase B", "bytecode_libc_consistency", "BYTECODE_LIBC_FAILURES.md"),
     ("Phase C", "differential_stress", "DIFFERENTIAL_FAILURES.md"),
     ("Phase E", "fuzz_stress_test", "FUZZ_FAILURES.md"),
-    ("K&R / E2E / LeetCode / C++", "cide_e2e", ["KR_FAILURES.md", "E2E_FAILURES.md", "LEETCODE_FAILURES.md", "CPP_FAILURES.md"]),
+    ("K&R / E2E / LeetCode / C++", "vitro_e2e", ["KR_FAILURES.md", "E2E_FAILURES.md", "LEETCODE_FAILURES.md", "CPP_FAILURES.md"]),
     ("C++ Parser", "parser_cpp_unit_test", "CPP_FAILURES.md"),
     ("C++ TypeChecker", "typeck_cpp_unit_test", "CPP_FAILURES.md"),
     ("C++ BytecodeGen", "bytecode_gen_cpp_unit_test", "CPP_FAILURES.md"),
@@ -211,7 +211,7 @@ def check_consistency(result: TierResult) -> tuple:
       这实现 AGENTS.md 防线 5 声明的「KNOWN_FAILURE 现在通过 → 报错」方向。
     - soft（仅 [WARN] 提示，不阻塞）：测试有失败时的"请确保已记录"提醒 ——
       文档为自由文本，无法精确匹配失败用例名，硬失败会产生持续误报；
-      精确双向对账由 cide_e2e.rs 的 KNOWN_* 常量机制闭环承担。
+      精确双向对账由 vitro_e2e.rs 的 KNOWN_* 常量机制闭环承担。
     """
     hard, soft = [], []
     for failures_md in result.failures_md:

@@ -11,12 +11,12 @@
  * bodies contain a conditional branch (recording Aborts and falls back to the
  * interpreter), and single-layer loops cannot be "pierced" by an outer trace.
  *
- * Expected  (clang + `cide_cli unified`): inner=40000 i=200 j=200
- * Bug (before fix, `cide_cli run` executor + JIT): inner=20200 i=200 j=0
+ * Expected  (clang + `vitro_cli unified`): inner=40000 i=200 j=200
+ * Bug (before fix, `vitro_cli run` executor + JIT): inner=20200 i=200 j=0
  *   -> inner stops at 101*200: from outer iteration 102 on, the inner loop is
  *      skipped entirely (`j=0` is still executed each round, hence j ends at 0).
  *
- * Root cause (fixed): the JIT fast path in CideVM::run stayed active while a
+ * Root cause (fixed): the JIT fast path in VitroVM::run stayed active while a
  * trace was being recorded. When recording reached the inner loop head it hit
  * the already-compiled inner trace and ran the whole inner loop in one bulk
  * call, so the recorder never saw the inner instructions; the outer trace was

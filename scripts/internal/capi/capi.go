@@ -1,6 +1,6 @@
 //go:build windows
 
-// Package capi 是 Cide 引擎 DLL（cide_native.dll）C ABI 绑定与字符串读取的
+// Package capi 是 Vitro 引擎 DLL（vitro_native.dll）C ABI 绑定与字符串读取的
 // 单源封装（D5 收尾重构，2026-09-13）。
 //
 // 背景：cBytes / ptrToGoString / readChannel / DLL 绑定曾在 shadow_verify /
@@ -9,7 +9,7 @@
 // 各驱动只保留判定与流程逻辑。
 //
 // 契约（与引擎 native/src/capi 一致）：
-//   - engine_version 为 rust-alloc，须 cide_free_string 释放；
+//   - engine_version 为 rust-alloc，须 vitro_free_string 释放；
 //   - 编译错误读取走 CompileErrorsExact（ABI 1.2.0 length API 定长读取），
 //     不依赖变长窗口扫描；
 //   - Session 句柄非线程安全（DLL 并发调用 → 堆损坏实证）：调用方自行互斥。
@@ -163,10 +163,10 @@ func TruncateRunes(s string, n int) string {
 
 // E-P1-5：结构化输出通道必需符号（ABI >= 1.1.0），缺失即 fail fast，不退回文本清洗。
 var requiredSymbols = []string{
-	"cide_get_program_output_length",
-	"cide_get_program_output",
-	"cide_get_engine_notes_length",
-	"cide_get_engine_notes",
+	"vitro_get_program_output_length",
+	"vitro_get_program_output",
+	"vitro_get_engine_notes_length",
+	"vitro_get_engine_notes",
 }
 
 // DLL 引擎 C ABI 的绑定集合（各驱动共用；字段名与旧驱动内联版一一对应）。
@@ -213,24 +213,24 @@ func Load(path string) *DLL {
 	for _, name := range requiredSymbols {
 		bind(name)
 	}
-	d.SessionCreate = bind("cide_session_create")
-	d.SessionDestroy = bind("cide_session_destroy")
-	d.Compile = bind("cide_compile")
-	d.CompileUnit = bind("cide_compile_unit")
-	d.CompileAll = bind("cide_compile_all")
-	d.Run = bind("cide_run")
-	d.SetInputMode = bind("cide_set_input_mode")
-	d.SetInput = bind("cide_set_input")
-	d.CompileErrors = bind("cide_get_compile_errors")
-	d.CompileErrorsLength = bind("cide_get_compile_errors_length")
-	d.RuntimeError = bind("cide_get_runtime_error")
-	d.ProgOutLen = bind("cide_get_program_output_length")
-	d.ProgOut = bind("cide_get_program_output")
-	d.NotesLen = bind("cide_get_engine_notes_length")
-	d.Notes = bind("cide_get_engine_notes")
-	if d.DLL.NewProc("cide_engine_version").Find() == nil && d.DLL.NewProc("cide_free_string").Find() == nil {
-		d.EngineVersion = d.DLL.NewProc("cide_engine_version")
-		d.FreeString = d.DLL.NewProc("cide_free_string")
+	d.SessionCreate = bind("vitro_session_create")
+	d.SessionDestroy = bind("vitro_session_destroy")
+	d.Compile = bind("vitro_compile")
+	d.CompileUnit = bind("vitro_compile_unit")
+	d.CompileAll = bind("vitro_compile_all")
+	d.Run = bind("vitro_run")
+	d.SetInputMode = bind("vitro_set_input_mode")
+	d.SetInput = bind("vitro_set_input")
+	d.CompileErrors = bind("vitro_get_compile_errors")
+	d.CompileErrorsLength = bind("vitro_get_compile_errors_length")
+	d.RuntimeError = bind("vitro_get_runtime_error")
+	d.ProgOutLen = bind("vitro_get_program_output_length")
+	d.ProgOut = bind("vitro_get_program_output")
+	d.NotesLen = bind("vitro_get_engine_notes_length")
+	d.Notes = bind("vitro_get_engine_notes")
+	if d.DLL.NewProc("vitro_engine_version").Find() == nil && d.DLL.NewProc("vitro_free_string").Find() == nil {
+		d.EngineVersion = d.DLL.NewProc("vitro_engine_version")
+		d.FreeString = d.DLL.NewProc("vitro_free_string")
 	}
 	d.EnsureFreshArtifacts()
 	return d
@@ -251,7 +251,7 @@ func (d *DLL) EnsureFreshArtifacts() {
 		d.FreeString.Call(raw)
 	}
 	if !strings.Contains(version, head) {
-		Fatal("引擎产物不是当前提交构建的：cide_engine_version()=%q 不含 HEAD %s。\n请先 cd native && cargo build --release —— 否则会在陈旧二进制上得到假绿。",
+		Fatal("引擎产物不是当前提交构建的：vitro_engine_version()=%q 不含 HEAD %s。\n请先 cd native && cargo build --release —— 否则会在陈旧二进制上得到假绿。",
 			version, head)
 	}
 }
@@ -268,7 +268,7 @@ func (d *DLL) CompileErrorsExact(h uintptr) string {
 	}
 	p, _, _ := d.CompileErrors.Call(h)
 	if p == 0 {
-		Fatal("引擎契约破坏：cide_get_compile_errors_length=%d 但 cide_get_compile_errors 返回 NULL", n)
+		Fatal("引擎契约破坏：vitro_get_compile_errors_length=%d 但 vitro_get_compile_errors 返回 NULL", n)
 	}
 	buf := unsafe.Slice((*byte)(unsafe.Pointer(p)), n+1)
 	return string(buf[:n])

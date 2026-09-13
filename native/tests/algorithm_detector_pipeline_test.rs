@@ -12,9 +12,9 @@
 //! 修复前实测（bstSearch 模板）：`match: bst_insert on insert` 一条，
 //! search 零 match（47 帧全部无标注）。
 
-use cide_native::compiler::algorithm_detector::detect_algorithms;
-use cide_native::compiler::lexer::Lexer;
-use cide_native::compiler::parser::Parser;
+use vitro_native::compiler::algorithm_detector::detect_algorithms;
+use vitro_native::compiler::lexer::Lexer;
+use vitro_native::compiler::parser::Parser;
 
 const BST_SEARCH_TEMPLATE: &str = r#"
 #include <stdio.h>

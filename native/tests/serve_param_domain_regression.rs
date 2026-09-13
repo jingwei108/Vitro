@@ -15,8 +15,8 @@
 //! 端到端防线：`scripts/core_asset_verdict/interaction_probe`（Go，J9 有牙，
 //! 修复后 1800 请求零死亡全绿）；本文件把最小复现固化进 cargo test。
 
-use cide_native::session::{CompileUnit, Session};
-use cide_native::session_api;
+use vitro_native::session::{CompileUnit, Session};
+use vitro_native::session_api;
 
 fn setup_10_step_program() -> Session {
     let mut session = Session::default();
@@ -81,8 +81,8 @@ fn repeated_far_seeks_do_not_accumulate_bad_state() {
 #[test]
 fn get_payloads_negative_end_returns_empty() {
     // R-2026-09-03 单元级：负 end 直接钳制，返回空而非 panic
-    use cide_native::unified::engine::UnifiedEngine;
-    use cide_native::unified::types::StepPayload;
+    use vitro_native::unified::engine::UnifiedEngine;
+    use vitro_native::unified::types::StepPayload;
 
     let mut engine = UnifiedEngine::new();
     let dummy = |step: i32| StepPayload {

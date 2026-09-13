@@ -1,4 +1,4 @@
-//! 会话操作的语言中立层：`capi` / `cide_cli serve` / wasm 共用同一套入口语义。
+//! 会话操作的语言中立层：`capi` / `vitro_cli serve` / wasm 共用同一套入口语义。
 //!
 //! 架构纪律（主计划 §2.2 纪律 2）：**三个出口只做薄包装**。此前 capi 第一批把
 //! "运行 → JSON"的构造直接写在 C 导出函数内部；若 serve 再写一份，就会重蹈
@@ -38,7 +38,7 @@ pub fn severity_name(severity: i32) -> &'static str {
 pub fn compile(session: &mut Session) -> Value {
     let units = session.compile.compile_units.clone();
     if units.is_empty() {
-        return error_json("尚未提供编译单元：请先调用 cide_compile_unit");
+        return error_json("尚未提供编译单元：请先调用 vitro_compile_unit");
     }
     let ok = run_multi_file_pipeline(session, units, false).is_ok();
     let diagnostics: Vec<Value> = session
@@ -118,13 +118,13 @@ pub fn run(session: &mut Session) -> Value {
 /// 增量喂入交互输入并继续运行，返回与 [`run`] 同构的结果 JSON。
 ///
 /// **语义**（下游需求清单 A2）：`run` 返回 `waiting_input` 后，调用方可用本入口
-/// 追加 stdin 文本（可含多行，按 [`cide_runtime::RuntimeState::split_stdin`] 同口径切行）并让程序
+/// 追加 stdin 文本（可含多行，按 [`vitro_runtime::RuntimeState::split_stdin`] 同口径切行）并让程序
 /// 继续执行到 `finished` / `trapped` / 下一次 `waiting_input`。
 ///
 /// 状态机：`waiting_input` --input.feed--> `running` --> `waiting_input | finished | trap`
 /// （`feed` 在非等待态也可调用：文本追加到输入缓冲末尾，随后正常续跑。）
 ///
-/// 与 capi `cide_provide_input_line` 同源语义（薄包装），三出口共用本实现。
+/// 与 capi `vitro_provide_input_line` 同源语义（薄包装），三出口共用本实现。
 /// `text` 为空串时仅触发续跑（等价于"再推进一步"）。
 pub fn input_feed(session: &mut Session, text: &str) -> Value {
     if !session.compile.compiled {
@@ -238,7 +238,7 @@ pub fn step_begin(session: &mut Session) -> i32 {
 /// 单步推进一次，返回该步的 `AutoStepResult` 形状 JSON（见 schema 文档 §6.1）。
 pub fn step_next(session: &mut Session) -> Result<Value, String> {
     let Some(mut engine) = session.unified.take() else {
-        return Err("统一模式会话未初始化：请先调用 cide_step_begin".to_string());
+        return Err("统一模式会话未初始化：请先调用 vitro_step_begin".to_string());
     };
     let mut vm = session.vm.take().unwrap_or_default();
     let outcome = engine.run_batch(&mut vm, session, 1);
@@ -290,7 +290,7 @@ pub fn step_next(session: &mut Session) -> Result<Value, String> {
     serde_json::to_value(&result).map_err(|e| format!("JSON 序列化失败：{}", e))
 }
 
-/// 普通 VM 单步（非统一模式；cide_cli step 子命令同款语义）。
+/// 普通 VM 单步（非统一模式；vitro_cli step 子命令同款语义）。
 ///
 /// 首次调用（`running == false`）先初始化步进环境并推进到第一个 step 事件；
 /// 之后每次调用推进一条指令。R2：自 flutter_bridge 收口而来——原实现挂在全局
@@ -406,8 +406,8 @@ fn step_out(session: &Session, status: crate::session::StepStatus, waiting: bool
     }
 }
 
-/// 当前栈帧局部变量快照（cide_cli step 的 `p` 命令；教学变量面板同源）。
-pub fn variables(session: &Session) -> Vec<cide_runtime::VariableSnapshotData> {
+/// 当前栈帧局部变量快照（vitro_cli step 的 `p` 命令；教学变量面板同源）。
+pub fn variables(session: &Session) -> Vec<vitro_runtime::VariableSnapshotData> {
     match session.vm.as_ref() {
         Some(vm) => vm.get_variable_snapshot(),
         None => Vec::new(),
@@ -417,7 +417,7 @@ pub fn variables(session: &Session) -> Vec<cide_runtime::VariableSnapshotData> {
 /// 取 `[start, end)` 步区间的 StepPayload（裁剪到当前 frameCache 窗口内）。
 pub fn payloads(session: &Session, start: i32, end: i32) -> Result<Value, String> {
     let Some(engine) = session.unified.as_ref() else {
-        return Err("统一模式会话未初始化：请先调用 cide_step_begin".to_string());
+        return Err("统一模式会话未初始化：请先调用 vitro_step_begin".to_string());
     };
     Ok(json!({
         "payloads": engine.get_payloads(start, end),
@@ -429,7 +429,7 @@ pub fn payloads(session: &Session, start: i32, end: i32) -> Result<Value, String
 /// Seek 到指定步（窗口内直接命中；越窗走检查点恢复 + 正向重放）。
 pub fn seek(session: &mut Session, target: i32) -> Result<Value, String> {
     let Some(mut engine) = session.unified.take() else {
-        return Err("统一模式会话未初始化：请先调用 cide_step_begin".to_string());
+        return Err("统一模式会话未初始化：请先调用 vitro_step_begin".to_string());
     };
     let mut vm = session.vm.take().unwrap_or_default();
     let result = engine.seek_to(target, &mut vm, session);
@@ -447,7 +447,7 @@ pub fn set_breakpoints(session: &mut Session, lines: &[i32]) -> i32 {
                 vm.add_breakpoint(line);
             }
         }
-        // S3 A2/A3 口径（下游 cide-replay）：断点命中后的暂停态是粘性的，
+        // S3 A2/A3 口径（下游 vitro-replay）：断点命中后的暂停态是粘性的，
         // **清空断点即恢复推进**——serve 出口明示的恢复手段（无独立 resume 方法）。
         // 注意暂停态有**两层**：VM 层 `vm.paused`（断点/step_event 置位）与
         // 统一模式引擎层 `unified.is_paused`（run_batch 见 Paused 置位），
@@ -521,12 +521,12 @@ pub fn memory_regions(session: &Session) -> Value {
 /// 它与 codegen 的实际分配一致（含填充）；末位符号无后继可参照，退化为
 /// `compute_type_size`（标量/指针/数组精确；struct/union/class 因 VM 侧无布局表
 /// 返回 0，再退化为 1 个最小字节）。`alloc_line` 取声明行。
-fn global_region_entries(vm: &crate::vm::core::CideVM) -> Vec<(u32, Value)> {
-    use cide_runtime::GLOBAL_START;
-    let mut globals: Vec<&cide_runtime::Symbol> = vm.get_symbols().iter().filter(|s| !s.is_local).collect();
+fn global_region_entries(vm: &crate::vm::core::VitroVM) -> Vec<(u32, Value)> {
+    use vitro_runtime::GLOBAL_START;
+    let mut globals: Vec<&vitro_runtime::Symbol> = vm.get_symbols().iter().filter(|s| !s.is_local).collect();
     globals.sort_by_key(|s| s.addr);
     // struct/union/class 布局表在 VM 侧不存在，空表即"只算标量与数组"的口径
-    let no_fields: std::collections::HashMap<String, Vec<cide_ast::StructField>> = std::collections::HashMap::new();
+    let no_fields: std::collections::HashMap<String, Vec<vitro_ast::StructField>> = std::collections::HashMap::new();
     let no_class_sizes: std::collections::HashMap<String, i32> = std::collections::HashMap::new();
 
     let mut out = Vec::with_capacity(globals.len());
@@ -538,7 +538,7 @@ fn global_region_entries(vm: &crate::vm::core::CideVM) -> Vec<(u32, Value)> {
             .filter(|s| *s > 0);
         let size = match span {
             Some(s) => s as i32,
-            None => match cide_ast::compute_type_size(&sym.ty, &no_fields, &no_fields, &no_class_sizes) {
+            None => match vitro_ast::compute_type_size(&sym.ty, &no_fields, &no_fields, &no_class_sizes) {
                 0 => 1,
                 n => n,
             },
@@ -549,7 +549,7 @@ fn global_region_entries(vm: &crate::vm::core::CideVM) -> Vec<(u32, Value)> {
                 "addr": addr,
                 "size": size,
                 "name": sym.name,
-                "ty": cide_runtime::type_display_name(&sym.ty),
+                "ty": vitro_runtime::type_display_name(&sym.ty),
                 "is_heap": false,
                 "is_freed": false,
                 "alloc_line": sym.decl_line,
@@ -566,7 +566,7 @@ fn global_region_entries(vm: &crate::vm::core::CideVM) -> Vec<(u32, Value)> {
 /// `name` = 函数名；`alloc_line` = **进入该帧的调用行**（`caller_line`；
 /// `main` 的帧为 0 —— 它不是被调用出来的）；`size` = 帧跨度
 /// （`original_stack_top - locals_base`，与 VM 的 `mem_stack_top -= frame_size` 同源）。
-fn stack_region_entries(vm: &crate::vm::core::CideVM) -> Vec<(u32, Value)> {
+fn stack_region_entries(vm: &crate::vm::core::VitroVM) -> Vec<(u32, Value)> {
     vm.get_call_stack()
         .iter()
         .map(|f| {
@@ -611,7 +611,7 @@ pub fn config(session: &Session) -> Value {
 
 /// `session.reset` 语义单源：清空编译/运行状态，**保留会话级配置**
 /// （隔离预算、判分确定性、argv），与引擎 `reset_runtime` 的"配置保留、运行
-/// 清空"语义一致。serve 与后续出口共用本入口（R3 自 cide_cli 收口）。
+/// 清空"语义一致。serve 与后续出口共用本入口（R3 自 vitro_cli 收口）。
 pub fn reset_session_preserving_config(session: &mut Session) {
     let quarantine_budget = session.memory.quarantine_budget;
     let deterministic = session.runtime.deterministic;
@@ -627,14 +627,14 @@ pub fn reset_session_preserving_config(session: &mut Session) {
 /// E2：引擎能力清单（机器可读真实能力；"版本宏当能力探测"的三层配套之一）。
 ///
 /// 口径（C23 锚定决议）：`__STDC_VERSION__=202311L` 是**名义锚点**，真实能力
-/// 以本清单为准；内存模型常量从 `cide_runtime` 单源引用，禁止在此复刻数值。
+/// 以本清单为准；内存模型常量从 `vitro_runtime` 单源引用，禁止在此复刻数值。
 pub fn capabilities() -> Value {
     use crate::unified::contracts::{BEHAVIOR_CONTRACTS, RESERVED_FIELDS_V0_2, SCHEMA_V0_1_FROZEN_AT, SCHEMA_VERSION, V0_2_FIELD_LEDGER};
     use crate::unified::vocabulary::SEMANTIC_LABEL_VOCABULARY;
-    use cide_runtime::{GLOBAL_REGION_LIMIT, GLOBAL_START, HEAP_START, MEM_SIZE, NULL_TRAP_SIZE};
+    use vitro_runtime::{GLOBAL_REGION_LIMIT, GLOBAL_START, HEAP_START, MEM_SIZE, NULL_TRAP_SIZE};
     json!({
-        "engine": "cide",
-        "abi_version": crate::capi::CIDE_ABI_VERSION,
+        "engine": "vitro",
+        "abi_version": crate::capi::VITRO_ABI_VERSION,
         // 引擎版本串（含构建期 git 短哈希）：消费方据此自检"产物是否当前提交构建"
         "engine_version": crate::capi::engine_version_string(),
         // 协议轨道（B2）：v0.1 冻结状态 + 预留位 + v0.2 台账，消费方据此做版本协商
@@ -655,7 +655,7 @@ pub fn capabilities() -> Value {
                 "spec": "C-语言子集/C语言子集规范.md",
                 "predefined_macros": {
                     "__STDC_VERSION__": "202311L",
-                    "__CIDE_SUBSET__": "1",
+                    "__VITRO_SUBSET__": "1",
                 },
                 "preprocessor": {
                     "object_macros": true,

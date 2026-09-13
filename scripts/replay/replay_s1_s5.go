@@ -19,7 +19,7 @@
 package main
 
 import (
-	"cide/scripts/internal/capi"
+	"vitro/scripts/internal/capi"
 
 	"bufio"
 	"encoding/json"
@@ -45,8 +45,8 @@ var (
 
 func init() {
 	root := capi.ProjectRoot()
-	cliDefault = filepath.Join(root, "native", "target", "release", "cide_cli.exe")
-	dllPath = filepath.Join(root, "native", "target", "release", "cide_native.dll")
+	cliDefault = filepath.Join(root, "native", "target", "release", "vitro_cli.exe")
+	dllPath = filepath.Join(root, "native", "target", "release", "vitro_native.dll")
 }
 
 // ---------------------------------------------------------------- JSON 访问 helper
@@ -100,7 +100,7 @@ func truthy(v any) bool {
 	}
 }
 
-// ---------------------------------------------------------------- Serve：cide_cli serve 会话
+// ---------------------------------------------------------------- Serve：vitro_cli serve 会话
 
 type frame struct {
 	req  map[string]any
@@ -902,11 +902,11 @@ func runS5(s *Serve, rep *Report, payloads []map[string]any, anchor string) {
 	abi := mstr(mmap(rPing["result"])["abi"])
 	// A4a：ABI 版本下限断言（签名契约 ≥ 1.1.0，即 E-P1-5 结构化输出通道起）。
 	// 不硬编码具体版本——引擎按"加函数 = minor"承诺演进（1.2.0 起追加
-	// cide_get_compile_errors_length 等），快照冻结具体串会让每次兼容性加函数
+	// vitro_get_compile_errors_length 等），快照冻结具体串会让每次兼容性加函数
 	// 都假红；下限语义保留牙齿：major 变更（破坏性）或低于 1.1.0 的产物必红。
 	rep.check("S5", "A4a", abiVersionAtLeast(abi, 1, 1), fmt.Sprintf("abi=%s（要求 ≥ 1.1.0）", abi))
 
-	// A4b：直读 dll 的 cide_engine_version（Go 走规范指针读取 + cide_free_string）
+	// A4b：直读 dll 的 vitro_engine_version（Go 走规范指针读取 + vitro_free_string）
 	if _, err := os.Stat(dllPath); err == nil {
 		ver := readEngineVersion(dllPath)
 		rep.check("S5", "A4b", strings.Contains(ver, anchor), fmt.Sprintf("engine_version=%q 含锚定 %s", ver, anchor))
@@ -925,14 +925,14 @@ func head3(ss []string) []string {
 	return ss
 }
 
-// readEngineVersion 读 cide_engine_version 返回的 rust-alloc 字符串并按契约释放。
+// readEngineVersion 读 vitro_engine_version 返回的 rust-alloc 字符串并按契约释放。
 // uintptr→Pointer 转换集中于本函数（vet -unsafeptr=false 豁免，同 gosmoke 裁定）。
 func readEngineVersion(path string) string {
 	dll := syscall.NewLazyDLL(path)
-	procVer := dll.NewProc("cide_engine_version")
-	procFree := dll.NewProc("cide_free_string")
+	procVer := dll.NewProc("vitro_engine_version")
+	procFree := dll.NewProc("vitro_free_string")
 	if procVer.Find() != nil {
-		capi.Fatal("DLL 缺少 cide_engine_version: %s", path)
+		capi.Fatal("DLL 缺少 vitro_engine_version: %s", path)
 	}
 	raw, _, _ := procVer.Call()
 	if raw == 0 {
@@ -1074,7 +1074,7 @@ func isContainer(v any) bool {
 // ---------------------------------------------------------------- main
 
 func main() {
-	cli := flag.String("cli", cliDefault, "cide_cli 路径")
+	cli := flag.String("cli", cliDefault, "vitro_cli 路径")
 	anchor := flag.String("anchor", "", "版本锚定短哈希；缺省 = 从引擎版本串自动取")
 	sections := flag.String("sections", "S1,S2,S3,S5", "要跑的分节")
 	selftest := flag.Bool("selftest", false, "只跑判定口径埋雷自检（J9）")

@@ -3,11 +3,11 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion};
 /// R2：原 flutter_bridge::compile_and_run（全局单例）收口为本地 Session 直驱——
 /// 基准对象不变：编译管线 + 统一模式执行环境初始化。
 fn compile_and_run(source: &str) {
-    use cide_native::engine::compile_pipeline::{run_multi_file_pipeline, setup_vm};
-    use cide_native::engine::session_ops::{inject_preset_files, reset_runtime_for_step};
-    use cide_native::session::{CompileUnit, Session};
-    use cide_native::unified::engine::UnifiedEngine;
-    use cide_native::vm::core::CideVM;
+    use vitro_native::engine::compile_pipeline::{run_multi_file_pipeline, setup_vm};
+    use vitro_native::engine::session_ops::{inject_preset_files, reset_runtime_for_step};
+    use vitro_native::session::{CompileUnit, Session};
+    use vitro_native::unified::engine::UnifiedEngine;
+    use vitro_native::vm::core::VitroVM;
 
     let mut session = Session::default();
     session.compile.compile_units = vec![CompileUnit {
@@ -21,7 +21,7 @@ fn compile_and_run(source: &str) {
 
     let mut engine = UnifiedEngine::new();
     engine.reset();
-    let mut vm = CideVM::default();
+    let mut vm = VitroVM::default();
     reset_runtime_for_step(&mut session);
     setup_vm(&mut vm, &session);
     inject_preset_files(&mut vm, &mut session);

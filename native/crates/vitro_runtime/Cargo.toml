@@ -1,0 +1,9 @@
+[package]
+name = "vitro_runtime"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+vitro_ast = { path = "../vitro_ast" }
+vitro_shared = { path = "../vitro_shared" }
+serde = { version = "1.0", features = ["derive"] }

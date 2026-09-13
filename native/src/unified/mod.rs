@@ -1,4 +1,4 @@
-pub use cide_algorithm_steps as algorithm_steps;
+pub use vitro_algorithm_steps as algorithm_steps;
 pub mod collector;
 pub mod contracts;
 pub mod engine;

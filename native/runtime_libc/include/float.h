@@ -1,4 +1,4 @@
-/* Cide float.h stub */
+/* Vitro float.h stub */
 #define FLT_RADIX 2
 #define FLT_DIG 6
 #define DBL_DIG 15

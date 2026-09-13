@@ -17,9 +17,9 @@
 //! 热点检测与录制均不触发），与 `jit_traces_mut().clear()`（清表后 ip_hits
 //! 仍会累积重新录制）不同——后者会让"解释分支"混入 JIT 步，对照失效。
 
-use cide_native::engine::compile_pipeline::run_multi_file_pipeline;
-use cide_native::engine::session_ops::{execute_run, reset_runtime};
-use cide_native::session::{CompileUnit, Session};
+use vitro_native::engine::compile_pipeline::run_multi_file_pipeline;
+use vitro_native::engine::session_ops::{execute_run, reset_runtime};
+use vitro_native::session::{CompileUnit, Session};
 use std::time::Instant;
 
 struct RunOutcome {

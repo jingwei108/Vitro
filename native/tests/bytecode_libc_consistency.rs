@@ -4,27 +4,27 @@
 //!
 //! 核心逻辑：把 Layer C（Bytecode Libc）的 C 源码同时交给：
 //! 1. Clang：编译成原生可执行文件，输出作为唯一 golden；
-//! 2. Cide：编译成字节码，在 VM 中运行，输出与 golden 对比。
+//! 2. Vitro：编译成字节码，在 VM 中运行，输出与 golden 对比。
 //!
 //! 测试哲学：
 //! - ALL_IN：所有 Bytecode Libc 的 C 源码必须参与验证。
-//! - GOLDEN_FROM_CLANG：golden 只能来自 Clang，不能来自 Cide 自己。
-//! - NO_CODE_DISTORTION：Bytecode Libc 的 C 源码不得为了通过 Cide 编译器而改写。
+//! - GOLDEN_FROM_CLANG：golden 只能来自 Clang，不能来自 Vitro 自己。
+//! - NO_CODE_DISTORTION：Bytecode Libc 的 C 源码不得为了通过 Vitro 编译器而改写。
 
-use cide_native::engine::compile_pipeline::run_multi_file_pipeline;
-use cide_native::engine::session_ops::execute_run;
-use cide_native::session::{CompileUnit, Session};
+use vitro_native::engine::compile_pipeline::run_multi_file_pipeline;
+use vitro_native::engine::session_ops::execute_run;
+use vitro_native::session::{CompileUnit, Session};
 use std::process::Command;
 
 const BASE_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/bytecode_libc_consistency");
 const RUNTIME_LIBC_DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/runtime_libc");
 
-/// 从 Cide session 中提取纯净的 stdout。
+/// 从 Vitro session 中提取纯净的 stdout。
 ///
 /// E-P1-5：引擎附注（"程序运行完成，返回值：N"、内存泄漏报告）已走 note 通道，
 /// 这里直接读结构化 stdout 投影——**不再需要文本正则清洗**（旧实现会在程序自己
 /// 打印同类文本时误删真实输出）。
-fn extract_cide_stdout(session: &Session) -> String {
+fn extract_vitro_stdout(session: &Session) -> String {
     session.runtime.stdout()
 }
 
@@ -33,7 +33,7 @@ fn extract_cide_stdout(session: &Session) -> String {
 /// * `driver_name` — 驱动文件名（如 "test_isdigit.c"）
 /// * `lib_sources` — 库源码文件名列表（如 &["src/ctype.c"]
 ///
-/// 注意：Cide 路径已自动加载预编译的 Bytecode Libc，无需显式传入库源码；
+/// 注意：Vitro 路径已自动加载预编译的 Bytecode Libc，无需显式传入库源码；
 ///       Clang 路径仍需链接 runtime_libc C 源码以生成 golden。
 fn run_consistency_case(driver_name: &str, lib_sources: &[&str]) {
     let driver_path = format!("{}/drivers/{}", BASE_DIR, driver_name);
@@ -88,7 +88,7 @@ fn run_consistency_case(driver_name: &str, lib_sources: &[&str]) {
     // 清理临时可执行文件
     let _ = std::fs::remove_file(&exe_path);
 
-    // ── 2. Cide 路径：编译并运行 ────────────────────────────────────────
+    // ── 2. Vitro 路径：编译并运行 ────────────────────────────────────────
     // 对于已切换到 Bytecode 产品路径的函数（ctype + abs），setup_vm 会自动加载
     // 预编译的 Bytecode Libc；对于仍走 Host 路径的函数，需显式传入 runtime_libc 源码。
     let mut units: Vec<CompileUnit> = vec![CompileUnit {
@@ -114,22 +114,22 @@ fn run_consistency_case(driver_name: &str, lib_sources: &[&str]) {
             .iter()
             .map(|d| format!("{}:{}: {} (E{})", d.filename, d.line, d.message, d.error_code))
             .collect();
-        panic!("Cide 编译失败: {}\n诊断:\n{}", e, diags.join("\n"));
+        panic!("Vitro 编译失败: {}\n诊断:\n{}", e, diags.join("\n"));
     }
 
     let run_result = execute_run(&mut session);
     if let Err(e) = run_result {
-        panic!("Cide 运行失败: {}", e);
+        panic!("Vitro 运行失败: {}", e);
     }
 
-    let cide_output_raw = extract_cide_stdout(&session);
-    let cide_output = normalize_output(&cide_output_raw);
+    let vitro_output_raw = extract_vitro_stdout(&session);
+    let vitro_output = normalize_output(&vitro_output_raw);
 
     // ── 3. 对比 ──────────────────────────────────────────────────────────
     assert_eq!(
-        cide_output, golden,
-        "Cide 输出与 Clang golden 不一致!\n\n--- Cide ---\n{:?}\n--- Clang ---\n{:?}",
-        cide_output, golden
+        vitro_output, golden,
+        "Vitro 输出与 Clang golden 不一致!\n\n--- Vitro ---\n{:?}\n--- Clang ---\n{:?}",
+        vitro_output, golden
     );
 }
 

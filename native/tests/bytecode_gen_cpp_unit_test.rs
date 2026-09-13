@@ -4,35 +4,35 @@ use std::ffi::{c_char, CString};
 
 fn compile_and_run_cpp(source: &str) -> Result<(i32, Vec<String>), String> {
     unsafe {
-        let session = cide_native::capi::cide_session_create();
+        let session = vitro_native::capi::vitro_session_create();
         if session.is_null() {
             return Err("Failed to create session".to_string());
         }
 
         let src = CString::new(source).map_err(|e| e.to_string())?;
         let fname = CString::new("main.cpp").map_err(|e| e.to_string())?;
-        cide_native::capi::cide_compile_unit(session, fname.as_ptr() as *const c_char, src.as_ptr() as *const c_char);
+        vitro_native::capi::vitro_compile_unit(session, fname.as_ptr() as *const c_char, src.as_ptr() as *const c_char);
 
-        let compile_ret = cide_native::capi::cide_compile_all(session);
+        let compile_ret = vitro_native::capi::vitro_compile_all(session);
         if compile_ret != 0 {
-            let err_ptr = cide_native::capi::cide_get_compile_errors(session);
+            let err_ptr = vitro_native::capi::vitro_get_compile_errors(session);
             let err_msg = if err_ptr.is_null() {
                 "Unknown compile error".to_string()
             } else {
                 std::ffi::CStr::from_ptr(err_ptr).to_string_lossy().to_string()
             };
-            cide_native::capi::cide_session_destroy(session);
+            vitro_native::capi::vitro_session_destroy(session);
             return Err(err_msg);
         }
 
-        let run_ret = cide_native::capi::cide_run(session);
+        let run_ret = vitro_native::capi::vitro_run(session);
 
         // E-P1-5：直接读纯程序 stdout 通道（引擎附注走 note 通道），不再做文本清洗。
         let mut outputs = Vec::new();
-        let out_len = cide_native::capi::cide_get_program_output_length(session);
+        let out_len = vitro_native::capi::vitro_get_program_output_length(session);
         if out_len > 0 {
             let mut buf = vec![0u8; out_len as usize + 1];
-            cide_native::capi::cide_get_program_output(session, buf.as_mut_ptr() as *mut c_char, buf.len() as i32);
+            vitro_native::capi::vitro_get_program_output(session, buf.as_mut_ptr() as *mut c_char, buf.len() as i32);
             let out_str = String::from_utf8_lossy(&buf);
             for line in out_str.lines() {
                 let trimmed = line.trim_matches('\0');
@@ -42,14 +42,14 @@ fn compile_and_run_cpp(source: &str) -> Result<(i32, Vec<String>), String> {
             }
         }
 
-        let err_ptr = cide_native::capi::cide_get_runtime_error(session);
+        let err_ptr = vitro_native::capi::vitro_get_runtime_error(session);
         let runtime_err = if err_ptr.is_null() {
             None
         } else {
             Some(std::ffi::CStr::from_ptr(err_ptr).to_string_lossy().to_string())
         };
 
-        cide_native::capi::cide_session_destroy(session);
+        vitro_native::capi::vitro_session_destroy(session);
 
         if let Some(e) = runtime_err {
             if !e.is_empty() {
@@ -256,7 +256,7 @@ fn test_cpp_range_for_vector() {
     let src = r#"
 #include <stdio.h>
 int main() {
-    cide_vec_int v;
+    vitro_vec_int v;
     v.push_back(1);
     v.push_back(2);
     v.push_back(3);
@@ -278,7 +278,7 @@ fn test_cpp_range_for_string() {
     let src = r#"
 #include <stdio.h>
 int main() {
-    cide_string s;
+    vitro_string s;
     s.push_back('a');
     s.push_back('b');
     s.push_back('c');
@@ -397,7 +397,7 @@ fn test_cpp_container_vec_int() {
     let src = r#"
 #include <stdio.h>
 int main() {
-    cide_vec_int v;
+    vitro_vec_int v;
     v.push_back(10);
     v.push_back(20);
     printf("%d\n", v.size());
@@ -418,7 +418,7 @@ fn test_cpp_container_vec_float() {
     let src = r#"
 #include <stdio.h>
 int main() {
-    cide_vec_float v;
+    vitro_vec_float v;
     v.push_back(15);
     v.push_back(25);
     printf("%.1f\n", v.get(0));
@@ -436,7 +436,7 @@ fn test_cpp_container_string() {
     let src = r#"
 #include <stdio.h>
 int main() {
-    cide_string s;
+    vitro_string s;
     s.push_back('h');
     s.push_back('i');
     printf("%d\n", s.size());
@@ -454,15 +454,15 @@ int main() {
 
 #[test]
 fn test_cpp_builtin_layout_from_toml() {
-    let layout = cide_native::compiler::cpp_frontend::builtin_layout::builtin_class_layout("cide_vec_int");
-    assert!(layout.is_some(), "builtin_class_layout should return Some for cide_vec_int");
+    let layout = vitro_native::compiler::cpp_frontend::builtin_layout::builtin_class_layout("vitro_vec_int");
+    assert!(layout.is_some(), "builtin_class_layout should return Some for vitro_vec_int");
     let layout = layout.unwrap();
-    assert_eq!(layout.size, 12, "cide_vec_int size should be 12");
-    assert_eq!(layout.fields.len(), 3, "cide_vec_int should have 3 fields");
+    assert_eq!(layout.size, 12, "vitro_vec_int size should be 12");
+    assert_eq!(layout.fields.len(), 3, "vitro_vec_int should have 3 fields");
     let method_names: Vec<_> = layout.methods.iter().map(|m| m.name.as_str()).collect();
-    assert!(method_names.contains(&"push_back"), "cide_vec_int should have push_back method");
-    assert!(method_names.contains(&"size"), "cide_vec_int should have size method");
-    assert!(method_names.contains(&"get"), "cide_vec_int should have get method");
+    assert!(method_names.contains(&"push_back"), "vitro_vec_int should have push_back method");
+    assert!(method_names.contains(&"size"), "vitro_vec_int should have size method");
+    assert!(method_names.contains(&"get"), "vitro_vec_int should have get method");
 }
 
 #[test]
@@ -470,7 +470,7 @@ fn test_cpp_container_vec_char() {
     let src = r#"
 #include <stdio.h>
 int main() {
-    cide_vec_char v;
+    vitro_vec_char v;
     v.push_back('a');
     v.push_back('b');
     printf("%d\n", v.size());
@@ -491,7 +491,7 @@ fn test_cpp_container_list_int() {
     let src = r#"
 #include <stdio.h>
 int main() {
-    cide_list_int l;
+    vitro_list_int l;
     l.push_back(1);
     l.push_back(2);
     l.push_front(0);
@@ -562,24 +562,24 @@ int main() {
 #[test]
 fn test_cpp_type_map_lookup() {
     assert_eq!(
-        cide_native::compiler::cpp_frontend::type_map::cpp_type_to_cide("vector<int>"),
-        Some("cide_vec_int")
+        vitro_native::compiler::cpp_frontend::type_map::cpp_type_to_vitro("vector<int>"),
+        Some("vitro_vec_int")
     );
     assert_eq!(
-        cide_native::compiler::cpp_frontend::type_map::cpp_type_to_cide("vector<float>"),
-        Some("cide_vec_float")
+        vitro_native::compiler::cpp_frontend::type_map::cpp_type_to_vitro("vector<float>"),
+        Some("vitro_vec_float")
     );
     assert_eq!(
-        cide_native::compiler::cpp_frontend::type_map::cpp_type_to_cide("string"),
-        Some("cide_string")
+        vitro_native::compiler::cpp_frontend::type_map::cpp_type_to_vitro("string"),
+        Some("vitro_string")
     );
     assert_eq!(
-        cide_native::compiler::cpp_frontend::type_map::map_container_method("cide_vec_int", "push_back"),
-        Some("cide_vec_int__push_back")
+        vitro_native::compiler::cpp_frontend::type_map::map_container_method("vitro_vec_int", "push_back"),
+        Some("vitro_vec_int__push_back")
     );
     assert_eq!(
-        cide_native::compiler::cpp_frontend::type_map::map_container_method("cide_string", "push_back"),
-        Some("cide_string__push_back")
+        vitro_native::compiler::cpp_frontend::type_map::map_container_method("vitro_string", "push_back"),
+        Some("vitro_string__push_back")
     );
 }
 
@@ -1054,7 +1054,7 @@ int main() {
     return 0;
 }
 "#;
-    // 当前行为：Cide 允许 goto 向前跳转，a1 在函数退出时析构，a2 所在块被跳过。
+    // 当前行为：Vitro 允许 goto 向前跳转，a1 在函数退出时析构，a2 所在块被跳过。
     // 记录为已知行为：不强制报错，但需确保不崩溃且已构造对象正确析构。
     let (ret, outputs) = compile_and_run_cpp(src).expect("Compile/run failed");
     assert_eq!(ret, 0);

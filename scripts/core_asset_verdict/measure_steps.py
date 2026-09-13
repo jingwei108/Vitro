@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""662 用例的**执行规模**实测：逐个跑 `cide_cli unified`，记录真实步数。
+"""662 用例的**执行规模**实测：逐个跑 `vitro_cli unified`，记录真实步数。
 
 Q3/规模 realism 需要的是步数分布，不是行数。本脚本对每个现有用例实际执行一遍
 （解释器 + 统一模式），记录：总步数 / 是否正常结束 / 是否 trap / 墙钟耗时。
@@ -20,9 +20,9 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="repla
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 NATIVE = ROOT / "native"
-CLI = NATIVE / "target/release/cide_cli.exe"
+CLI = NATIVE / "target/release/vitro_cli.exe"
 if not CLI.exists():
-    CLI = NATIVE / "target/debug/cide_cli.exe"
+    CLI = NATIVE / "target/debug/vitro_cli.exe"
 
 SHADOW_DIR = NATIVE / "tests" / "shadow_verification"
 sys.path.insert(0, str(SHADOW_DIR))

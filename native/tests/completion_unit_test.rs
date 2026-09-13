@@ -2,14 +2,14 @@
 
 //! CompletionEngine 单元测试
 
-use cide_native::compiler::lexer::Lexer;
-use cide_native::compiler::parser::Parser;
-use cide_native::engine::completion::{
+use vitro_native::compiler::lexer::Lexer;
+use vitro_native::compiler::parser::Parser;
+use vitro_native::engine::completion::{
     build_snapshot, build_snapshot_from_source, get_completion_candidates, CompletionKind,
 };
-use cide_native::session::Session;
+use vitro_native::session::Session;
 
-fn parse(source: &str) -> Option<cide_native::compiler::ast::ProgramNode> {
+fn parse(source: &str) -> Option<vitro_native::compiler::ast::ProgramNode> {
     let (tokens, _) = Lexer::new(source).tokenize();
     let (program, _) = Parser::new(tokens).parse();
     program
@@ -86,7 +86,7 @@ fn test_completion_expression_context_locals_first() {
     "#;
     let program = parse(source).unwrap();
     let mut session = Session::default();
-    cide_native::engine::completion::update_completion_snapshot(&mut session, &program);
+    vitro_native::engine::completion::update_completion_snapshot(&mut session, &program);
 
     // r#" 后的换行导致 line 0 是空行
     // line 5 = `            ` (空行 inside foo), col 12
@@ -112,7 +112,7 @@ fn test_completion_member_access_struct() {
     "#;
     let program = parse(source).unwrap();
     let mut session = Session::default();
-    cide_native::engine::completion::update_completion_snapshot(&mut session, &program);
+    vitro_native::engine::completion::update_completion_snapshot(&mut session, &program);
 
     // line 7 = `            p.` (r#" 后的空行导致 line 0 为空)
     let candidates = get_completion_candidates(&session, source, 7, 14, "");
@@ -144,7 +144,7 @@ fn test_completion_member_access_pointer() {
     "#;
     let program = parse(source).unwrap();
     let mut session = Session::default();
-    cide_native::engine::completion::update_completion_snapshot(&mut session, &program);
+    vitro_native::engine::completion::update_completion_snapshot(&mut session, &program);
 
     // line 7 = `            n->`
     let candidates = get_completion_candidates(&session, source, 7, 16, "");
@@ -164,7 +164,7 @@ fn test_completion_type_context() {
     "#;
     let program = parse(source).unwrap();
     let mut session = Session::default();
-    cide_native::engine::completion::update_completion_snapshot(&mut session, &program);
+    vitro_native::engine::completion::update_completion_snapshot(&mut session, &program);
 
     // line 4 = `            int ` -> TypePosition 上下文
     let candidates = get_completion_candidates(&session, source, 4, 16, "");
@@ -183,7 +183,7 @@ fn test_completion_format_string() {
     "#;
     let program = parse(source).unwrap();
     let mut session = Session::default();
-    cide_native::engine::completion::update_completion_snapshot(&mut session, &program);
+    vitro_native::engine::completion::update_completion_snapshot(&mut session, &program);
 
     let candidates = get_completion_candidates(&session, source, 2, 20, "%");
     let labels: Vec<String> = candidates.iter().map(|c| c.label.clone()).collect();
@@ -197,7 +197,7 @@ fn test_completion_preprocessor() {
     let source = "#include <\n";
     let program = parse(source).unwrap_or_default();
     let mut session = Session::default();
-    cide_native::engine::completion::update_completion_snapshot(&mut session, &program);
+    vitro_native::engine::completion::update_completion_snapshot(&mut session, &program);
 
     let candidates = get_completion_candidates(&session, source, 0, 10, "");
     let labels: Vec<String> = candidates.iter().map(|c| c.label.clone()).collect();
@@ -214,7 +214,7 @@ fn test_completion_function_insert_text() {
     "#;
     let program = parse(source).unwrap();
     let mut session = Session::default();
-    cide_native::engine::completion::update_completion_snapshot(&mut session, &program);
+    vitro_native::engine::completion::update_completion_snapshot(&mut session, &program);
 
     // line 3 = `            ` (空行 inside foo)
     let candidates = get_completion_candidates(&session, source, 3, 12, "bar");
@@ -359,8 +359,8 @@ fn test_completion_type_context_with_incomplete_code() {
 #[test]
 fn test_find_variable_type_parses_unsigned_int_param() {
     // B48: 验证带空格的类型名（如 unsigned int）能被正确解析。
-    use cide_native::engine::completion::candidates::find_variable_type;
-    use cide_native::engine::completion::{CompletionSnapshot, SnapshotFunc};
+    use vitro_native::engine::completion::candidates::find_variable_type;
+    use vitro_native::engine::completion::{CompletionSnapshot, SnapshotFunc};
 
     let snapshot = CompletionSnapshot {
         functions: vec![SnapshotFunc {

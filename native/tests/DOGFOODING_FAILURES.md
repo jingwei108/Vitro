@@ -1,8 +1,8 @@
-# Cide C++ Dogfooding 失败记录
+# Vitro C++ Dogfooding 失败记录
 
 > **原则**：All in. Record don't hide. Fix real bugs, not test cases.
 >
-> Dogfooding 验证是 Cide C++ 编译器正确性的终极测试：用 Cide C++ 子集编写纯 C++ 容器/算法实现，验证其运行时行为与 C 基线一致，并对简单方法进行字节码等价验证。
+> Dogfooding 验证是 Vitro C++ 编译器正确性的终极测试：用 Vitro C++ 子集编写纯 C++ 容器/算法实现，验证其运行时行为与 C 基线一致，并对简单方法进行字节码等价验证。
 
 ---
 

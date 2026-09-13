@@ -1,9 +1,9 @@
-# Cide 自研 VM 体验优势设计文档
+# Vitro 自研 VM 体验优势设计文档
 
 > **核心理念**：自研 VM 的优势不是省内存，而是做通用 IDE/可视化工具做不出来的教学体验。  
 > **性能原则**：中端手机 50MB 内存换零延迟交互，完全可接受。拒绝为省 47.5MB 做过度工程化。
 >
-> **2026-09-11 前端切割后现状**：教学体验的载体已从 Dart widget 转为**协议载荷 + 三出口 API**。本仓库负责在后端产出这些能力（快照/检查点/热力图/语义标注/变量历史/变量级高亮），经 C ABI、wasm32、`cide_cli serve` 交付；渲染与交互由社区前端实现。载荷字段以 [`docs/spec/STEP_PAYLOAD_SCHEMA_V0_1.md`](../../spec/STEP_PAYLOAD_SCHEMA_V0_1.md 为准。
+> **2026-09-11 前端切割后现状**：教学体验的载体已从 Dart widget 转为**协议载荷 + 三出口 API**。本仓库负责在后端产出这些能力（快照/检查点/热力图/语义标注/变量历史/变量级高亮），经 C ABI、wasm32、`vitro_cli serve` 交付；渲染与交互由社区前端实现。载荷字段以 [`docs/spec/STEP_PAYLOAD_SCHEMA_V0_1.md`](../../spec/STEP_PAYLOAD_SCHEMA_V0_1.md 为准。
 >
 > **最后核对日期**：2026-09-11（修订：实现位置表中的 Dart widget 改为后端能力 + 三出口载荷；修正正文中的旧模块路径，并如实记录 `unified/checkpoint.rs` 已不存在等现状差异）
 
@@ -65,7 +65,7 @@
 
 ```rust
 // 后端：行号 → 执行次数
-// 结构定义：native/crates/cide_runtime/src/runtime_state.rs 的 ExecutionHeatmap
+// 结构定义：native/crates/vitro_runtime/src/runtime_state.rs 的 ExecutionHeatmap
 // 收集与投递：native/src/unified/collector.rs + native/src/unified/types.rs
 pub struct ExecutionHeatmap {
     pub line_counts: HashMap<i32, u64>,      // 行号 → 执行次数
@@ -176,7 +176,7 @@ pub struct VarHistory {
 }
 
 // 执行过程中自动收集（历史设计稿，仓库中不存在）
-fn collect_var_history(vm: &CideVM, step: i32) -> Vec<VarHistory> {
+fn collect_var_history(vm: &VitroVM, step: i32) -> Vec<VarHistory> {
     vm.symbols.iter()
         .filter(|s| s.scope == Scope::Local)
         .map(|s| VarHistory {
@@ -228,7 +228,7 @@ for (int i = 0; i <= n; i++) {   // 应该是 i < n
 
 **通用 IDE**：程序崩溃，终端输出 `Segmentation fault`，学生一脸懵逼。
 
-**Cide**：
+**Vitro**：
 
 ```
 ⚠️ 运行时错误：数组越界
@@ -250,7 +250,7 @@ for (int i = 0; i <= n; i++) {   // 应该是 i < n
 ### 5.2 技术实现
 
 ```rust
-impl CideVM {
+impl VitroVM {
     pub fn step_next_safe(&mut self) -> Result<(), TrapInfo> {
         let checkpoint = self.snapshot();  // 执行前保存
         match self.step_next() {
@@ -308,7 +308,7 @@ pub fn get_variable_highlights(&self) -> Vec<VariableHighlight> {
 }
 ```
 
-消费方在编辑器中按 `line` / `column` / `length` 绘制下划线、边框或底色——**渲染属消费方职责**（社区前端自行实现，原 Dart `CideEditor.spanBuilder` 已随 `CideFlutter/` 迁出，历史资产，已迁出）。后端需保证的是：每步能给出"这一步访问了哪些变量、以何种方式访问"。
+消费方在编辑器中按 `line` / `column` / `length` 绘制下划线、边框或底色——**渲染属消费方职责**（社区前端自行实现，原 Dart `VitroEditor.spanBuilder` 已随 `CideFlutter/` 迁出，历史资产，已迁出）。后端需保证的是：每步能给出"这一步访问了哪些变量、以何种方式访问"。
 
 > **已落地的等价载荷（口径需对齐）**：`docs/spec/STEP_PAYLOAD_SCHEMA_V0_1.md` 的 `accessed_vars[]`（`AccessedVar`）目前只有两个字段：`name` 与 `access_type`（枚举仅 `"Read"` / `"Write"`，见 schema §2.3、§3.2，大小写敏感，无第三种取值）。上例的 `VariableHighlight`（含 `line` / `column` / `length` / `Declare` / `Compare`）在仓库中**不存在**：**精确到列范围的高亮与"声明/比较"语义属未完成缺口**，消费方目前只能按"变量名 + 读写类型"高亮。
 
@@ -372,23 +372,23 @@ pub struct StepPayload {
 
 ### 7.3 检查点管理
 
-> **现状（2026-09-11 核实）**：`CheckpointManager` **确实存在**，但位于 `native/crates/cide_vm/src/snapshot.rs`（不是设计稿暗示的 `unified/checkpoint.rs`——**该文件不存在**），且实际 API 比下例更丰富：`new(interval)`、`should_checkpoint(step, semantic_label)`（**语义感知**，非机械的 `step % interval`）、`save`、`nearest(target)`、`seek` 重放，并支持 `MemoryImage::Full` 与增量内存映像的链式重建。下例为历史设计稿，仅示意思路。
+> **现状（2026-09-11 核实）**：`CheckpointManager` **确实存在**，但位于 `native/crates/vitro_vm/src/snapshot.rs`（不是设计稿暗示的 `unified/checkpoint.rs`——**该文件不存在**），且实际 API 比下例更丰富：`new(interval)`、`should_checkpoint(step, semantic_label)`（**语义感知**，非机械的 `step % interval`）、`save`、`nearest(target)`、`seek` 重放，并支持 `MemoryImage::Full` 与增量内存映像的链式重建。下例为历史设计稿，仅示意思路。
 
 ```rust
-// 历史设计稿（实际实现在 native/crates/cide_vm/src/snapshot.rs）
+// 历史设计稿（实际实现在 native/crates/vitro_vm/src/snapshot.rs）
 pub struct CheckpointManager {
     pub checkpoints: Vec<(i32, VMSnapshot)>,  // (step_index, snapshot)
     pub interval: i32,                        // 20 步
 }
 
 impl CheckpointManager {
-    pub fn maybe_save(&mut self, step: i32, vm: &CideVM) {
+    pub fn maybe_save(&mut self, step: i32, vm: &VitroVM) {
         if step % self.interval == 0 {
             self.checkpoints.push((step, vm.snapshot()));
         }
     }
     
-    pub fn seek_to(&self, target: i32, vm: &mut CideVM) {
+    pub fn seek_to(&self, target: i32, vm: &mut VitroVM) {
         // 找到最近检查点
         let (idx, snap) = self.checkpoints.iter().rfind(|(s, _)| *s <= target).unwrap();
         vm.restore(snap);
@@ -435,9 +435,9 @@ impl CheckpointManager {
 
 | 优先级 | 功能 | 状态 | 后端实现位置 / 交付载荷 |
 |:---|:---|:---|:---|
-| P0 | VM 全量快照/恢复 + 检查点管理 | ✅ 已实现 | `native/crates/cide_vm/src/snapshot.rs`（`VMSnapshot` / `CheckpointManager`）+ `native/src/unified/engine.rs`（seek 重放） |
+| P0 | VM 全量快照/恢复 + 检查点管理 | ✅ 已实现 | `native/crates/vitro_vm/src/snapshot.rs`（`VMSnapshot` / `CheckpointManager`）+ `native/src/unified/engine.rs`（seek 重放） |
 | P0 | 自动执行模式（收集 StepPayload） | ✅ 已实现 | `native/src/unified/engine.rs` `run_batch()` + `native/src/unified/collector.rs` |
-| P1 | 执行路径热力图（Heatmap） | ✅ 已实现 | `native/crates/cide_runtime/src/runtime_state.rs`（`ExecutionHeatmap`）+ 载荷 `heatmap_line` / `heatmap_count`（渲染属消费方） |
+| P1 | 执行路径热力图（Heatmap） | ✅ 已实现 | `native/crates/vitro_runtime/src/runtime_state.rs`（`ExecutionHeatmap`）+ 载荷 `heatmap_line` / `heatmap_count`（渲染属消费方） |
 | P1 | 排序动画 MVP + 语义进度条 | ✅ 后端载荷已实现 | `vis_events[]`（`AlgorithmStepSnapshot` + `VisEvent`）+ `semantic_label`（动画渲染属消费方） |
 | P1 | 变量变化历史 | ⚠️ 部分 | 载荷 `local_vars` 已按步给出；**变化点索引未物化**（缺口，见 §3.2），趋势图由消费方按窗口自行推导 |
 | P2 | 运行时异常自动回退 | ✅ 已实现 | `native/src/unified/engine.rs` `pre_step_snap` + `root_cause_hint` 载荷 |
@@ -450,7 +450,7 @@ impl CheckpointManager {
 
 ## 附录：竞品对比
 
-| 功能 | VisuAlgo | Python Tutor | GDB/LLDB | VisualBinaryTree | **Cide（本方案）** |
+| 功能 | VisuAlgo | Python Tutor | GDB/LLDB | VisualBinaryTree | **Vitro（本方案）** |
 |:---|:---|:---|:---|:---|:---|
 | 算法动画 | ✅ | ❌ | ❌ | ✅ | ✅ |
 | 进度条拖动 | ❌ | ❌ | ❌ | ✅ | ✅ |

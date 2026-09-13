@@ -1,14 +1,14 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use cide_native::compiler::ast::{BinaryOp, Expr, Stmt, TypeKind};
-use cide_native::compiler::lexer::Lexer;
-use cide_native::compiler::parser::Parser;
+use vitro_native::compiler::ast::{BinaryOp, Expr, Stmt, TypeKind};
+use vitro_native::compiler::lexer::Lexer;
+use vitro_native::compiler::parser::Parser;
 
 fn parse(
     src: &str,
 ) -> (
-    Option<cide_native::compiler::ast::ProgramNode>,
-    Vec<cide_native::compiler::parser::ParseError>,
+    Option<vitro_native::compiler::ast::ProgramNode>,
+    Vec<vitro_native::compiler::parser::ParseError>,
 ) {
     let (tokens, _) = Lexer::new(src).tokenize();
     Parser::new(tokens).parse()

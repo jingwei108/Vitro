@@ -1,11 +1,11 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use cide_native::compiler::codegen::BytecodeGen;
-use cide_native::compiler::lexer::Lexer;
-use cide_native::compiler::parser::Parser;
-use cide_native::compiler::typeck::TypeChecker;
+use vitro_native::compiler::codegen::BytecodeGen;
+use vitro_native::compiler::lexer::Lexer;
+use vitro_native::compiler::parser::Parser;
+use vitro_native::compiler::typeck::TypeChecker;
 
-fn compile_source(source: &str) -> Result<cide_native::compiler::codegen::CompileOutput, String> {
+fn compile_source(source: &str) -> Result<vitro_native::compiler::codegen::CompileOutput, String> {
     let (tokens, lex_errors) = Lexer::new(source).tokenize();
     if !lex_errors.is_empty() {
         return Err(format!("Lexer errors: {:?}", lex_errors));

@@ -1,4 +1,4 @@
-/* Cide time.h stub */
+/* Vitro time.h stub */
 typedef long long time_t;
 typedef long long clock_t;
 

@@ -8,25 +8,25 @@
 //   - Clang 侧：文件用例在原目录编译（#include 解析）、-Wno-implicit-function-declaration、
 //     编译 30s / 运行 5s 超时、worker 隔离运行目录 + VFS 预设文件（test.txt / numbers.txt）、
 //     结果中的运行目录路径归一化为 <rundir>；
-//   - Cide 侧：capi 直调（compile_unit+compile_all / set_input_mode+set_input）+
+//   - Vitro 侧：capi 直调（compile_unit+compile_all / set_input_mode+set_input）+
 //     E-P1-5 结构化输出通道（禁文本清洗）+ ABI 缺失 / 产物版本串不含 HEAD 时 fail fast；
-//   - 判定（主驱动口径，与 C++ 版不同）：都编译失败=match；clang OK+cide 编译失败=compile_gap；
-//     都编译 OK 且都运行失败=match；仅 cide 运行失败=known_issue（KNOWN_FAILURE_CASES）/runtime_gap；
+//   - 判定（主驱动口径，与 C++ 版不同）：都编译失败=match；clang OK+vitro 编译失败=compile_gap；
+//     都编译 OK 且都运行失败=match；仅 vitro 运行失败=known_issue（KNOWN_FAILURE_CASES）/runtime_gap；
 //     stdout 不一致=known_issue（category 含 "bug" 或 KNOWN_FAILURE_CASES）/output_gap；
-//     仅 clang 编译失败=cide_better；
+//     仅 clang 编译失败=vitro_better；
 //   - 门禁：非预期差异（compile_gap / runtime_gap / output_gap）>0 → exit 1；
 //     Clang 预检失败 / 产物不新鲜 → exit 2；DLL 缺失 → exit 1；
 //   - 报告三件套：Markdown（带时间戳 + latest）、JSON（带时间戳 + latest）、
 //     kr_leetcode_report.json；--limit 调试样本不覆盖任何 latest。
 //
 // 与 Python 版的差异（有意的，均记录在案）：
-//   - 并发形态：Clang 侧并发（--jobs，0=自动 min(CPU,8)），Cide 侧互斥锁串行——
+//   - 并发形态：Clang 侧并发（--jobs，0=自动 min(CPU,8)），Vitro 侧互斥锁串行——
 //     DLL 并发调用 → 堆损坏是实测结论（AGENTS.md D5 进度），单进程内不做线程安全假设；
 //     Python 版靠多进程绕开该限制，Go 单进程 + 互斥是等价的安全形态；
 //   - Clang 结果缓存为 Go 自有 schema（"go1"）：key 用 Go 结构体序列化 + sha256，
 //     与 Python key（json.dumps sort_keys）天然不同名、互不干扰、可共存于同一 .clang_cache/；
 //   - stdin 口径修正：Python text=True 在 Windows 上把 stdin 的 \n 翻译成 \r\n 再喂 Clang
-//     （而 Cide 收 \n，"同一份字节"名不副实）；Go 两侧喂同一份 .in 内容
+//     （而 Vitro 收 \n，"同一份字节"名不副实）；Go 两侧喂同一份 .in 内容
 //     （经 universal-newlines 归一为 \n，与 Python Path.read_text 的读取语义一致）；
 //   - Clang 编译失败重试 3 次（C++ 版第一站实证 CI runner 瞬时故障）；
 //   - 不再内置硬编码 SHADOW_CASES fallback：目录加载失败/为空 → fail loud（exit 2）。
@@ -40,7 +40,7 @@
 package main
 
 import (
-	"cide/scripts/internal/capi"
+	"vitro/scripts/internal/capi"
 
 	"bytes"
 	"context"
@@ -67,7 +67,7 @@ import (
 var (
 	projectRoot   = capi.ProjectRoot()
 	nativeDir     = filepath.Join(projectRoot, "native")
-	dllPath       = filepath.Join(nativeDir, "target", "release", "cide_native.dll")
+	dllPath       = filepath.Join(nativeDir, "target", "release", "vitro_native.dll")
 	scriptDir     = filepath.Join(nativeDir, "tests", "shadow_verification")
 	clangCacheDir = filepath.Join(scriptDir, ".clang_cache")
 	runRoot       = filepath.Join(scriptDir, ".shadow_tmp")
@@ -83,15 +83,15 @@ var (
 	// CI runner 上 clang 偶发瞬时失败（D5 第一站实测，shadow_verify_cpp.go 同款）
 	clangRetry = 3
 
-	// VFS 预设文件：Cide 在 setup_vm / inject_preset_files 中注入同样内容，
+	// VFS 预设文件：Vitro 在 setup_vm / inject_preset_files 中注入同样内容，
 	// 这里写物理文件让 Clang 侧看到一致的文件环境。
 	presetFiles = map[string]string{
 		"test.txt":    "hello\nworld\n",
 		"numbers.txt": "1 2 3 4 5\n",
 	}
 
-	// 已知失败用例（与 E2E 防线 cide_e2e.rs 的 KNOWN_TEMPLATE_FAILURES 常量对齐，
-	// 根因分析见 native/tests/E2E_FAILURES.md）。这些模板在 Cide VM 的边界检查下
+	// 已知失败用例（与 E2E 防线 vitro_e2e.rs 的 KNOWN_TEMPLATE_FAILURES 常量对齐，
+	// 根因分析见 native/tests/E2E_FAILURES.md）。这些模板在 Vitro VM 的边界检查下
 	// 触发陷阱而 Clang 静默 UB，属于已记录的教学差异，门禁不视为回归。
 	// ⚠️ 防线 5 双向监控约定：若这些用例在 E2E 防线转绿，需同步移除此处条目。
 	knownFailureCases = map[string]bool{
@@ -122,7 +122,7 @@ type runResult struct {
 
 type shadowCase struct {
 	name     string
-	source   string // 清洗后源码（剔除 "// @" 行；与 Cide compile_unit 收到的一致）
+	source   string // 清洗后源码（剔除 "// @" 行；与 Vitro compile_unit 收到的一致）
 	category string // 预期分类，如 "double"、"arch_diff_bug"
 	srcDir   string // baseline / gap / template / knr / leetcode
 	path     string // 源文件绝对路径（#include 解析、缓存 origin）
@@ -131,7 +131,7 @@ type shadowCase struct {
 
 // normalizeNewlines 等价 Python 文本模式读取的 universal newlines：
 // \r\n → \n、孤立 \r → \n。用例源码 / .in 内容统一经此归一，
-// 保证 Cide 与缓存材料看到的字节与 Python 驱动一致。
+// 保证 Vitro 与缓存材料看到的字节与 Python 驱动一致。
 func normalizeNewlines(s string) string {
 	if !strings.ContainsRune(s, '\r') {
 		return s
@@ -146,7 +146,7 @@ func normalizeNewlines(s string) string {
 // 自检不过 → 退出码 2 拒绝运行：判定函数坏了的"全绿"比没有门禁更坏。
 func selfCheck() {
 	clangOK := runResult{Compiler: "clang", CompileSuccess: true, RunSuccess: true, Stdout: "1\n2\n", ExitCode: 0}
-	cideOK := runResult{Compiler: "cide", CompileSuccess: true, RunSuccess: true, Stdout: "1\n2\n", ExitCode: 0}
+	vitroOK := runResult{Compiler: "vitro", CompileSuccess: true, RunSuccess: true, Stdout: "1\n2\n", ExitCode: 0}
 	c := func(name, category string) shadowCase {
 		return shadowCase{name: name, category: category}
 	}
@@ -154,32 +154,32 @@ func selfCheck() {
 		name  string
 		cs    shadowCase
 		clang runResult
-		cide  runResult
+		vitro  runResult
 		want  string
 	}{
-		{"两侧一致 → match", c("x", "baseline"), clangOK, cideOK, "match"},
-		{"cide 编译失败 → compile_gap", c("x", "baseline"), clangOK, runResult{Compiler: "cide", CompileSuccess: false}, "compile_gap"},
+		{"两侧一致 → match", c("x", "baseline"), clangOK, vitroOK, "match"},
+		{"vitro 编译失败 → compile_gap", c("x", "baseline"), clangOK, runResult{Compiler: "vitro", CompileSuccess: false}, "compile_gap"},
 		// 语义雷区：主驱动口径——两侧都编译失败是 match（用例本身可能有问题），
 		// 不是 C++ 版的 clang_compile_fail；若变成 compile_gap 会制造全量假红。
-		{"都编译失败 → match", c("x", "baseline"), runResult{Compiler: "clang", CompileSuccess: false}, runResult{Compiler: "cide", CompileSuccess: false}, "match"},
-		{"clang 编译失败而 cide 通过 → cide_better", c("x", "baseline"), runResult{Compiler: "clang", CompileSuccess: false}, cideOK, "cide_better"},
-		// J2：gap 目录 = "Cide 扩展"声明域，clang 拒绝属预期 → gap_extension
-		{"gap 目录 clang 拒绝 → gap_extension", shadowCase{name: "x", category: "gap", srcDir: "gap"}, runResult{Compiler: "clang", CompileSuccess: false}, cideOK, "gap_extension"},
-		{"都运行失败 → match", c("x", "baseline"), runResult{Compiler: "clang", CompileSuccess: true, RunSuccess: false, RunError: "boom"}, runResult{Compiler: "cide", CompileSuccess: true, RunSuccess: false, RunError: "boom"}, "match"},
-		{"仅 cide 运行失败 → runtime_gap", c("x", "baseline"), clangOK, runResult{Compiler: "cide", CompileSuccess: true, RunSuccess: false, RunError: "trap"}, "runtime_gap"},
+		{"都编译失败 → match", c("x", "baseline"), runResult{Compiler: "clang", CompileSuccess: false}, runResult{Compiler: "vitro", CompileSuccess: false}, "match"},
+		{"clang 编译失败而 vitro 通过 → vitro_better", c("x", "baseline"), runResult{Compiler: "clang", CompileSuccess: false}, vitroOK, "vitro_better"},
+		// J2：gap 目录 = "Vitro 扩展"声明域，clang 拒绝属预期 → gap_extension
+		{"gap 目录 clang 拒绝 → gap_extension", shadowCase{name: "x", category: "gap", srcDir: "gap"}, runResult{Compiler: "clang", CompileSuccess: false}, vitroOK, "gap_extension"},
+		{"都运行失败 → match", c("x", "baseline"), runResult{Compiler: "clang", CompileSuccess: true, RunSuccess: false, RunError: "boom"}, runResult{Compiler: "vitro", CompileSuccess: true, RunSuccess: false, RunError: "boom"}, "match"},
+		{"仅 vitro 运行失败 → runtime_gap", c("x", "baseline"), clangOK, runResult{Compiler: "vitro", CompileSuccess: true, RunSuccess: false, RunError: "trap"}, "runtime_gap"},
 		// KNOWN_FAILURE_CASES 豁免：已记录的教学差异不统计为 runtime_gap
-		{"已知失败用例运行失败 → known_issue", c("bTree_default", "baseline"), clangOK, runResult{Compiler: "cide", CompileSuccess: true, RunSuccess: false, RunError: "trap"}, "known_issue"},
-		{"输出不同 → output_gap", c("x", "baseline"), clangOK, runResult{Compiler: "cide", CompileSuccess: true, RunSuccess: true, Stdout: "1\n3\n"}, "output_gap"},
+		{"已知失败用例运行失败 → known_issue", c("bTree_default", "baseline"), clangOK, runResult{Compiler: "vitro", CompileSuccess: true, RunSuccess: false, RunError: "trap"}, "known_issue"},
+		{"输出不同 → output_gap", c("x", "baseline"), clangOK, runResult{Compiler: "vitro", CompileSuccess: true, RunSuccess: true, Stdout: "1\n3\n"}, "output_gap"},
 		// category 含 "bug" 豁免：已记录的架构差异不统计为 output_gap
-		{"输出不同但 category 含 bug → known_issue", c("x", "arch_diff_bug"), clangOK, runResult{Compiler: "cide", CompileSuccess: true, RunSuccess: true, Stdout: "1\n3\n"}, "known_issue"},
-		{"输出不同但用例已知 → known_issue", c("spfa_default", "baseline"), clangOK, runResult{Compiler: "cide", CompileSuccess: true, RunSuccess: true, Stdout: "1\n3\n"}, "known_issue"},
+		{"输出不同但 category 含 bug → known_issue", c("x", "arch_diff_bug"), clangOK, runResult{Compiler: "vitro", CompileSuccess: true, RunSuccess: true, Stdout: "1\n3\n"}, "known_issue"},
+		{"输出不同但用例已知 → known_issue", c("spfa_default", "baseline"), clangOK, runResult{Compiler: "vitro", CompileSuccess: true, RunSuccess: true, Stdout: "1\n3\n"}, "known_issue"},
 		// 语义雷区：这两条若变红，说明 strip / CRLF 归一口径被破坏——
 		// Python 版靠 .strip() + universal newlines 保持 match，Go 版必须同语义。
-		{"尾部空白差异仍 → match", c("x", "baseline"), clangOK, runResult{Compiler: "cide", CompileSuccess: true, RunSuccess: true, Stdout: "1\n2\n   \n"}, "match"},
-		{"CRLF/LF 差异仍 → match", c("x", "baseline"), clangOK, runResult{Compiler: "cide", CompileSuccess: true, RunSuccess: true, Stdout: "1\r\n2\r\n"}, "match"},
+		{"尾部空白差异仍 → match", c("x", "baseline"), clangOK, runResult{Compiler: "vitro", CompileSuccess: true, RunSuccess: true, Stdout: "1\n2\n   \n"}, "match"},
+		{"CRLF/LF 差异仍 → match", c("x", "baseline"), clangOK, runResult{Compiler: "vitro", CompileSuccess: true, RunSuccess: true, Stdout: "1\r\n2\r\n"}, "match"},
 	}
 	for _, ck := range checks {
-		if got := analyzeDiff(ck.cs, ck.clang, ck.cide); got != ck.want {
+		if got := analyzeDiff(ck.cs, ck.clang, ck.vitro); got != ck.want {
 			capi.Fatal("启动自检失败：%s：期望 %s，实际 %s（判定口径已破坏，拒绝运行）", ck.name, ck.want, got)
 		}
 	}
@@ -271,7 +271,7 @@ func runWithClangOnce(cs shadowCase, runDir string) runResult {
 			Stderr: compileErrBuf.String(), ExitCode: code, DurationMs: msSince(start), abnormal: abnormal}
 	}
 
-	// 运行（cwd = 隔离运行目录；stdin 与 Cide 侧喂同一份字节）
+	// 运行（cwd = 隔离运行目录；stdin 与 Vitro 侧喂同一份字节）
 	runCtx, runCancel := context.WithTimeout(context.Background(), clangRunTimeout)
 	defer runCancel()
 	runCmd := exec.CommandContext(runCtx, exeFile)
@@ -457,21 +457,21 @@ func clangCacheStore(key string, result runResult) {
 	_ = os.Rename(tmp, filepath.Join(clangCacheDir, key+".json"))
 }
 
-// ---------------------------------------------------------------- Cide 侧
+// ---------------------------------------------------------------- Vitro 侧
 
-// cideMu：引擎 DLL 会话级线程安全性已实证为不安全（并发 → 堆损坏，见 AGENTS.md
-// D5 进度），Cide 侧全程互斥串行；Clang 侧是耗时大头，由 goroutine 池并发。
-var cideMu sync.Mutex
+// vitroMu：引擎 DLL 会话级线程安全性已实证为不安全（并发 → 堆损坏，见 AGENTS.md
+// D5 进度），Vitro 侧全程互斥串行；Clang 侧是耗时大头，由 goroutine 池并发。
+var vitroMu sync.Mutex
 
-// runWithCide 通过 C API 调用 Cide 编译并运行（文件用例走 compile_unit+compile_all）。
-func runWithCide(d *capi.DLL, cs shadowCase) runResult {
-	cideMu.Lock()
-	defer cideMu.Unlock()
+// runWithVitro 通过 C API 调用 Vitro 编译并运行（文件用例走 compile_unit+compile_all）。
+func runWithVitro(d *capi.DLL, cs shadowCase) runResult {
+	vitroMu.Lock()
+	defer vitroMu.Unlock()
 
 	start := time.Now()
 	handle, _, _ := d.SessionCreate.Call()
 	if handle == 0 {
-		return runResult{Compiler: "cide", CompileSuccess: false, CompileError: "session create failed", ExitCode: -1,
+		return runResult{Compiler: "vitro", CompileSuccess: false, CompileError: "session create failed", ExitCode: -1,
 			DurationMs: msSince(start)}
 	}
 	defer d.SessionDestroy.Call(handle)
@@ -497,7 +497,7 @@ func runWithCide(d *capi.DLL, cs shadowCase) runResult {
 		if errMsg == "" {
 			errMsg = "Unknown compile error"
 		}
-		return runResult{Compiler: "cide", CompileSuccess: false, CompileError: errMsg,
+		return runResult{Compiler: "vitro", CompileSuccess: false, CompileError: errMsg,
 			Stderr: errMsg, ExitCode: int(int32(compileRet)), DurationMs: msSince(start)}
 	}
 
@@ -514,7 +514,7 @@ func runWithCide(d *capi.DLL, cs shadowCase) runResult {
 	stdoutStr := strings.TrimSpace(capi.ReadChannel(handle, d.ProgOutLen, d.ProgOut))
 	runtimeErr := d.RuntimeErr(handle)
 
-	return runResult{Compiler: "cide", CompileSuccess: true,
+	return runResult{Compiler: "vitro", CompileSuccess: true,
 		RunSuccess: int32(runRet) == 0 && runtimeErr == "",
 		RunError:   runtimeErr, Stdout: stdoutStr, Stderr: runtimeErr,
 		ExitCode:   int(int32(runRet)),
@@ -523,23 +523,23 @@ func runWithCide(d *capi.DLL, cs shadowCase) runResult {
 
 // ---------------------------------------------------------------- 判定
 
-// analyzeDiff 分析 Clang 和 Cide 的差异（主驱动判定树，与 Python 版逐分支对齐）。
-func analyzeDiff(cs shadowCase, clang, cide runResult) string {
-	if clang.CompileSuccess && !cide.CompileSuccess {
+// analyzeDiff 分析 Clang 和 Vitro 的差异（主驱动判定树，与 Python 版逐分支对齐）。
+func analyzeDiff(cs shadowCase, clang, vitro runResult) string {
+	if clang.CompileSuccess && !vitro.CompileSuccess {
 		return "compile_gap"
 	}
-	if clang.CompileSuccess && cide.CompileSuccess {
-		if !clang.RunSuccess && !cide.RunSuccess {
+	if clang.CompileSuccess && vitro.CompileSuccess {
+		if !clang.RunSuccess && !vitro.RunSuccess {
 			return "match" // 都失败
 		}
-		if clang.RunSuccess && !cide.RunSuccess {
+		if clang.RunSuccess && !vitro.RunSuccess {
 			// 已记录的模板运行失败（E2E_FAILURES.md 有根因）不算回归
 			if knownFailureCases[cs.name] {
 				return "known_issue"
 			}
 			return "runtime_gap"
 		}
-		if capi.Normalize(clang.Stdout) != capi.Normalize(cide.Stdout) {
+		if capi.Normalize(clang.Stdout) != capi.Normalize(vitro.Stdout) {
 			// 已知问题（预期行为差异）不统计为 output_gap
 			if strings.Contains(cs.category, "bug") || knownFailureCases[cs.name] {
 				return "known_issue"
@@ -548,17 +548,17 @@ func analyzeDiff(cs shadowCase, clang, cide runResult) string {
 		}
 		return "match"
 	}
-	if !clang.CompileSuccess && !cide.CompileSuccess {
+	if !clang.CompileSuccess && !vitro.CompileSuccess {
 		return "match" // 都编译失败（可能是用例本身有问题）
 	}
-	// J2（U0#1②，2026-09-13）：gap 目录的语义就是"Cide 扩展，非 C 标准"——
-	// clang 拒绝而 Cide 通过属**预期**，归类 gap_extension（门禁通过、汇总
-	// 分列），不再冒充 cide_better。baseline/template/knr/leetcode 的
-	// cide_better 仍按 J2 逐例归零（补头转真 golden 或移 gap）。
+	// J2（U0#1②，2026-09-13）：gap 目录的语义就是"Vitro 扩展，非 C 标准"——
+	// clang 拒绝而 Vitro 通过属**预期**，归类 gap_extension（门禁通过、汇总
+	// 分列），不再冒充 vitro_better。baseline/template/knr/leetcode 的
+	// vitro_better 仍按 J2 逐例归零（补头转真 golden 或移 gap）。
 	if cs.srcDir == "gap" {
 		return "gap_extension"
 	}
-	return "cide_better" // Cide 通过但 Clang 失败（baseline 等目录按 J2 须归零）
+	return "vitro_better" // Vitro 通过但 Clang 失败（baseline 等目录按 J2 须归零）
 }
 
 // compileErrorPatterns 缺失特性分类关键词（有序，先到先得；与 Python 版同序同词）。
@@ -586,7 +586,7 @@ var compileErrorPatterns = []struct {
 	{"const_string", []string{"char*", "const"}},
 }
 
-// classifyCompileError 根据 Cide 编译错误消息分类缺失特性。
+// classifyCompileError 根据 Vitro 编译错误消息分类缺失特性。
 // 优先使用用例本身的 expected_category（如果已知且不是 baseline），再用错误信息
 // 关键词作为 fallback 分类。
 func classifyCompileError(errorMsg, expectedCategory string) string {
@@ -699,7 +699,7 @@ type caseOutcome struct {
 	index int
 	cs    shadowCase
 	clang runResult
-	cide  runResult
+	vitro  runResult
 }
 
 // executeCases 执行全部用例，返回按用例序重排的结果（并行下同样确定性）。
@@ -707,8 +707,8 @@ type caseOutcome struct {
 // 两段流水线（有意与 Python 的"每 worker 串行跑完整用例"不同，性能实证见
 // D5 第一站）：
 //   - Wave 1：Clang 侧满并发（耗时大头；clang 子进程是独立进程，天然并发安全）；
-//   - Wave 2：Cide 侧单线程串行——引擎 DLL 会话级线程安全性已实证为不安全
-//     （并发 → 堆损坏，见 AGENTS.md D5 进度）。实测 Cide 单例 ~1.5ms，
+//   - Wave 2：Vitro 侧单线程串行——引擎 DLL 会话级线程安全性已实证为不安全
+//     （并发 → 堆损坏，见 AGENTS.md D5 进度）。实测 Vitro 单例 ~1.5ms，
 //     串行段对总时长影响可忽略，而 Wave 1 的并发度不再被互斥锁稀释。
 //
 // 每个 Clang 槽位一个隔离运行目录 go_run_{slot}，预设文件写入其中。
@@ -766,9 +766,9 @@ func executeCases(cases []shadowCase, jobs int, refreshClang bool, clangVersion 
 	}
 	wg.Wait()
 
-	// Wave 2：Cide（串行，互斥由 runWithCide 内部锁保证）
+	// Wave 2：Vitro（串行，互斥由 runWithVitro 内部锁保证）
 	for i, cs := range cases {
-		outcomes[i].cide = runWithCide(dll, cs)
+		outcomes[i].vitro = runWithVitro(dll, cs)
 	}
 	return outcomes
 }
@@ -887,7 +887,7 @@ type detailEntry struct {
 	Case             string `json:"case"`
 	Expected         string `json:"expected"`
 	DiffType         string `json:"diff_type"`
-	CideCompileError string `json:"cide_compile_error"`
+	VitroCompileError string `json:"vitro_compile_error"`
 }
 
 type srcStat struct {
@@ -902,7 +902,7 @@ type diffInfo struct {
 	cs    shadowCase
 	diff  string
 	clang runResult
-	cide  runResult
+	vitro  runResult
 }
 
 type runConfig struct {
@@ -934,7 +934,7 @@ func generateReport(diffs []diffInfo, outputPath string, cfg *runConfig) {
 	var categoryOrder []string
 	categoryCases := map[string][]string{}
 	for _, d := range compileGaps {
-		cat := classifyCompileError(d.cide.CompileError, d.cs.category)
+		cat := classifyCompileError(d.vitro.CompileError, d.cs.category)
 		if _, seen := categoryCounts[cat]; !seen {
 			categoryOrder = append(categoryOrder, cat)
 		}
@@ -974,7 +974,7 @@ func generateReport(diffs []diffInfo, outputPath string, cfg *runConfig) {
 
 	total := len(diffs)
 	lines := []string{
-		"# Cide 影子验证报告",
+		"# Vitro 影子验证报告",
 		"",
 		fmt.Sprintf("生成时间: %s", time.Now().Format("2006-01-02 15:04:05")),
 		fmt.Sprintf("总用例数: %d", total),
@@ -1029,12 +1029,12 @@ func generateReport(diffs []diffInfo, outputPath string, cfg *runConfig) {
 		lines = append(lines, "", fmt.Sprintf("### %s [%s]", d.cs.name, d.diff))
 		lines = append(lines, fmt.Sprintf("- 预期分类: %s", d.cs.category))
 		lines = append(lines, fmt.Sprintf("- Clang: compile=%s, run=%s", okTag(d.clang.CompileSuccess), okTag(d.clang.RunSuccess)))
-		lines = append(lines, fmt.Sprintf("- Cide: compile=%s, run=%s", okTag(d.cide.CompileSuccess), okTag(d.cide.RunSuccess)))
-		if !d.cide.CompileSuccess {
-			lines = append(lines, fmt.Sprintf("- Cide 编译错误: %s", capi.TruncateRunes(d.cide.CompileError, 200)))
-		} else if strings.TrimSpace(d.clang.Stdout) != strings.TrimSpace(d.cide.Stdout) {
+		lines = append(lines, fmt.Sprintf("- Vitro: compile=%s, run=%s", okTag(d.vitro.CompileSuccess), okTag(d.vitro.RunSuccess)))
+		if !d.vitro.CompileSuccess {
+			lines = append(lines, fmt.Sprintf("- Vitro 编译错误: %s", capi.TruncateRunes(d.vitro.CompileError, 200)))
+		} else if strings.TrimSpace(d.clang.Stdout) != strings.TrimSpace(d.vitro.Stdout) {
 			lines = append(lines, fmt.Sprintf("- Clang stdout: %s", capi.TruncateRunes(strings.TrimSpace(d.clang.Stdout), 200)))
-			lines = append(lines, fmt.Sprintf("- Cide stdout: %s", capi.TruncateRunes(strings.TrimSpace(d.cide.Stdout), 200)))
+			lines = append(lines, fmt.Sprintf("- Vitro stdout: %s", capi.TruncateRunes(strings.TrimSpace(d.vitro.Stdout), 200)))
 		}
 	}
 
@@ -1083,7 +1083,7 @@ func summaryOf(diffs []diffInfo) map[string]int {
 		"output_gap":  0,
 	}
 	for _, d := range diffs {
-		if _, tracked := s[d.diff]; tracked { // known_issue / cide_better 不入 summary（与 Python 同）
+		if _, tracked := s[d.diff]; tracked { // known_issue / vitro_better 不入 summary（与 Python 同）
 			s[d.diff]++
 		}
 	}
@@ -1094,7 +1094,7 @@ func categoryFrequencyOf(diffs []diffInfo) map[string]int {
 	freq := map[string]int{}
 	for _, d := range diffs {
 		if d.diff == "compile_gap" {
-			cat := classifyCompileError(d.cide.CompileError, d.cs.category)
+			cat := classifyCompileError(d.vitro.CompileError, d.cs.category)
 			freq[cat]++
 		}
 	}
@@ -1105,14 +1105,14 @@ func detailsOf(diffs []diffInfo) []detailEntry {
 	out := make([]detailEntry, 0, len(diffs))
 	for _, d := range diffs {
 		errText := ""
-		if !d.cide.CompileSuccess {
-			errText = capi.TruncateRunes(d.cide.CompileError, 500)
+		if !d.vitro.CompileSuccess {
+			errText = capi.TruncateRunes(d.vitro.CompileError, 500)
 		}
 		out = append(out, detailEntry{
 			Case:             d.cs.name,
 			Expected:         d.cs.category,
 			DiffType:         d.diff,
-			CideCompileError: errText,
+			VitroCompileError: errText,
 		})
 	}
 	return out
@@ -1166,17 +1166,17 @@ func writeKrLeetCodeReport(diffs []diffInfo, outputPath string) {
 			continue
 		}
 		errText := ""
-		if !d.cide.CompileSuccess {
-			errText = capi.TruncateRunes(d.cide.CompileError, 500)
+		if !d.vitro.CompileSuccess {
+			errText = capi.TruncateRunes(d.vitro.CompileError, 500)
 		}
 		gaps = append(gaps, map[string]any{
 			"case":               d.cs.name,
 			"src_dir":            d.cs.srcDir,
 			"diff_type":          d.diff,
 			"expected_category":  d.cs.category,
-			"cide_compile_error": errText,
+			"vitro_compile_error": errText,
 			"clang_stdout":       capi.TruncateRunes(strings.TrimSpace(d.clang.Stdout), 200),
-			"cide_stdout":        capi.TruncateRunes(strings.TrimSpace(d.cide.Stdout), 200),
+			"vitro_stdout":        capi.TruncateRunes(strings.TrimSpace(d.vitro.Stdout), 200),
 		})
 	}
 	report["gaps"] = gaps
@@ -1189,7 +1189,7 @@ func writeKrLeetCodeReport(diffs []diffInfo, outputPath string) {
 
 // verifyClangAvailable E-P0-4：Clang 预检。
 // 缺失时 fail fast（exit 2，区别于测试失败的 exit 1），防止所有用例的
-// run_with_clang 抛异常后被 analyzeDiff 尾分支静默归类为 cide_better，
+// run_with_clang 抛异常后被 analyzeDiff 尾分支静默归类为 vitro_better，
 // 防线 1 退化为"全量通过"。返回版本串写入报告供审计。
 func verifyClangAvailable() string {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -1237,21 +1237,21 @@ func main() {
 	rebuildFlag := flag.Bool("rebuild", false, "检测到 release DLL 比引擎源码旧时，先执行 cargo build --release")
 	limitFlag := flag.Int("limit", 0, "仅执行前 N 个用例（本地调试提速用；正式门禁/CI 请勿使用，且不更新 latest 报告）")
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Cide 影子验证框架（Go 版，D5 最后一站）\n用法: go run scripts/shadow_verify.go [选项]\n选项:\n")
+		fmt.Fprintf(os.Stderr, "Vitro 影子验证框架（Go 版，D5 最后一站）\n用法: go run scripts/shadow_verify.go [选项]\n选项:\n")
 		flag.PrintDefaults()
 	}
 	flag.Parse()
 
 	bar60 := strings.Repeat("=", 60)
 	fmt.Println(bar60)
-	fmt.Println("Cide 影子验证框架")
+	fmt.Println("Vitro 影子验证框架")
 	fmt.Println(bar60)
 
-	// E-P0-4：Clang 预检，缺失 fail fast（防止全量用例被静默归类 cide_better）
+	// E-P0-4：Clang 预检，缺失 fail fast（防止全量用例被静默归类 vitro_better）
 	clangVersion := verifyClangAvailable()
 
 	if _, err := os.Stat(dllPath); err != nil {
-		fmt.Printf("错误: 找不到 Cide DLL: %s\n", dllPath)
+		fmt.Printf("错误: 找不到 Vitro DLL: %s\n", dllPath)
 		fmt.Println("请先运行: cd native && cargo build --release")
 		os.Exit(1)
 	}
@@ -1308,14 +1308,14 @@ func main() {
 			cacheTag = " (clang 缓存)"
 		}
 		fmt.Printf("  Clang: compile=%s, run=%s%s\n", okOf(oc.clang.CompileSuccess), okOf(oc.clang.RunSuccess), cacheTag)
-		fmt.Printf("  Cide:  compile=%s, run=%s\n", okOf(oc.cide.CompileSuccess), okOf(oc.cide.RunSuccess))
+		fmt.Printf("  Vitro:  compile=%s, run=%s\n", okOf(oc.vitro.CompileSuccess), okOf(oc.vitro.RunSuccess))
 
-		diffType := analyzeDiff(oc.cs, oc.clang, oc.cide)
-		diffs = append(diffs, diffInfo{cs: oc.cs, diff: diffType, clang: oc.clang, cide: oc.cide})
+		diffType := analyzeDiff(oc.cs, oc.clang, oc.vitro)
+		diffs = append(diffs, diffInfo{cs: oc.cs, diff: diffType, clang: oc.clang, vitro: oc.vitro})
 
 		switch diffType {
 		case "compile_gap":
-			cat := classifyCompileError(oc.cide.CompileError, oc.cs.category)
+			cat := classifyCompileError(oc.vitro.CompileError, oc.cs.category)
 			fmt.Printf("  => 编译缺口 [%s]\n", cat)
 		case "match":
 			fmt.Println("  => 匹配 ✓")
@@ -1380,9 +1380,9 @@ func main() {
 	//
 	// 判定规则：
 	//   - 非预期差异（compile_gap / runtime_gap / output_gap）→ exit 1
-	//     （Clang 能跑而 Cide 不能，或输出不一致 = 回归）
-	//   - match / known_issue（category 含 "bug" 的已记录问题）/ cide_better
-	//     （Cide 教学扩展比 Clang 宽松）→ 不视为失败，与 AGENTS.md 统计口径一致
+	//     （Clang 能跑而 Vitro 不能，或输出不一致 = 回归）
+	//   - match / known_issue（category 含 "bug" 的已记录问题）/ vitro_better
+	//     （Vitro 教学扩展比 Clang 宽松）→ 不视为失败，与 AGENTS.md 统计口径一致
 	var unexpected []diffInfo
 	for _, d := range diffs {
 		if d.diff == "compile_gap" || d.diff == "runtime_gap" || d.diff == "output_gap" {
@@ -1394,7 +1394,7 @@ func main() {
 	fmt.Println("Shadow 门禁汇总")
 	fmt.Println(bar60)
 	fmt.Printf("总用例: %d\n", len(diffs))
-	for _, dt := range []string{"match", "known_issue", "cide_better", "gap_extension", "compile_gap", "runtime_gap", "output_gap"} {
+	for _, dt := range []string{"match", "known_issue", "vitro_better", "gap_extension", "compile_gap", "runtime_gap", "output_gap"} {
 		n := 0
 		for _, d := range diffs {
 			if d.diff == dt {

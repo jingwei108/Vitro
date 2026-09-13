@@ -1,1 +1,1 @@
-pub use cide_shared::error_codes::*;
+pub use vitro_shared::error_codes::*;

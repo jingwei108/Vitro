@@ -4,10 +4,10 @@
 背景（本裁定独立实测）：662 用例的 clang 侧 golden 由驱动 `run_with_clang` 生成，
 它对**文件用例**直接编译原文件、不注入 `stdio.h`；只有内联用例才走 `make_clang_header`。
 clang 22 默认 C23，隐式函数声明是**错误**——因此缺少 `#include <stdio.h>` 的用例
-clang 直接编译失败，落进 `cide_better` 或"两侧都失败 = match"。
+clang 直接编译失败，落进 `vitro_better` 或"两侧都失败 = match"。
 
 本脚本对这 28 个无 golden 用例做**可救性测量**：在临时副本上补 `stdio.h`/`stdlib.h`
-后重跑 clang，看它是否恢复为有效 golden（编译成功且与 Cide stdout 一致）。
+后重跑 clang，看它是否恢复为有效 golden（编译成功且与 Vitro stdout 一致）。
 **不改动用例文件本身**（只读原文件 + 写临时副本）。
 
 用法：python scripts/core_asset_verdict/oracle_gap_probe.py [--jobs 8]
@@ -44,9 +44,9 @@ def probe(entry: dict) -> dict:
     tmp = work / f"{name}_aug.c"
     tmp.write_text(augmented, encoding="utf-8")
     clang = sv.run_with_clang(augmented, path=None, work_dir=work, stdin_text=case.stdin)
-    cide = sv.run_with_cide(case.source, filename=str(case.path), stdin_text=case.stdin)
+    vitro = sv.run_with_vitro(case.source, filename=str(case.path), stdin_text=case.stdin)
     rescued = clang.compile_success and clang.run_success
-    agree = rescued and (clang.stdout or "").strip() == (cide.stdout or "").strip()
+    agree = rescued and (clang.stdout or "").strip() == (vitro.stdout or "").strip()
     return {
         "name": name, "src_dir": case.src_dir,
         "original_verdict": entry["verdict"],
@@ -54,7 +54,7 @@ def probe(entry: dict) -> dict:
         "rescued_compile_run": rescued,
         "stdout_agrees_after_rescue": agree,
         "clang_stdout": (clang.stdout or "")[:120],
-        "cide_stdout": (cide.stdout or "")[:120],
+        "vitro_stdout": (vitro.stdout or "")[:120],
         "clang_err": (clang.compile_error or "")[:200],
     }
 
@@ -74,8 +74,8 @@ def main() -> int:
     agree = [r for r in results if r["stdout_agrees_after_rescue"]]
     print(f"无外部 golden 用例: {len(results)}")
     print(f"补头文件后 clang 恢复可编译可运行: {len(rescued)}")
-    print(f"  其中 stdout 与 Cide 一致（本可成为有效 golden）: {len(agree)}")
-    print(f"  其中 stdout 与 Cide 不一致（真差异被'exemption'吞掉）: {len(rescued)-len(agree)}")
+    print(f"  其中 stdout 与 Vitro 一致（本可成为有效 golden）: {len(agree)}")
+    print(f"  其中 stdout 与 Vitro 不一致（真差异被'exemption'吞掉）: {len(rescued)-len(agree)}")
     print(f"补头后仍失败（用例本身非常规 / 双侧都失败）: {len(results)-len(rescued)}")
     for r in results:
         tag = ("RESCUED_MATCH" if r["stdout_agrees_after_rescue"] else

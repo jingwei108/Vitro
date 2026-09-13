@@ -1,12 +1,12 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use cide_native::compiler::codegen::BytecodeGen;
-use cide_native::compiler::lexer::Lexer;
-use cide_native::compiler::parser::Parser;
-use cide_native::compiler::typeck::TypeChecker;
-use cide_runtime::opcode::OpCode;
+use vitro_native::compiler::codegen::BytecodeGen;
+use vitro_native::compiler::lexer::Lexer;
+use vitro_native::compiler::parser::Parser;
+use vitro_native::compiler::typeck::TypeChecker;
+use vitro_runtime::opcode::OpCode;
 
-fn generate(src: &str) -> cide_native::compiler::codegen::CompileOutput {
+fn generate(src: &str) -> vitro_native::compiler::codegen::CompileOutput {
     let (tokens, _) = Lexer::new(src).tokenize();
     let (maybe_program, parse_errors) = Parser::new(tokens).parse();
     assert!(parse_errors.is_empty(), "Parse errors: {:?}", parse_errors);

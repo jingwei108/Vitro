@@ -253,11 +253,11 @@ def read_shadow_match_rate() -> dict[str, str]:
             summary = data.get("summary", {})
             details = data.get("details", [])
             total = summary.get("total", 0)
-            # 与 README/AGENTS.md 对外口径一致：完全匹配 + Cide 更优 + 已知差异均计入匹配
+            # 与 README/AGENTS.md 对外口径一致：完全匹配 + Vitro 更优 + 已知差异均计入匹配
             matched = sum(
                 1
                 for c in details
-                if c.get("diff_type") in ("match", "cide_better", "known_issue")
+                if c.get("diff_type") in ("match", "vitro_better", "known_issue")
             )
             result["C"] = f"{matched}/{total}"
         except Exception:
@@ -316,7 +316,7 @@ def generate_report() -> str:
     shadow_rates = read_shadow_match_rate()
 
     lines: list[str] = []
-    lines.append("# Cide 工程健康度看板")
+    lines.append("# Vitro 工程健康度看板")
     lines.append("")
     lines.append(f"> 生成时间: {now}")
     lines.append(f"> 基线提交: `{rev}{dirty}`")

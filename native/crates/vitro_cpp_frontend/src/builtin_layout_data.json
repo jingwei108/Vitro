@@ -1,0 +1,502 @@
+{
+  "version": 2,
+  "generated_at": "2026-06-13T07:02:27.692861+00:00",
+  "classes": {
+    "vitro_list_int": {
+      "cpp_name": "list<int>",
+      "source_file": "native/runtime_libc/vitro/list.cpp",
+      "size": 12,
+      "fields": [
+        {
+          "name": "head",
+          "type": "vitro_list_node<int>*"
+        },
+        {
+          "name": "tail",
+          "type": "vitro_list_node<int>*"
+        },
+        {
+          "name": "n",
+          "type": "int"
+        }
+      ],
+      "methods": [
+        {
+          "name": "push_back",
+          "params": [
+            "int"
+          ],
+          "ret": "void",
+          "is_virtual": false
+        },
+        {
+          "name": "push_front",
+          "params": [
+            "int"
+          ],
+          "ret": "void",
+          "is_virtual": false
+        },
+        {
+          "name": "pop_back",
+          "params": [],
+          "ret": "int",
+          "is_virtual": false
+        },
+        {
+          "name": "size",
+          "params": [],
+          "ret": "int",
+          "is_virtual": false
+        },
+        {
+          "name": "front",
+          "params": [],
+          "ret": "int",
+          "is_virtual": false
+        },
+        {
+          "name": "back",
+          "params": [],
+          "ret": "int",
+          "is_virtual": false
+        },
+        {
+          "name": "pop_front",
+          "params": [],
+          "ret": "void",
+          "is_virtual": false
+        },
+        {
+          "name": "get",
+          "params": [
+            "int"
+          ],
+          "ret": "int",
+          "is_virtual": false
+        },
+        {
+          "name": "clear",
+          "params": [],
+          "ret": "void",
+          "is_virtual": false
+        },
+        {
+          "name": "destroy",
+          "params": [],
+          "ret": "void",
+          "is_virtual": false
+        }
+      ]
+    },
+    "vitro_string": {
+      "cpp_name": "string",
+      "source_file": "native/runtime_libc/vitro/string.cpp",
+      "size": 12,
+      "fields": [
+        {
+          "name": "n",
+          "type": "int"
+        },
+        {
+          "name": "m",
+          "type": "int"
+        },
+        {
+          "name": "s",
+          "type": "char*"
+        }
+      ],
+      "methods": [
+        {
+          "name": "push_back",
+          "params": [
+            "char"
+          ],
+          "ret": "void",
+          "is_virtual": false
+        },
+        {
+          "name": "pop_back",
+          "params": [],
+          "ret": "char",
+          "is_virtual": false
+        },
+        {
+          "name": "size",
+          "params": [],
+          "ret": "int",
+          "is_virtual": false
+        },
+        {
+          "name": "capacity",
+          "params": [],
+          "ret": "int",
+          "is_virtual": false
+        },
+        {
+          "name": "get",
+          "params": [
+            "int"
+          ],
+          "ret": "char",
+          "is_virtual": false
+        },
+        {
+          "name": "c_str",
+          "params": [],
+          "ret": "char*",
+          "is_virtual": false
+        },
+        {
+          "name": "front",
+          "params": [],
+          "ret": "char",
+          "is_virtual": false
+        },
+        {
+          "name": "back",
+          "params": [],
+          "ret": "char",
+          "is_virtual": false
+        },
+        {
+          "name": "pop_front",
+          "params": [],
+          "ret": "void",
+          "is_virtual": false
+        },
+        {
+          "name": "clear",
+          "params": [],
+          "ret": "void",
+          "is_virtual": false
+        },
+        {
+          "name": "destroy",
+          "params": [],
+          "ret": "void",
+          "is_virtual": false
+        }
+      ]
+    },
+    "vitro_vec_int": {
+      "cpp_name": "vector<int>",
+      "source_file": "native/runtime_libc/vitro/vector.cpp",
+      "size": 12,
+      "fields": [
+        {
+          "name": "n",
+          "type": "int"
+        },
+        {
+          "name": "m",
+          "type": "int"
+        },
+        {
+          "name": "a",
+          "type": "int*"
+        }
+      ],
+      "methods": [
+        {
+          "name": "push_back",
+          "params": [
+            "int"
+          ],
+          "ret": "void",
+          "is_virtual": false
+        },
+        {
+          "name": "pop_back",
+          "params": [],
+          "ret": "int",
+          "is_virtual": false
+        },
+        {
+          "name": "size",
+          "params": [],
+          "ret": "int",
+          "is_virtual": false
+        },
+        {
+          "name": "capacity",
+          "params": [],
+          "ret": "int",
+          "is_virtual": false
+        },
+        {
+          "name": "front",
+          "params": [],
+          "ret": "int",
+          "is_virtual": false
+        },
+        {
+          "name": "back",
+          "params": [],
+          "ret": "int",
+          "is_virtual": false
+        },
+        {
+          "name": "pop_front",
+          "params": [],
+          "ret": "void",
+          "is_virtual": false
+        },
+        {
+          "name": "get",
+          "params": [
+            "int"
+          ],
+          "ret": "int",
+          "is_virtual": false
+        },
+        {
+          "name": "clear",
+          "params": [],
+          "ret": "void",
+          "is_virtual": false
+        },
+        {
+          "name": "destroy",
+          "params": [],
+          "ret": "void",
+          "is_virtual": false
+        }
+      ]
+    },
+    "vitro_vec_float": {
+      "cpp_name": "vector<float>",
+      "source_file": "native/runtime_libc/vitro/vector.cpp",
+      "size": 12,
+      "fields": [
+        {
+          "name": "n",
+          "type": "int"
+        },
+        {
+          "name": "m",
+          "type": "int"
+        },
+        {
+          "name": "a",
+          "type": "float*"
+        }
+      ],
+      "methods": [
+        {
+          "name": "push_back",
+          "params": [
+            "float"
+          ],
+          "ret": "void",
+          "is_virtual": false
+        },
+        {
+          "name": "pop_back",
+          "params": [],
+          "ret": "float",
+          "is_virtual": false
+        },
+        {
+          "name": "size",
+          "params": [],
+          "ret": "int",
+          "is_virtual": false
+        },
+        {
+          "name": "capacity",
+          "params": [],
+          "ret": "int",
+          "is_virtual": false
+        },
+        {
+          "name": "front",
+          "params": [],
+          "ret": "float",
+          "is_virtual": false
+        },
+        {
+          "name": "back",
+          "params": [],
+          "ret": "float",
+          "is_virtual": false
+        },
+        {
+          "name": "pop_front",
+          "params": [],
+          "ret": "void",
+          "is_virtual": false
+        },
+        {
+          "name": "get",
+          "params": [
+            "int"
+          ],
+          "ret": "float",
+          "is_virtual": false
+        },
+        {
+          "name": "clear",
+          "params": [],
+          "ret": "void",
+          "is_virtual": false
+        },
+        {
+          "name": "destroy",
+          "params": [],
+          "ret": "void",
+          "is_virtual": false
+        }
+      ]
+    },
+    "vitro_vec_char": {
+      "cpp_name": "vector<char>",
+      "source_file": "native/runtime_libc/vitro/vector.cpp",
+      "size": 12,
+      "fields": [
+        {
+          "name": "n",
+          "type": "int"
+        },
+        {
+          "name": "m",
+          "type": "int"
+        },
+        {
+          "name": "a",
+          "type": "char*"
+        }
+      ],
+      "methods": [
+        {
+          "name": "push_back",
+          "params": [
+            "char"
+          ],
+          "ret": "void",
+          "is_virtual": false
+        },
+        {
+          "name": "pop_back",
+          "params": [],
+          "ret": "char",
+          "is_virtual": false
+        },
+        {
+          "name": "size",
+          "params": [],
+          "ret": "int",
+          "is_virtual": false
+        },
+        {
+          "name": "capacity",
+          "params": [],
+          "ret": "int",
+          "is_virtual": false
+        },
+        {
+          "name": "front",
+          "params": [],
+          "ret": "char",
+          "is_virtual": false
+        },
+        {
+          "name": "back",
+          "params": [],
+          "ret": "char",
+          "is_virtual": false
+        },
+        {
+          "name": "pop_front",
+          "params": [],
+          "ret": "void",
+          "is_virtual": false
+        },
+        {
+          "name": "get",
+          "params": [
+            "int"
+          ],
+          "ret": "char",
+          "is_virtual": false
+        },
+        {
+          "name": "clear",
+          "params": [],
+          "ret": "void",
+          "is_virtual": false
+        },
+        {
+          "name": "destroy",
+          "params": [],
+          "ret": "void",
+          "is_virtual": false
+        }
+      ]
+    }
+  },
+  "method_map": {
+    "vitro_list_int": {
+      "push_back": "vitro_list_int__push_back",
+      "push_front": "vitro_list_int__push_front",
+      "pop_back": "vitro_list_int__pop_back",
+      "size": "vitro_list_int__size",
+      "front": "vitro_list_int__front",
+      "back": "vitro_list_int__back",
+      "pop_front": "vitro_list_int__pop_front",
+      "get": "vitro_list_int__get",
+      "clear": "vitro_list_int__clear",
+      "destroy": "__dtor__vitro_list_int"
+    },
+    "vitro_string": {
+      "push_back": "vitro_string__push_back",
+      "pop_back": "vitro_string__pop_back",
+      "size": "vitro_string__size",
+      "capacity": "vitro_string__capacity",
+      "get": "vitro_string__get",
+      "c_str": "vitro_string__c_str",
+      "front": "vitro_string__front",
+      "back": "vitro_string__back",
+      "pop_front": "vitro_string__pop_front",
+      "clear": "vitro_string__clear",
+      "destroy": "__dtor__vitro_string"
+    },
+    "vitro_vec_int": {
+      "push_back": "vitro_vec_int__push_back",
+      "pop_back": "vitro_vec_int__pop_back",
+      "size": "vitro_vec_int__size",
+      "capacity": "vitro_vec_int__capacity",
+      "front": "vitro_vec_int__front",
+      "back": "vitro_vec_int__back",
+      "pop_front": "vitro_vec_int__pop_front",
+      "get": "vitro_vec_int__get",
+      "clear": "vitro_vec_int__clear",
+      "destroy": "__dtor__vitro_vec_int"
+    },
+    "vitro_vec_float": {
+      "push_back": "vitro_vec_float__push_back",
+      "pop_back": "vitro_vec_float__pop_back",
+      "size": "vitro_vec_float__size",
+      "capacity": "vitro_vec_float__capacity",
+      "front": "vitro_vec_float__front",
+      "back": "vitro_vec_float__back",
+      "pop_front": "vitro_vec_float__pop_front",
+      "get": "vitro_vec_float__get",
+      "clear": "vitro_vec_float__clear",
+      "destroy": "__dtor__vitro_vec_float"
+    },
+    "vitro_vec_char": {
+      "push_back": "vitro_vec_char__push_back",
+      "pop_back": "vitro_vec_char__pop_back",
+      "size": "vitro_vec_char__size",
+      "capacity": "vitro_vec_char__capacity",
+      "front": "vitro_vec_char__front",
+      "back": "vitro_vec_char__back",
+      "pop_front": "vitro_vec_char__pop_front",
+      "get": "vitro_vec_char__get",
+      "clear": "vitro_vec_char__clear",
+      "destroy": "__dtor__vitro_vec_char"
+    }
+  }
+}

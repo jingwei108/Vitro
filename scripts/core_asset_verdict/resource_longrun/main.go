@@ -19,7 +19,7 @@
 package main
 
 import (
-	"cide/scripts/internal/probeutil"
+	"vitro/scripts/internal/probeutil"
 
 	"context"
 	"encoding/json"
@@ -233,7 +233,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "FATAL:", err)
 		os.Exit(2)
 	}
-	fmt.Printf("cide_cli: %s\n看门狗上限 %vMB\n", cli, capMB)
+	fmt.Printf("vitro_cli: %s\n看门狗上限 %vMB\n", cli, capMB)
 	fmt.Println("== 1. seek 重放放大 ==")
 	a := seekScaling(capMB)
 	fmt.Println("== 2. malloc/free (regions 登记表) ==")

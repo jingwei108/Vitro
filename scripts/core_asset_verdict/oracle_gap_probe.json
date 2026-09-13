@@ -12,7 +12,7 @@
   "rescued_compile_run": true,
   "stdout_agrees_after_rescue": true,
   "clang_stdout": "7",
-  "cide_stdout": "7",
+  "vitro_stdout": "7",
   "clang_err": ""
  },
  {
@@ -28,7 +28,7 @@
   "rescued_compile_run": true,
   "stdout_agrees_after_rescue": true,
   "clang_stdout": "1 2",
-  "cide_stdout": "1 2",
+  "vitro_stdout": "1 2",
   "clang_err": ""
  },
  {
@@ -43,7 +43,7 @@
   "rescued_compile_run": false,
   "stdout_agrees_after_rescue": false,
   "clang_stdout": "in main\nin helper\n",
-  "cide_stdout": "in main\nin helper",
+  "vitro_stdout": "in main\nin helper",
   "clang_err": ""
  },
  {
@@ -59,7 +59,7 @@
   "rescued_compile_run": false,
   "stdout_agrees_after_rescue": false,
   "clang_stdout": "",
-  "cide_stdout": "",
+  "vitro_stdout": "",
   "clang_err": "D:\\code\\c_ide_rust\\scripts\\core_asset_verdict\\.oracle_rescue\\baseline__e2_include_cycle\\test.c:9:10: fatal error: 'e2_cycle_a.h' file not found\n    9 | #include \"e2_cycle_a.h\"\n      |          ^~~~~~~"
  },
  {
@@ -74,7 +74,7 @@
   "rescued_compile_run": false,
   "stdout_agrees_after_rescue": false,
   "clang_stdout": "",
-  "cide_stdout": "",
+  "vitro_stdout": "",
   "clang_err": "D:\\code\\c_ide_rust\\scripts\\core_asset_verdict\\.oracle_rescue\\baseline__e3_static_assert_fail\\test.c:9:15: error: static assertion failed due to requirement '1 == 2': math broken\n    9 | static_assert("
  },
  {
@@ -90,7 +90,7 @@
   "rescued_compile_run": true,
   "stdout_agrees_after_rescue": true,
   "clang_stdout": "hello",
-  "cide_stdout": "hello",
+  "vitro_stdout": "hello",
   "clang_err": ""
  },
  {
@@ -106,7 +106,7 @@
   "rescued_compile_run": false,
   "stdout_agrees_after_rescue": false,
   "clang_stdout": "",
-  "cide_stdout": "15 1 0 5 15",
+  "vitro_stdout": "15 1 0 5 15",
   "clang_err": "D:\\code\\c_ide_rust\\scripts\\core_asset_verdict\\.oracle_rescue\\baseline__keyword_compat\\test.c:13:5: error: use of undeclared identifier 'bool'\n   13 |     bool b2 = 0;\n      |     ^~~~\nD:\\code\\c_ide_ru"
  },
  {
@@ -122,7 +122,7 @@
   "rescued_compile_run": true,
   "stdout_agrees_after_rescue": true,
   "clang_stdout": "1 3",
-  "cide_stdout": "1 3",
+  "vitro_stdout": "1 3",
   "clang_err": ""
  },
  {
@@ -138,7 +138,7 @@
   "rescued_compile_run": true,
   "stdout_agrees_after_rescue": true,
   "clang_stdout": "1 2 3",
-  "cide_stdout": "1 2 3",
+  "vitro_stdout": "1 2 3",
   "clang_err": ""
  },
  {
@@ -154,7 +154,7 @@
   "rescued_compile_run": true,
   "stdout_agrees_after_rescue": true,
   "clang_stdout": "30 20 10",
-  "cide_stdout": "30 20 10",
+  "vitro_stdout": "30 20 10",
   "clang_err": ""
  },
  {
@@ -170,7 +170,7 @@
   "rescued_compile_run": true,
   "stdout_agrees_after_rescue": true,
   "clang_stdout": "30 20",
-  "cide_stdout": "30 20",
+  "vitro_stdout": "30 20",
   "clang_err": ""
  },
  {
@@ -186,7 +186,7 @@
   "rescued_compile_run": true,
   "stdout_agrees_after_rescue": true,
   "clang_stdout": "null",
-  "cide_stdout": "null",
+  "vitro_stdout": "null",
   "clang_err": ""
  },
  {
@@ -202,7 +202,7 @@
   "rescued_compile_run": true,
   "stdout_agrees_after_rescue": true,
   "clang_stdout": "1",
-  "cide_stdout": "1",
+  "vitro_stdout": "1",
   "clang_err": ""
  },
  {
@@ -218,7 +218,7 @@
   "rescued_compile_run": true,
   "stdout_agrees_after_rescue": true,
   "clang_stdout": "1",
-  "cide_stdout": "1",
+  "vitro_stdout": "1",
   "clang_err": ""
  },
  {
@@ -234,7 +234,7 @@
   "rescued_compile_run": true,
   "stdout_agrees_after_rescue": true,
   "clang_stdout": "1",
-  "cide_stdout": "1",
+  "vitro_stdout": "1",
   "clang_err": ""
  },
  {
@@ -250,7 +250,7 @@
   "rescued_compile_run": true,
   "stdout_agrees_after_rescue": true,
   "clang_stdout": "1 2 3 4 5 ",
-  "cide_stdout": "1 2 3 4 5",
+  "vitro_stdout": "1 2 3 4 5",
   "clang_err": ""
  },
  {
@@ -266,7 +266,7 @@
   "rescued_compile_run": false,
   "stdout_agrees_after_rescue": false,
   "clang_stdout": "",
-  "cide_stdout": "",
+  "vitro_stdout": "",
   "clang_err": "D:\\code\\c_ide_rust\\scripts\\core_asset_verdict\\.oracle_rescue\\gap__complex_number\\test.c:7:28: error: expected ';' at end of declaration\n    7 | int main() { double complex z = 1.0 + 2.0*I; printf(\"%.1"
  },
  {
@@ -282,7 +282,7 @@
   "rescued_compile_run": false,
   "stdout_agrees_after_rescue": false,
   "clang_stdout": "",
-  "cide_stdout": "ok",
+  "vitro_stdout": "ok",
   "clang_err": ""
  },
  {
@@ -298,7 +298,7 @@
   "rescued_compile_run": false,
   "stdout_agrees_after_rescue": false,
   "clang_stdout": "",
-  "cide_stdout": "hello",
+  "vitro_stdout": "hello",
   "clang_err": ""
  },
  {
@@ -314,7 +314,7 @@
   "rescued_compile_run": true,
   "stdout_agrees_after_rescue": true,
   "clang_stdout": "ok",
-  "cide_stdout": "ok",
+  "vitro_stdout": "ok",
   "clang_err": ""
  },
  {
@@ -330,7 +330,7 @@
   "rescued_compile_run": false,
   "stdout_agrees_after_rescue": false,
   "clang_stdout": "",
-  "cide_stdout": "",
+  "vitro_stdout": "",
   "clang_err": "D:\\code\\c_ide_rust\\scripts\\core_asset_verdict\\.oracle_rescue\\gap__implicit_int\\test.c:7:1: error: type specifier missing, defaults to 'int'; ISO C99 and later do not support implicit int [-Wimplicit-i"
  },
  {
@@ -346,7 +346,7 @@
   "rescued_compile_run": false,
   "stdout_agrees_after_rescue": false,
   "clang_stdout": "",
-  "cide_stdout": "",
+  "vitro_stdout": "",
   "clang_err": "lld-link: error: subsystem must be defined\nclang: error: linker command failed with exit code 1 (use -v to see invocation)\n"
  }
 ]

@@ -3,7 +3,7 @@
 //! C++ 指针赋值的方向语义（2026-09-11 PR 清单 P1-6）。
 //!
 //! C++ 允许**向上转型**（`Derived* → Base*`）隐式发生：它是多态的基础写法，
-//! Clang++ 在 `-Wall -Wextra` 下对此零警告。Cide 此前把它报成
+//! Clang++ 在 `-Wall -Wextra` 下对此零警告。Vitro 此前把它报成
 //! "不兼容的指针类型赋值：Base* ← Derived*" 并建议"隐式类型转换可能导致数据截断"
 //!（复用了标量转换码 W3053），属教学误导。
 //!
@@ -12,8 +12,8 @@
 //! 2. 向下转型（`Base* → Derived*`）仍提示需要显式转换（C++ 隐式不允许）；
 //! 3. 无关类型指针（`int* ← double*`）仍提示不兼容。
 
-use cide_native::session::{CompileUnit, Session};
-use cide_native::session_api;
+use vitro_native::session::{CompileUnit, Session};
+use vitro_native::session_api;
 
 /// 编译并返回诊断数组（每条含 code / severity / message）。
 fn diagnostics_of(source: &str) -> Vec<serde_json::Value> {

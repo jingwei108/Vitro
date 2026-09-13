@@ -1,3 +1,3 @@
-/* Cide assert.h stub */
-void __cide_assert_fail(void);
-#define assert(expr) if (!(expr)) __cide_assert_fail()
+/* Vitro assert.h stub */
+void __vitro_assert_fail(void);
+#define assert(expr) if (!(expr)) __vitro_assert_fail()

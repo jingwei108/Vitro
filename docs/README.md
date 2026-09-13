@@ -1,4 +1,4 @@
-# Cide 项目文档
+# Vitro 项目文档
 
 > 教学 C/C++ 子集参考执行引擎（白箱后端）——架构设计、语言子集规范、协议与测试防线
 >
@@ -18,10 +18,11 @@
 
 | 文档 | 说明 |
 |------|------|
-| [`current/01-定位与路线/后端定位与白箱计划.md`](current/01-定位与路线/后端定位与白箱计划.md) | **后端定位主计划**：前端切割决策、三出口一核心架构、协议先行、Phase 0~3 路线（原 `CIDE_BACKEND_SPLIT_WASM_WHITEBOX_PLAN.md`） |
-| [`current/01-定位与路线/架构设计.md`](current/01-定位与路线/架构设计.md) | 架构总纲（编译器管线 / CideVM / 内存模型 / 时间旅行 / 诊断 / 协议 / 关键决策）（原 `DESIGN.md`） |
+| [`current/01-定位与路线/后端定位与白箱计划.md`](current/01-定位与路线/后端定位与白箱计划.md) | **后端定位主计划**：前端切割决策、三出口一核心架构、协议先行、Phase 0~3 路线（原 `VITRO_BACKEND_SPLIT_WASM_WHITEBOX_PLAN.md`） |
+| [`current/01-定位与路线/项目更名记录.md`](current/01-定位与路线/项目更名记录.md) | **项目更名记录**：Cide → Vitro 决策依据、命名映射、ABI 2.0.0 迁移指引、诚实边界与验证记录（2026-09-14） |
+| [`current/01-定位与路线/架构设计.md`](current/01-定位与路线/架构设计.md) | 架构总纲（编译器管线 / VitroVM / 内存模型 / 时间旅行 / 诊断 / 协议 / 关键决策）（原 `DESIGN.md`） |
 | [`current/01-定位与路线/项目路线图.md`](current/01-定位与路线/项目路线图.md) | 项目路线图：当前状态、已完成里程碑、下一步、已知缺口 G1~G13（诚实记录）（原 `ROADMAP.md`） |
-| [`current/01-定位与路线/结构重构与C23锚定决议.md`](current/01-定位与路线/结构重构与C23锚定决议.md) | 结构重构决议（R1~R4，已全部交付）+ C23 语言锚定 + E2 模块化预处理器 + E3 C23 语义级（原 `CIDE_RESTRUCTURE_PLAN.md`） |
+| [`current/01-定位与路线/结构重构与C23锚定决议.md`](current/01-定位与路线/结构重构与C23锚定决议.md) | 结构重构决议（R1~R4，已全部交付）+ C23 语言锚定 + E2 模块化预处理器 + E3 C23 语义级（原 `VITRO_RESTRUCTURE_PLAN.md`） |
 | [`current/01-定位与路线/工程债务维护方案.md`](current/01-定位与路线/工程债务维护方案.md) | 工程债务偿还与长期维护方案（`#DXX` 债务编号体系的事实源）（原 `MAINTENANCE_PLAN.md`） |
 | [`current/01-定位与路线/内存安全规范.md`](current/01-定位与路线/内存安全规范.md) | 内存安全规范（Rust 边界、线性内存、堆隔离与检查清单）（原 `MEMORY_SAFETY.md`） |
 
@@ -31,7 +32,7 @@
 |------|------|
 | [`current/02-构建与上手/快速入门.md`](current/02-构建与上手/快速入门.md) | 快速入门：命令行 / JSON-lines 会话 / wasm32 三条主路径（原 `QUICKSTART.md`） |
 | [`current/02-构建与上手/构建指南.md`](current/02-构建与上手/构建指南.md) | 构建指南：引擎、CLI、wasm32、测试防线、脚本清单与排障（原 `BUILD.md`） |
-| [`current/02-构建与上手/CLI使用手册.md`](current/02-构建与上手/CLI使用手册.md) | `cide_cli` 使用手册（含 `serve` JSON-lines 协议契约与方法一览）（原 `CIDE_CLI.md`） |
+| [`current/02-构建与上手/CLI使用手册.md`](current/02-构建与上手/CLI使用手册.md) | `vitro_cli` 使用手册（含 `serve` JSON-lines 协议契约与方法一览）（原 `VITRO_CLI.md`） |
 
 #### 语言子集规范（行为契约）
 
@@ -68,18 +69,18 @@
 | 文档 | 说明 |
 |------|------|
 | [`spec/STEP_PAYLOAD_SCHEMA_V0_1.md`](spec/STEP_PAYLOAD_SCHEMA_V0_1.md) | **StepPayload v0.1 语言中立协议 schema**（已冻结，S1–S5 签字回放 61/61；§9 v0.2 激活轨道、附录 B 受控词汇表） |
-| [`current/06-出口与协议/CAPI评审回复与实现状态.md`](current/06-出口与协议/CAPI评审回复与实现状态.md) | capi 签名评审定稿（外部消费者诉求逐条回应 + 第一批 13 入口实现台账）（原 `CIDE_CAPI_REVIEW_RESPONSE.md`） |
-| [`current/06-出口与协议/下游需求处置回执.md`](current/06-出口与协议/下游需求处置回执.md) | 下游需求清单处置与窗口表态（A/B/C/D 逐项回执；第二批 capi 窗口、三段式内存地图、会话语义）（原 `CIDE_DOWNSTREAM_REQUESTS_RESPONSE.md`） |
-| [`current/06-出口与协议/堆有界隔离决议.md`](current/06-出口与协议/堆有界隔离决议.md) | 堆内存决议：bump 分配 + 有界隔离（三道墙；已拍板已实施，U2 不可破坏项）（原 `CIDE_HEAP_QUARANTINE_DECISION.md`） |
+| [`current/06-出口与协议/CAPI评审回复与实现状态.md`](current/06-出口与协议/CAPI评审回复与实现状态.md) | capi 签名评审定稿（外部消费者诉求逐条回应 + 第一批 13 入口实现台账）（原 `VITRO_CAPI_REVIEW_RESPONSE.md`） |
+| [`current/06-出口与协议/下游需求处置回执.md`](current/06-出口与协议/下游需求处置回执.md) | 下游需求清单处置与窗口表态（A/B/C/D 逐项回执；第二批 capi 窗口、三段式内存地图、会话语义）（原 `VITRO_DOWNSTREAM_REQUESTS_RESPONSE.md`） |
+| [`current/06-出口与协议/堆有界隔离决议.md`](current/06-出口与协议/堆有界隔离决议.md) | 堆内存决议：bump 分配 + 有界隔离（三道墙；已拍板已实施，U2 不可破坏项）（原 `VITRO_HEAP_QUARANTINE_DECISION.md`） |
 
 #### 质量、裁定与工作记录
 
 | 文档 | 说明 |
 |------|------|
-| [`current/07-质量与裁定/统一整备路线图.md`](current/07-质量与裁定/统一整备路线图.md) | **统一整备路线图 U0~U7（排期权威）**：三语化 S 系列与重构评估 Phase 系列的合并执行方案（波次总览 / CS 硬门禁 / 防伪绿机制）（原 `CIDE_OVERHAUL_ROADMAP.md`） |
-| [`current/07-质量与裁定/核心资产重构裁定.md`](current/07-质量与裁定/核心资产重构裁定.md) | **核心资产重构裁定 v1（独立裁定）+ 重构执行方案**：分区裁定 / 判据 J1~J10 / 候选对比 / 中止条件 / §13 五域执行方案（D1 防线自身、D5 工具链语言 Python→Go 迁移边界与双轨纪律）；**§14 JIT trace 路径 P0 静默错值**（嵌套纯计数循环被外层 trace 穿透；**归因修正为与 `long long` 无关**；根因 = JIT fast path 在录制期间未禁用；含四组双向验证实验与 `vm_bench` 两处方法学缺陷）；**§14.11 对重构范围的影响**：新增子域 **D6（JIT 加速器存废重裁：先校正 `vm_bench` 重测加速比 → 删 JIT 或收缩作用域）**、D1b 形状对抗生成、J10 前置到 W1——**裁定①（核心不重写）维持**。实测脚本与证据 JSON 在 [`scripts/core_asset_verdict/`](../scripts/core_asset_verdict/)（原 `CIDE_CORE_ASSET_RECONSTRUCTION_VERDICT.md`） |
-| [`current/07-质量与裁定/三语化整备审计计划.md`](current/07-质量与裁定/三语化整备审计计划.md) | 三语化整备计划 v1.1（§1~§4 渗出证据链 / 防伪绿解剖 / 10591ad 事故裁定仍为权威记录；§5 批次表已并入 U 系列路线图）（原 `CIDE_TRILINGUAL_OVERHAUL_PLAN.md`） |
-| [`current/07-质量与裁定/重构评估报告20260912.md`](current/07-质量与裁定/重构评估报告20260912.md) | 重构评估（§1~§4 权威证据：泄漏复发洞实锤 / 7 项动态探针 / 分模块风险清单；§5 计划已并入 U 系列路线图）（原 `CIDE_REFACTOR_ASSESSMENT_2026_09_12.md`） |
+| [`current/07-质量与裁定/统一整备路线图.md`](current/07-质量与裁定/统一整备路线图.md) | **统一整备路线图 U0~U7（排期权威）**：三语化 S 系列与重构评估 Phase 系列的合并执行方案（波次总览 / CS 硬门禁 / 防伪绿机制）（原 `VITRO_OVERHAUL_ROADMAP.md`） |
+| [`current/07-质量与裁定/核心资产重构裁定.md`](current/07-质量与裁定/核心资产重构裁定.md) | **核心资产重构裁定 v1（独立裁定）+ 重构执行方案**：分区裁定 / 判据 J1~J10 / 候选对比 / 中止条件 / §13 五域执行方案（D1 防线自身、D5 工具链语言 Python→Go 迁移边界与双轨纪律）；**§14 JIT trace 路径 P0 静默错值**（嵌套纯计数循环被外层 trace 穿透；**归因修正为与 `long long` 无关**；根因 = JIT fast path 在录制期间未禁用；含四组双向验证实验与 `vm_bench` 两处方法学缺陷）；**§14.11 对重构范围的影响**：新增子域 **D6（JIT 加速器存废重裁：先校正 `vm_bench` 重测加速比 → 删 JIT 或收缩作用域）**、D1b 形状对抗生成、J10 前置到 W1——**裁定①（核心不重写）维持**。实测脚本与证据 JSON 在 [`scripts/core_asset_verdict/`](../scripts/core_asset_verdict/)（原 `VITRO_CORE_ASSET_RECONSTRUCTION_VERDICT.md`） |
+| [`current/07-质量与裁定/三语化整备审计计划.md`](current/07-质量与裁定/三语化整备审计计划.md) | 三语化整备计划 v1.1（§1~§4 渗出证据链 / 防伪绿解剖 / 10591ad 事故裁定仍为权威记录；§5 批次表已并入 U 系列路线图）（原 `VITRO_TRILINGUAL_OVERHAUL_PLAN.md`） |
+| [`current/07-质量与裁定/重构评估报告20260912.md`](current/07-质量与裁定/重构评估报告20260912.md) | 重构评估（§1~§4 权威证据：泄漏复发洞实锤 / 7 项动态探针 / 分模块风险清单；§5 计划已并入 U 系列路线图）（原 `VITRO_REFACTOR_ASSESSMENT_2026_09_12.md`） |
 | [`current/07-质量与裁定/代码审阅与修复追踪20260906.md`](current/07-质量与裁定/代码审阅与修复追踪20260906.md) | 全面代码审阅报告（137 条发现）与四批修复追踪（**修复进度权威追踪**；0911 复核已闭环归档）（原 `code_review_report_2026-09-06.md`） |
 | [`current/07-质量与裁定/实测发现登记20260913_性能与头文件.md`](current/07-质量与裁定/实测发现登记20260913_性能与头文件.md) | **实测发现登记（性能 + 头文件语义，2026-09-13）**：P-1~P-6（malloc churn 超线性 / 解释单步 35~41ns / 步数膨胀 18 步 / JIT 覆盖面 / 统一模式 58.5μs 步 / 基准方法学）、H-1~H-5（include 静默跳过零诊断、__has_include 口径不一、<> 宽松、存根遮蔽、wasm 降级）、D-1~D-4 文档漂移、跨平台备查——全部实测登记并经独立复核（§8），已挂接路线图批次（H-1/H-2 入 U1 第三批；P-1 完成 G6 复核一半，解锁 U2#2 开工前置） |
 | [`current/07-质量与裁定/脚本埋雷验证记录.md`](current/07-质量与裁定/脚本埋雷验证记录.md) | **J9 台账**：三个判定型脚本（shadow_verify / ci_three_tier_check / serve_smoke）各一条"注入→必须红"埋雷实证——判定型脚本埋雷记录 = 0 时其全绿不得作为结论依据（W0-1 / U0#8 验收达成）；含 serve_smoke 边界批与两处脚本自身缺陷的发现记录 |
@@ -139,12 +140,12 @@
 | `ARCHIVE_PANEL_DRAG_GESTURE_DESIGN.md` | 前端交互设计，宿主已迁出 |
 | `ARCHIVE_PHASE_KR_LEETCODE_TEST_PLAN.md` | 计划已达成（K&R 69 绿 / LeetCode 138 通过） |
 | `ARCHIVE_POINTER_COMPOUND_ASSIGN_PLAN.md` | 已全链路支持（2026-06-28） |
-| `ARCHIVE_RECURSIVE_TYPE_SYSTEM_REFACTOR.md` | 重构已落地于 `cide_ast` |
+| `ARCHIVE_RECURSIVE_TYPE_SYSTEM_REFACTOR.md` | 重构已落地于 `vitro_ast` |
 | `ARCHIVE_S6_READINESS_ASSESSMENT.md` | 阶段评估已被后续里程碑覆盖 |
 | `ARCHIVE_SHADOW_VS_CI.md` | 立论前提（特性缺失期）已消失 |
 | `ARCHIVE_WEB_DEPLOYMENT_CLOUDFLARE_AND_WASM_INTEGRATION.md` | Flutter Web 部署路径作废 |
 | `ARCHIVE_WEB_DEPLOYMENT_GITHUB_AND_GITEE_PAGES.md` | 双 Pages 部署围绕已删除产物构建 |
 
 > ⚠️ **archive/ 中的文档仅供追溯参考，内容可能已严重过时，且不再维护。**
-> 英文文档（`README_EN.md` / `BUILD_EN.md` / `CIDE_CLI_EN.md` / `QUICKSTART_EN.md` 等）已于 2026-09-11 删除，
+> 英文文档（`README_EN.md` / `BUILD_EN.md` / `VITRO_CLI_EN.md` / `QUICKSTART_EN.md` 等）已于 2026-09-11 删除，
 > 仓库中仅保留 [`AGENTS_EN.md`](../AGENTS_EN.md)；翻译工作后续再议。

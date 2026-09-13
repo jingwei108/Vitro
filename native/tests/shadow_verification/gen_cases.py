@@ -119,7 +119,7 @@ cases = [
     ("function_pointer_array", 'int f1() { return 1; } int f2() { return 2; } int main() { int (*fp[2])() = {f1,f2}; printf("%d %d", fp[0](), fp[1]()); return 0; }'),
     ("function_pointer_arg", 'int apply(int (*op)(int), int x) { return op(x); } int inc(int n) { return n+1; } int main() { printf("%d", apply(inc, 5)); return 0; }'),
     ("function_pointer_typedef", 'typedef int (*Op)(int, int); int add(int a, int b) { return a+b; } int main() { Op op = add; printf("%d", op(2,3)); return 0; }'),
-    ("function_pointer_sizeof", 'int main() { printf("%d", sizeof(int (*)(int))); return 0; }'),  # Cide=4, Clang64=8 (known arch diff)
+    ("function_pointer_sizeof", 'int main() { printf("%d", sizeof(int (*)(int))); return 0; }'),  # Vitro=4, Clang64=8 (known arch diff)
     ("function_pointer_multi_level", 'int add(int a) { return a+1; } int main() { int (*fp)(int) = add; int (**pp)(int) = &fp; printf("%d", (*pp)(5)); return 0; }'),
     ("function_pointer_return_ptr", 'int* greet(int x) { static int r = 0; r = x; return &r; } int main() { int* (*fp)(int) = greet; int* p = fp(42); printf("%d", *p); return 0; }'),
     ("function_pointer_array_direct", 'int mul(int a, int b) { return a*b; } int divi(int a, int b) { return a/b; } int main() { int (*ops[2])(int, int) = {mul, divi}; printf("%d %d", ops[0](3,4), ops[1](8,2)); return 0; }'),

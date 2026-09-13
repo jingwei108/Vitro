@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
-"""`cide_cli serve`（JSON-lines 会话模式）端到端冒烟 + 协议断言。
+"""`vitro_cli serve`（JSON-lines 会话模式）端到端冒烟 + 协议断言。
 
 防线定位：出口 3 的协议契约验证 —— id 关联 / 错误帧同构 / session.reset /
 与 capi 共用入口语义（StepPayload 字段、隔离预算默认值等）。
 
-运行：`python scripts/serve_smoke.py`（需先构建 cide_cli：`cargo build --bin cide_cli`）
-或经环境变量指定可执行文件：`CIDE_CLI=/path/to/cide_cli python scripts/serve_smoke.py`
+运行：`python scripts/serve_smoke.py`（需先构建 vitro_cli：`cargo build --bin vitro_cli`）
+或经环境变量指定可执行文件：`VITRO_CLI=/path/to/vitro_cli python scripts/serve_smoke.py`
 """
 import json
 import os
@@ -23,10 +23,10 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
 def resolve_exe() -> Path:
-    override = os.environ.get("CIDE_CLI")
+    override = os.environ.get("VITRO_CLI")
     if override:
         return Path(override)
-    name = "cide_cli.exe" if sys.platform == "win32" else "cide_cli"
+    name = "vitro_cli.exe" if sys.platform == "win32" else "vitro_cli"
     debug = PROJECT_ROOT / "native" / "target" / "debug" / name
     release = PROJECT_ROOT / "native" / "target" / "release" / name
     # 取 mtime 较新的产物——固定 debug 优先会在陈旧 debug 上拿假绿
@@ -91,9 +91,9 @@ def check(cond, label, detail=""):
 def main():
     exe = resolve_exe()
     if not exe.exists():
-        print(f"错误: 找不到 {exe}，请先 `cd native && cargo build --bin cide_cli`")
+        print(f"错误: 找不到 {exe}，请先 `cd native && cargo build --bin vitro_cli`")
         return 2
-    print(f"cide_cli: {exe}")
+    print(f"vitro_cli: {exe}")
 
     payload = "\n".join(json.dumps(r, ensure_ascii=False) for r in REQUESTS) + "\n"
     proc = subprocess.run(
@@ -214,7 +214,7 @@ def main():
     )
     check(
         caps.get("memory_model", {}).get("global_region_limit") == 65536,
-        "capabilities 内存模型常量（单源 cide_runtime）",
+        "capabilities 内存模型常量（单源 vitro_runtime）",
     )
     # B2：schema 轨道与行为契约进能力清单（消费方可直读版本协商信息）
     check(
@@ -297,7 +297,7 @@ def main():
 # 预算语义（诚实分层）：
 # - 默认预算是**当前基线的宽松护栏**（远低于事故量级、高于正常尖峰），
 #   不是 J5 的 64B/步——那要等 U2 生命周期重构后才收紧；
-# - 证红方式：`CIDE_RSS_BUDGET_MB=5 python scripts/serve_smoke.py`
+# - 证红方式：`VITRO_RSS_BUDGET_MB=5 python scripts/serve_smoke.py`
 #   必红（护栏有牙，U0#2"先证会红"义务）。
 # 采样：驱动侧 ctypes 直调 psapi（GetProcessMemoryInfo 的提交峰值，
 # 与 scripts/internal/probeutil 同口径——不信被测代码自报）。
@@ -341,7 +341,7 @@ def _peak_commit_mb_windows(pid: int) -> int:
 
 def run_rss_guard_batch(exe: Path):
     print("\n== RSS 护栏批（远距 seek 压力形状，超预算即红）==")
-    budget_mb = int(os.environ.get("CIDE_RSS_BUDGET_MB", "512"))
+    budget_mb = int(os.environ.get("VITRO_RSS_BUDGET_MB", "512"))
     if sys.platform != "win32":
         print("  SKIP  非 Windows 平台（CI runner 为 windows-latest；采样走 psapi）")
         return []
@@ -394,7 +394,7 @@ def run_rss_guard_batch(exe: Path):
             fails.append(label)
     if peak >= 0:
         ok(peak <= budget_mb, "RSS 护栏：提交峰值在预算内",
-           f"peak={peak}MB budget={budget_mb}MB（U2 完成后按 J5 收紧；证红：CIDE_RSS_BUDGET_MB=5）")
+           f"peak={peak}MB budget={budget_mb}MB（U2 完成后按 J5 收紧；证红：VITRO_RSS_BUDGET_MB=5）")
     else:
         ok(False, "RSS 护栏：采样可用", "psapi 采样失败")
     return fails

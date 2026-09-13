@@ -121,7 +121,7 @@ typedef int* IntPtr;
 - **多级指针**：`int**`、`struct Node**` 等，支持解引用、取地址、数组索引、指针算术、显式 cast
 - **struct**：链表、树等数据结构的基础；支持按值返回（Hidden Return Pointer ABI）
 - **VLA（变长数组）**：C99 局部变长数组，运行时栈分配；支持一维/多维、sizeof 运行时求值、函数参数退化
-- **enum**：编译期计算常量值，生成 CideVM 全局常量，便于教学演示状态机
+- **enum**：编译期计算常量值，生成 VitroVM 全局常量，便于教学演示状态机
 - **typedef**：简化复杂类型声明，提升代码可读性
 
 ### 2.2 语句
@@ -354,7 +354,7 @@ fclose(fp);
 
 **支持细节**：
 - `fopen` / `fclose` / `fread` / `fwrite` / `fgets` / `fputs` / `fgetc` / `fputc` / `fseek` / `ftell` / `rewind` / `feof`
-- 所有文件操作在 CideVM 虚拟文件系统（VFS）沙盒内进行，路径相对于 VFS 根目录
+- 所有文件操作在 VitroVM 虚拟文件系统（VFS）沙盒内进行，路径相对于 VFS 根目录
 - `"r"` / `"w"` / `"a"` / `"rb"` / `"wb"` 等模式均可识别；**文本模式已完整模拟 Windows CRT 的 `\n` ↔ `\r\n` 自动换行转换**
   - 写入 `"w"` 时 `\n` 自动展开为 `\r\n`
   - 读取 `"r"` 时 `\r\n` 自动压缩为 `\n`
@@ -367,7 +367,7 @@ fclose(fp);
 
 ### 2.7 GCC 扩展（有限支持）
 
-为兼容部分教学代码和 K&R / 模板用例，Cide 对以下 GCC 扩展提供**有限支持**（仅保证 Shadow Verification 覆盖的用法可用，不保证完整语义）：
+为兼容部分教学代码和 K&R / 模板用例，Vitro 对以下 GCC 扩展提供**有限支持**（仅保证 Shadow Verification 覆盖的用法可用，不保证完整语义）：
 
 ```c
 // __asm__("...")：GCC 风格内联汇编占位
@@ -420,7 +420,7 @@ int main() {
 
 > **2026-09-11 更新**：上表最后两项（普通字符指令、scanf 返回值）原为"已知差异、未实现"，
 > 现已实现并以 Clang 实测对照（新增 Shadow/E2E 用例 3 个，含负向的字面不匹配场景）。
-> 同批修复：**标准输入换行口径统一** —— capi `cide_set_input` / serve `run.input` / CLI `-i` 三个入口此前用 `str::lines()`
+> 同批修复：**标准输入换行口径统一** —— capi `vitro_set_input` / serve `run.input` / CLI `-i` 三个入口此前用 `str::lines()`
 > 拆分输入、丢掉行尾 `'\n'`，导致 `getchar()` 永远读不到换行（K&R 用例 `kr_1_8` 的换行计数恒为 0）；
 > 现统一走 `RuntimeState::split_stdin`（保留换行）。
 
@@ -441,8 +441,8 @@ int main() {
 **与 Clang 的差异（诚实记录）**：
 
 1. **隔离窗口外的 UAF 可能漏检**：`free(p)` 与错误访问之间若隔离区已整体轮换（其间 churn 超过 256KB），`*p` 落在已复用块上，表现为"读到别人的值"而非 UAF 诊断。与 ASAN quarantine 行为一致；
-2. **`realloc` 恒搬移**：`realloc(p, 更小)` 在 glibc 下常原地返回同一地址，Cide 下必返回新地址（旧地址进隔离区）。标准不保证 realloc 不移动，依赖该行为的代码本就不合规，但**实测输出会与 Clang 不同**（如 `p = realloc(p, 8); p == old_p` 在 Cide 下为假）；
-3. **`free` 后地址的复用时机不同**：glibc 立即可复用，Cide 需等待隔离区驱逐（教学上更利于暴露"free 后仍持有旧指针"的错误）；
+2. **`realloc` 恒搬移**：`realloc(p, 更小)` 在 glibc 下常原地返回同一地址，Vitro 下必返回新地址（旧地址进隔离区）。标准不保证 realloc 不移动，依赖该行为的代码本就不合规，但**实测输出会与 Clang 不同**（如 `p = realloc(p, 8); p == old_p` 在 Vitro 下为假）；
+3. **`free` 后地址的复用时机不同**：glibc 立即可复用，Vitro 需等待隔离区驱逐（教学上更利于暴露"free 后仍持有旧指针"的错误）；
 4. **堆耗尽不 trap**：决议文本措辞为"教学 trap"，实现取 NULL + 输出教学提示 —— C 标准要求分配失败返回 NULL，Clang 同样返回 NULL，trap 会偏离"必须检查 malloc 返回值"这一编程习惯。
 
 > **反向链接**：本节隔离预算（堆上限 1/4 = 256KB）、FIFO 驱逐与"第三道墙"（region 表封顶）的完整推导、决议原文与验收用例见 [`堆有界隔离决议.md`](../../06-出口与协议（语言中立的引擎层决议，三出口共用）。
@@ -499,13 +499,13 @@ C89~C23 一致），带 `f`/`F` 后缀为 float。此前一律建模为 float，
 
 **与 Clang 的差异（诚实记录，本批新增/暴露）**：
 
-- **struct/union 布局为 packed**（预存）：Cide 不做成员对齐填充
-  （`struct S { char c; int i; }` 的 sizeof：Cide=5，Clang Win64=8）；
+- **struct/union 布局为 packed**（预存）：Vitro 不做成员对齐填充
+  （`struct S { char c; int i; }` 的 sizeof：Vitro=5，Clang Win64=8）；
   `alignof` 按"成员最大自然对齐"取值（与 Clang 口径一致），与自身 packed
   布局的 sizeof/offsetof 存在内部不一致。教学映射/堆可视化依赖 packed
   布局，改动需整体评估。
 - **指针为 4 字节**（预存）：VM 指针模型 4 字节，Win64 宿主实际 8 字节
-  （`_Alignof(int*)`：Cide=4，Clang=8）。1MB 线性内存模型使 4 字节指针
+  （`_Alignof(int*)`：Vitro=4，Clang=8）。1MB 线性内存模型使 4 字节指针
   自洽，非缺陷。
 - **数字分隔符**（C23-only 语法）在 Clang gnu17 默认模式下无法编译，
   对应用例由词法单元测试覆盖（`lexer_unit_test.rs`），不进 Shadow baseline。
@@ -515,7 +515,7 @@ C89~C23 一致），带 `f`/`F` 后缀为 float。此前一律建模为 float，
 ### 2.11 模块化预处理器（E2 批次，2026-09-11）
 
 架构：皮肤与内核分离——学生写标准 C 预处理语法，引擎内部为模块化内核
-（`cide_lexer/src/preprocessor/`：`resolver` / `macro_table` / `expander` /
+（`vitro_lexer/src/preprocessor/`：`resolver` / `macro_table` / `expander` /
 `cond` / `splice` / `directives`），不做文本变换黑魔法。
 
 **支持**：
@@ -527,7 +527,7 @@ C89~C23 一致），带 `f`/`F` 后缀为 float。此前一律建模为 float，
 | `#if` / `#elif` / `#else` / `#endif` / `#ifdef` / `#ifndef` | 整数常量表达式（`+ - * / %`、比较、`! && \|\|`，短路；短路分支内除零不触发）；`defined(X)` 宏展开前提取 |
 | `#undef` | 支持 |
 | `__STDC_VERSION__` | **名义锚点 202311L**——不随宿主 std 模式变化；真实能力见 capabilities JSON |
-| `__CIDE_SUBSET__` | 引擎专属探测宏（值为 1） |
+| `__VITRO_SUBSET__` | 引擎专属探测宏（值为 1） |
 | `__has_include(<h>)` / `__has_include("h")` | `#if` 内可用 |
 | `#include` 候选链 | quote-include 优先"包含者目录"，其次源文件目录 |
 | include-once | 同一文件只拼接一次（守卫语义内置，写不写守卫都正确）|
@@ -545,7 +545,7 @@ C89~C23 一致），带 `f`/`F` 后缀为 float。此前一律建模为 float，
    token，失败报 E1016。替代：显式命名或数组索引。
 3. **X-macro 高级用法**——依赖任意深度的重扫描时可能不工作。替代：代码生成脚本。
 4. **宏拼接 include 路径**（`#include MACRO(name)`）——不支持。替代：直接写路径。
-5. **无守卫双 include**——Clang 会重定义报错，Cide include-once 静默跳过
+5. **无守卫双 include**——Clang 会重定义报错，Vitro include-once 静默跳过
    （守卫语义内置的差异面，教学上鼓励写守卫或依赖内置语义均可）。
 6. **空实参 placemarker 语义**、拼接出预处理数字的边界形态——按"结果必须合法"
    从简处理。
@@ -564,7 +564,7 @@ C89~C23 一致），带 `f`/`F` 后缀为 float。此前一律建模为 float，
 | `static_assert` / `_Static_assert`（双拼写） | **编译期真求值**（与 enum 初始化器同一常量求值器，支持 sizeof(内建类型)）；为假 → 编译错误 E1020（携带消息）；单参形态（C23）支持；顶层与块作用域均可用 |
 | `constexpr` 对象 | 按 `const` 语义处理（`constexpr int N = 42;` 可用）。**边界（诚实记录）**：不强制初始化器为常量表达式、不做常量传播——数组尺寸/case 标签用 `constexpr` 变量不支持，请用字面量或 `#define` |
 | `[[属性]]` | 解析并忽略（前缀位置：顶层/语句）。无任何属性语义（`[[maybe_unused]]` 不抑制警告等）；与 Clang 默认模式"未知属性警告后忽略"的可见行为一致。属性参数内嵌套方括号不支持 |
-| `unreachable()` | `<stddef.h>` 声明；**执行到即教学 trap**（"执行了标注为不可达的代码……检查分支条件"）；死代码中的调用不执行、不影响输出。与 .NET/C23 的 UB 语义差异：Cide 给出确定性教学诊断 |
+| `unreachable()` | `<stddef.h>` 声明；**执行到即教学 trap**（"执行了标注为不可达的代码……检查分支条件"）；死代码中的调用不执行、不影响输出。与 .NET/C23 的 UB 语义差异：Vitro 给出确定性教学诊断 |
 
 **与 Clang 的差异（诚实记录）**：`nullptr`/`constexpr` 在 Clang gnu17 默认模式下
 编译失败（C23-only），因此不出 Shadow golden（由单元测试覆盖，同数字分隔符
@@ -676,7 +676,7 @@ int main() {
 
 ## 5. 与 VisualBinaryTree 的对比
 
-| 特性 | VisualBinaryTree Algo-C Subset | 本项目 Cide-C Subset |
+| 特性 | VisualBinaryTree Algo-C Subset | 本项目 Vitro-C Subset |
 |:---|:---|:---|
 | int | ✅ | ✅ |
 | 数组 | ✅（一维） | ✅（一维 + 多维） |
@@ -715,7 +715,7 @@ int main() {
 
 ## 6. 编译器实现工作量评估
 
-基于 Rust + CideVM 自定义字节码架构：
+基于 Rust + VitroVM 自定义字节码架构：
 
 ### 6.1 各模块代码量估算
 
@@ -769,7 +769,7 @@ int main() { return 0; }
 
 新增：
 - struct、malloc/free（简化版）
-- 内置输出函数（`print_int`、`__cide_output`）
+- 内置输出函数（`print_int`、`__vitro_output`）
 - 内存视图与内存泄漏检测
 
 **教学能力**：链表、树、动态内存、内存泄漏检测。
@@ -890,7 +890,7 @@ int main() { return 0; }
    - `int a, b;` → 可能困惑（为什么可以一行两个？）→ **已支持** ✅（`int a = 1, b = 2;`）
    - `p++` vs `arr[i++]` → 需要理解步长缩放，但已支持并带教学提示 → **保留**
 
-### 最终推荐的 Cide-C 子集（Phase 1 ~ 5 完整版）
+### 最终推荐的 Vitro-C 子集（Phase 1 ~ 5 完整版）
 
 ```
 数据类型：int、char、float、double、unsigned、long long、int*、char*、float*、double*、

@@ -7,12 +7,12 @@ import sys
 import time
 import threading
 
-CLI = "native/target/release/cide_cli.exe"
+CLI = "native/target/release/vitro_cli.exe"
 P3 = ('#include <stdio.h>\n\nint main() {\n    int s = 0;\n    for (int i = 0; i < 3000; i++) {\n'
       '        s += i;\n    }\n    printf("%d\\n", s);\n    return 0;\n}\n')
 
 import os
-env = dict(os.environ, CIDE_SEEK_DEBUG="1")
+env = dict(os.environ, VITRO_SEEK_DEBUG="1")
 serve = subprocess.Popen([CLI, "serve"], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                          stderr=open("scripts/replay/serve_stderr.log", "w", encoding="utf-8"), text=True, encoding="utf-8", env=env)
 kill = {"flag": False}

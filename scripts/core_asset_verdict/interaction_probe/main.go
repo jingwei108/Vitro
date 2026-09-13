@@ -2,7 +2,7 @@
 
 // interaction_probe —— 交互切面探针的 Go 迁移（D5 探针集：防线级判定型）。
 //
-// 影子防线只做「compile → run → 比 stdout」批处理；本探针走 cide_cli serve 的
+// 影子防线只做「compile → run → 比 stdout」批处理；本探针走 vitro_cli serve 的
 // JSON-lines 会话，做两件影子防线做不到的事：
 //
 //	A. 随机交互序列（固定种子加权选择 step/seek/payload.get/breakpoints/
@@ -15,7 +15,7 @@
 //
 // 与 Python 版（scripts/core_asset_verdict/interaction_probe.py）的对账口径：
 //   - **RNG 逐比特复刻**（choices 加权 bisect_right / choice / sample 池洗牌与
-//     set 拒绝两法），同 seed 下 op 序列与请求序列完全一致 → 与同一 cide_cli.exe
+//     set 拒绝两法），同 seed 下 op 序列与请求序列完全一致 → 与同一 vitro_cli.exe
 //     交互，per_program（含 panic 死亡点 died_at）、错误统计、不变量违反应逐字段一致；
 //   - stderr 字段含进程 pid，跨轨对账时需洗去；rss 字段仅在 --rss 下有效。
 //
@@ -27,9 +27,9 @@
 package main
 
 import (
-	"cide/scripts/internal/capi"
-	"cide/scripts/internal/probeutil"
-	"cide/scripts/internal/pyrandom"
+	"vitro/scripts/internal/capi"
+	"vitro/scripts/internal/probeutil"
+	"vitro/scripts/internal/pyrandom"
 
 	"bufio"
 	"encoding/json"
@@ -636,7 +636,7 @@ func main() {
 		}
 	}
 	start := time.Now()
-	fmt.Printf("cide_cli: %s\nseed=%d ops/程序=%d rss采样=%v\n\n", cli, seed, ops, doRSS)
+	fmt.Printf("vitro_cli: %s\nseed=%d ops/程序=%d rss采样=%v\n\n", cli, seed, ops, doRSS)
 
 	a := partA(seed, ops, doRSS)
 	fmt.Println("== A 随机交互序列 ==")

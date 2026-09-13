@@ -8,9 +8,9 @@
 //! 既有用例 `test_second_wall_max_steps_fuse` 只断言"消息含步数超限"，1000 万步也能满足，
 //! 因此长期掩盖了该缺陷 —— 本文件补上"配置值本身必须生效且可回显"的断言。
 
-use cide_native::capi;
-use cide_native::session::{CompileUnit, Session};
-use cide_native::session_api;
+use vitro_native::capi;
+use vitro_native::session::{CompileUnit, Session};
+use vitro_native::session_api;
 use std::ffi::{c_char, CString};
 
 /// 只分配不释放的自旋程序：会先撞步数保险丝（步数上限很小时），而非 1MB 堆墙。
@@ -81,21 +81,21 @@ fn test_capi_set_max_steps_before_compile_is_effective() {
     // 会话尚未编译时设置也必须生效：此前 capi 写成 `if let Some(vm) { .. }` 并返回 0，
     // 会话无 VM 时配置被静默丢弃（返回"成功"）。
     unsafe {
-        let session = capi::cide_session_create();
+        let session = capi::vitro_session_create();
         assert!(!session.is_null());
-        assert_eq!(capi::cide_set_max_steps(session, 500), 0, "设置应返回成功");
+        assert_eq!(capi::vitro_set_max_steps(session, 500), 0, "设置应返回成功");
 
         let fname = CString::new("main.c").unwrap();
         let src = CString::new(SPIN_SRC).unwrap();
-        capi::cide_compile_unit(
+        capi::vitro_compile_unit(
             session,
             fname.as_ptr() as *const c_char,
             src.as_ptr() as *const c_char,
         );
-        assert_eq!(capi::cide_compile_all(session), 0, "用例程序应能编译");
+        assert_eq!(capi::vitro_compile_all(session), 0, "用例程序应能编译");
 
-        let _ = capi::cide_run(session);
-        let err_ptr = capi::cide_get_runtime_error(session);
+        let _ = capi::vitro_run(session);
+        let err_ptr = capi::vitro_get_runtime_error(session);
         let err = if err_ptr.is_null() {
             String::new()
         } else {
@@ -106,6 +106,6 @@ fn test_capi_set_max_steps_before_compile_is_effective() {
             "编译前设置的步数上限必须生效（而不是被静默丢弃）：{err}"
         );
 
-        capi::cide_session_destroy(session);
+        capi::vitro_session_destroy(session);
     }
 }

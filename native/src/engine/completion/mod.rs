@@ -12,7 +12,7 @@ use crate::session::Session;
 // 数据类型
 // ============================================================================
 
-/// 补全候选（FRB 友好，将在 api/cide.rs 中重新包装）
+/// 补全候选（FRB 友好，将在 api/vitro.rs 中重新包装）
 #[derive(Debug, Clone)]
 pub struct CompletionCandidate {
     pub label: String,

@@ -47,7 +47,7 @@ type FactsDoc struct {
 	Facts       map[string]Fact `json:"facts"`
 }
 
-const factsSchema = "cide.facts.v1"
+const factsSchema = "vitro.facts.v1"
 
 // ─── 基础设施 ────────────────────────────────────────────────────────────────
 
@@ -312,7 +312,7 @@ func collectReplay(root string, facts map[string]Fact) {
 }
 
 func pythonExe() string {
-	if v := os.Getenv("CIDE_PYTHON"); v != "" {
+	if v := os.Getenv("VITRO_PYTHON"); v != "" {
 		return v
 	}
 	for _, c := range []string{"python", "python3", "py"} {
@@ -324,7 +324,7 @@ func pythonExe() string {
 }
 
 func collectServeSmoke(root string, facts map[string]Fact) {
-	how := "python scripts/serve_smoke.py（需先构建 cide_cli）"
+	how := "python scripts/serve_smoke.py（需先构建 vitro_cli）"
 	py := pythonExe()
 	if py == "" {
 		facts["serve_smoke_assertions"] = unavail("项", "scripts/serve_smoke.py", how, "找不到 python")

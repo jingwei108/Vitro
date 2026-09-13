@@ -1,4 +1,4 @@
-/* Bytecode Libc: string 子集 —— 用 Cide-C 子集重写的纯算法实现 */
+/* Bytecode Libc: string 子集 —— 用 Vitro-C 子集重写的纯算法实现 */
 
 int strlen(char *s) {
     int len = 0;

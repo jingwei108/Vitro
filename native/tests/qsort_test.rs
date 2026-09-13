@@ -4,32 +4,32 @@ use std::ffi::{c_char, CString};
 
 fn compile_and_run(source: &str) -> Result<(i32, Vec<String>), String> {
     unsafe {
-        let session = cide_native::capi::cide_session_create();
+        let session = vitro_native::capi::vitro_session_create();
         if session.is_null() {
             return Err("Failed to create session".to_string());
         }
 
         let src = CString::new(source).map_err(|e| e.to_string())?;
-        let compile_ret = cide_native::capi::cide_compile(session, src.as_ptr() as *const c_char);
+        let compile_ret = vitro_native::capi::vitro_compile(session, src.as_ptr() as *const c_char);
         if compile_ret != 0 {
-            let err_ptr = cide_native::capi::cide_get_compile_errors(session);
+            let err_ptr = vitro_native::capi::vitro_get_compile_errors(session);
             let err_msg = if err_ptr.is_null() {
                 "Unknown compile error".to_string()
             } else {
                 std::ffi::CStr::from_ptr(err_ptr).to_string_lossy().to_string()
             };
-            cide_native::capi::cide_session_destroy(session);
+            vitro_native::capi::vitro_session_destroy(session);
             return Err(err_msg);
         }
 
-        let run_ret = cide_native::capi::cide_run(session);
+        let run_ret = vitro_native::capi::vitro_run(session);
 
         // E-P1-5：直接读纯程序 stdout 通道（引擎附注走 note 通道），不再做文本清洗。
         let mut outputs = Vec::new();
-        let out_len = cide_native::capi::cide_get_program_output_length(session);
+        let out_len = vitro_native::capi::vitro_get_program_output_length(session);
         if out_len > 0 {
             let mut buf = vec![0u8; out_len as usize + 1];
-            cide_native::capi::cide_get_program_output(session, buf.as_mut_ptr() as *mut c_char, buf.len() as i32);
+            vitro_native::capi::vitro_get_program_output(session, buf.as_mut_ptr() as *mut c_char, buf.len() as i32);
             let out_str = String::from_utf8_lossy(&buf[..out_len as usize]);
             for line in out_str.lines() {
                 if !line.is_empty() {
@@ -38,14 +38,14 @@ fn compile_and_run(source: &str) -> Result<(i32, Vec<String>), String> {
             }
         }
 
-        let err_ptr = cide_native::capi::cide_get_runtime_error(session);
+        let err_ptr = vitro_native::capi::vitro_get_runtime_error(session);
         let runtime_err = if err_ptr.is_null() {
             None
         } else {
             Some(std::ffi::CStr::from_ptr(err_ptr).to_string_lossy().to_string())
         };
 
-        cide_native::capi::cide_session_destroy(session);
+        vitro_native::capi::vitro_session_destroy(session);
 
         if let Some(e) = runtime_err {
             if !e.is_empty() {

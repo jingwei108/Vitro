@@ -7,7 +7,7 @@ Q3 行为债量化需要回答的第一个问题：**662 个用例里，有多�
 本脚本不读 shadow 报告、不读缓存，直接用 clang 子进程重算一遍（规模 ~662 次编译）。
 判定口径：
   * golden_ok      clang 编译+运行成功 → stdout 是外部 golden，任何重写都必须复刻
-  * clang_compile_fail  clang 编译失败 → 该用例无外部 golden（cide_better 通道）
+  * clang_compile_fail  clang 编译失败 → 该用例无外部 golden（vitro_better 通道）
   * clang_run_fail      clang 能编但运行失败 → 无 golden
   * self_exempt        源码 `@category` 含 "bug" → shadow 驱动 analyze_diff 直接判 known_issue，
                        输出差异被豁免（"自我豁免通道"，驱动源码为证）

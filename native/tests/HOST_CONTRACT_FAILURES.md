@@ -30,7 +30,7 @@
   - 解释器 `StoreMem` 约定：**先 pop 值，再 pop 地址**（栈顶是值）。
   - JIT 模板错误实现为：**先 pop 地址，再 pop 值**。
   - 当填充数组的 `for` 循环执行次数超过 `JIT_THRESHOLD=100` 并被 trace 加速后，`arr[i] = 1000 - i` 实际把“值”当成地址写入，数值较小时（如 0x0383）落入 NULL trap 区，触发 trap。
-- **是否 Cide 限制**: 否
+- **是否 Vitro 限制**: 否
 - **是否标准库实现偏差**: 否（实现 bug）
 - **学生影响评级**: P0 — 教学中 1000 元素排序是常见场景，JIT 加速下所有数组写操作都可能把值写到错误地址，后果严重
 - **修复**:
@@ -54,7 +54,7 @@
   // 预期: -123（C 标准行为）
   // 实际: 0（Rust 的 parse::<i32>() 对非纯数字字符串返回 Err）
   ```
-- **是否 Cide 限制**: 否
+- **是否 Vitro 限制**: 否
 - **是否标准库实现偏差**: **是**
 - **学生影响评级**: P1（限制已知）— `atoi` 处理带后缀的字符串属于边缘场景，但在 K&R 示例中可能出现
 - **修复**: 将 `parse::<i32>()` 替换为手动前缀解析（跳过前导空白 → 处理符号 → 读取连续数字 → 遇到非数字停止）。
@@ -74,7 +74,7 @@
   // 预期: 返回非 NULL（等价于 malloc(64)）
   // 实际: 返回 NULL 并伴随 malloc(0) 警告
   ```
-- **是否 Cide 限制**: 否
+- **是否 Vitro 限制**: 否
 - **是否标准库实现偏差**: **是**
 - **学生影响评级**: P0（误导学生）— `realloc(ptr, 0)` 和 `realloc(NULL, size)` 是 C 标准中的常见用法，行为错误会导致学生困惑
 - **根因**: `host_realloc` 在 `ptr == 0` 分支直接调用 `host_malloc(vm, session)`，但此时 `new_size` 已被 pop 出栈，`host_malloc` 因栈空而读到 size=0。
@@ -96,7 +96,7 @@
   // 预期: 触发 NULL trap（地址 < 0x1000）
   // 实际: 静默写入 VM 内存地址 0，绕过所有安全检查
   ```
-- **是否 Cide 限制**: 否
+- **是否 Vitro 限制**: 否
 - **是否标准库实现偏差**: **是**
 - **学生影响评级**: P0（误导学生）— 绕过 NULL trap 使学生无法发现未初始化指针的错误
 - **根因**: `host_memset` 直接通过 `memory_ref_mut()` 操作原始内存切片，完全绕过了 `check_mem_access`。
@@ -122,7 +122,7 @@
   char *buf = malloc(3);
   strcpy(buf, "hello"); // 需要 6 字节（含 \0），但 buf 只有 3 字节
   ```
-- **是否 Cide 限制**: 否
+- **是否 Vitro 限制**: 否
 - **是否标准库实现偏差**: **是**
 - **学生影响评级**: P0（误导学生）— strcpy 越界是 C 教学中最典型的缓冲区溢出示例，不触发 trap 意味着学生无法得到即时反馈
 - **修复**: 在 `host_strcpy` 中通过 `session.memory.regions` 查找 `dest` 所属的已分配堆区域。若找到，验证 `src_len + 1 <= region.size - offset`；若越界则触发 `Trap` 并输出 `E3070 Buffer Overflow` 诊断信息，包含区域名、可用空间和修复建议。
@@ -141,7 +141,7 @@
   strcpy(buf, "ab");
   strcat(buf, " world"); // 已有 3 字节 + 需要 7 字节 = 10 字节，但 buf 只有 4 字节
   ```
-- **是否 Cide 限制**: 否
+- **是否 Vitro 限制**: 否
 - **是否标准库实现偏差**: **是**
 - **学生影响评级**: P0（误导学生）
 - **修复**: 与 `host_strcpy` 同理，通过 `session.memory.regions` 检查 `dest_len + src_len + 1 <= region.size - offset`，越界时触发 `E3070 Buffer Overflow`。
@@ -167,7 +167,7 @@
   }
   ```
   内层循环 backward jump 目标被命中超过 `JIT_THRESHOLD` 后，`TraceRecorder` 在第 N 次迭代（`j >= 20`）录制到 `JumpIfZero` 跳转到循环外，触发 `RecordResult::Abort`；但 `executor.rs` 对 `Finish` 和 `Abort` 都调用 `trace_recorder.finish()`，导致只包含条件判断的 4 条指令被编译为 `CompiledTrace`。
-- **是否 Cide 限制**: 否
+- **是否 Vitro 限制**: 否
 - **是否标准库实现偏差**: 否（实现 bug）
 - **学生影响评级**: P1 — 嵌套循环场景下 JIT 会生成无效 trace，导致循环被反复解释执行或触发 `max_steps` 误报为无限循环
 - **修复**:
@@ -184,7 +184,7 @@
 
 - **来源**: Host Contract（尚未编写测试，待补充）
 - **预期行为**: C99 标准不要求特定舍入方向，但常见实现（glibc/Clang）使用银行家舍入或向远离零舍入，输出 `"2.67"` 或 `"2.68"`。
-- **当前状态**: 未测试。Cide 的 `format_printf_string` 使用 Rust 的 `format!("{:.2}")`，其行为是银行家舍入（round half to even）。
+- **当前状态**: 未测试。Vitro 的 `format_printf_string` 使用 Rust 的 `format!("{:.2}")`，其行为是银行家舍入（round half to even）。
 - **建议**: 编写契约测试记录实际行为，若与主流 Clang 行为偏差则标记。
 
 ### `memcpy` / `memmove` Host Contract 缺失

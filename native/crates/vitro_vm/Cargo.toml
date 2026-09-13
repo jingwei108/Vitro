@@ -1,0 +1,15 @@
+[package]
+name = "vitro_vm"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+vitro_ast = { path = "../vitro_ast" }
+vitro_runtime = { path = "../vitro_runtime" }
+vitro_shared = { path = "../vitro_shared" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+libm = "0.2"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys = "0.3"

@@ -1,4 +1,4 @@
-/* Bytecode Libc: stdlib 子集 —— 用 Cide-C 子集重写的纯算法实现 */
+/* Bytecode Libc: stdlib 子集 —— 用 Vitro-C 子集重写的纯算法实现 */
 
 int abs(int n) {
     return n < 0 ? -n : n;

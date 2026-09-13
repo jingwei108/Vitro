@@ -31,7 +31,7 @@ FACET_RULES = [
     ("diagnostics", re.compile(
         r"error_catalog|Diagnostic|diagnostic|auto_fix|E3\d{3}|E1\d{3}|knowledge_graph")),
     ("batch_stdout", re.compile(
-        r"program_output|get_output|cide_run|stdout|printf\(")),
+        r"program_output|get_output|vitro_run|stdout|printf\(")),
 ]
 DEFAULT_FACET = "unit_other"
 

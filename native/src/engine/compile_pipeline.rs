@@ -10,7 +10,7 @@ use crate::compiler::parser::Parser;
 use crate::compiler::typeck::TypeChecker;
 use crate::engine::completion::update_completion_snapshot;
 use crate::session::*;
-use crate::vm::core::CideVM;
+use crate::vm::core::VitroVM;
 
 // ---------- 辅助函数：根据类型定义计算类型大小 ----------
 
@@ -24,7 +24,7 @@ pub trait CompileError {
 }
 
 /// E2：预处理警告（宏遮蔽 W1018 / 宏参数副作用 W1019）进 diagnostics 管线。
-impl CompileError for cide_lexer::LexerWarning {
+impl CompileError for vitro_lexer::LexerWarning {
     fn line(&self) -> i32 {
         self.line
     }
@@ -225,7 +225,7 @@ fn note_global_layout(session: &mut Session, global_data_end: u32, source: &str,
         return;
     }
     // 预估口径按无 argv 计算（编译期不知道运行期 argc），argv 场景由堆起点函数另行上移。
-    let heap_base = cide_runtime::compute_heap_base(global_data_end, 0, &[]);
+    let heap_base = vitro_runtime::compute_heap_base(global_data_end, 0, &[]);
     let note = GlobalLayoutNote {
         message: format!(
             "全局数据区达 {} 字节，已超过默认堆起点（{} 字节）。运行时堆起点将自动上移至 0x{:04X}，malloc 可用空间相应减少（约 {} KB）",
@@ -240,10 +240,10 @@ fn note_global_layout(session: &mut Session, global_data_end: u32, source: &str,
 
 // ========== VM 初始化 ==========
 
-pub fn setup_vm(vm: &mut CideVM, session: &Session) {
+pub fn setup_vm(vm: &mut VitroVM, session: &Session) {
     use crate::vm::bytecode_libc_loader::load_artifact;
     use crate::vm::core::{FuncMeta, VMSymbol};
-    use cide_runtime::opcode::OpCode;
+    use vitro_runtime::opcode::OpCode;
 
     vm.reset();
 
@@ -268,7 +268,7 @@ pub fn setup_vm(vm: &mut CideVM, session: &Session) {
     vm.load_program(full_code);
 
     // ── 4. 注册 Bytecode Libc 函数 ──
-    use cide_runtime::bytecode_libc_index::bytecode_libc_index;
+    use vitro_runtime::bytecode_libc_index::bytecode_libc_index;
 
     // 预编译产物中的 Call/CallPtr operand 已经被重定位为固定索引，
     // 因此只需注册固定索引即可同时满足内部调用和外部调用。
@@ -328,8 +328,8 @@ pub fn setup_vm(vm: &mut CideVM, session: &Session) {
     vm.set_i64_constants(i64_constants);
 
     // 注意：**不要**在这里设置步数上限。`max_steps` 是会话级配置
-    // （capi `cide_set_max_steps` / serve `config.set`），默认值由 `CideVM::default()` 提供
-    // （1000 万），`CideVM::reset()` 也刻意保留它。此处曾硬编码
+    // （capi `vitro_set_max_steps` / serve `config.set`），默认值由 `VitroVM::default()` 提供
+    // （1000 万），`VitroVM::reset()` 也刻意保留它。此处曾硬编码
     // `vm.set_max_steps(10_000_000)` —— 每次 run 都把用户配置抹掉，使"先设上限再运行"
     // 的教学保险丝形同虚设（实测：设 2000 步的程序一路跑到 16 万步撞 1MB 堆墙才停）。
     // 回归：`native/tests/session_config_test.rs::test_max_steps_survives_run`。
@@ -469,7 +469,7 @@ pub fn run_compile_pipeline(session: &mut Session, full_source: &str) -> Result<
     session.compile.f64_constants = output.f64_constants;
     session.compile.i64_constants = output.i64_constants;
     // 偏移 source_map 以匹配 Bytecode Libc 代码拼接后的 IP
-    let libc_code_len = cide_runtime::bytecode_libc_index::BYTECODE_LIBC_CODE_LEN as u32;
+    let libc_code_len = vitro_runtime::bytecode_libc_index::BYTECODE_LIBC_CODE_LEN as u32;
     session.compile.source_map = output
         .source_map
         .into_iter()
@@ -627,7 +627,7 @@ pub fn run_multi_file_pipeline(
     // 根据文件扩展名检测 C++ 模式
     let is_cpp_mode = units.iter().any(|u| {
         let name = u.filename.to_lowercase();
-        name.ends_with(".cpp") || name.ends_with(".cxx") || name.ends_with(".cidecpp")
+        name.ends_with(".cpp") || name.ends_with(".cxx") || name.ends_with(".vitrocpp")
     });
 
     // 提取首个非空源文件所在目录，供 #include 非标准库路径解析使用
@@ -708,7 +708,7 @@ pub fn run_multi_file_pipeline(
     session.compile.f64_constants = output.f64_constants;
     session.compile.i64_constants = output.i64_constants;
     // 偏移 source_map 以匹配 Bytecode Libc 代码拼接后的 IP
-    let libc_code_len = cide_runtime::bytecode_libc_index::BYTECODE_LIBC_CODE_LEN as u32;
+    let libc_code_len = vitro_runtime::bytecode_libc_index::BYTECODE_LIBC_CODE_LEN as u32;
     session.compile.source_map = output
         .source_map
         .into_iter()

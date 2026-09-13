@@ -4,32 +4,32 @@ use std::ffi::{c_char, CString};
 
 fn compile_and_run(source: &str) -> Result<(i32, Vec<String>), String> {
     unsafe {
-        let session = cide_native::capi::cide_session_create();
+        let session = vitro_native::capi::vitro_session_create();
         if session.is_null() {
             return Err("Failed to create session".to_string());
         }
 
         let src = CString::new(source).map_err(|e| e.to_string())?;
-        let compile_ret = cide_native::capi::cide_compile(session, src.as_ptr() as *const c_char);
+        let compile_ret = vitro_native::capi::vitro_compile(session, src.as_ptr() as *const c_char);
         if compile_ret != 0 {
-            let err_ptr = cide_native::capi::cide_get_compile_errors(session);
+            let err_ptr = vitro_native::capi::vitro_get_compile_errors(session);
             let err_msg = if err_ptr.is_null() {
                 "Unknown compile error".to_string()
             } else {
                 std::ffi::CStr::from_ptr(err_ptr).to_string_lossy().to_string()
             };
-            cide_native::capi::cide_session_destroy(session);
+            vitro_native::capi::vitro_session_destroy(session);
             return Err(err_msg);
         }
 
-        let run_ret = cide_native::capi::cide_run(session);
+        let run_ret = vitro_native::capi::vitro_run(session);
 
         // Collect output
         let mut outputs = Vec::new();
-        let out_len = cide_native::capi::cide_get_output_length(session);
+        let out_len = vitro_native::capi::vitro_get_output_length(session);
         if out_len > 0 {
             let mut buf = vec![0u8; out_len as usize + 1];
-            cide_native::capi::cide_get_output(session, buf.as_mut_ptr() as *mut c_char, buf.len() as i32);
+            vitro_native::capi::vitro_get_output(session, buf.as_mut_ptr() as *mut c_char, buf.len() as i32);
             let out_str = String::from_utf8_lossy(&buf);
             for line in out_str.lines() {
                 if !line.is_empty() {
@@ -39,14 +39,14 @@ fn compile_and_run(source: &str) -> Result<(i32, Vec<String>), String> {
         }
 
         // Check runtime error
-        let err_ptr = cide_native::capi::cide_get_runtime_error(session);
+        let err_ptr = vitro_native::capi::vitro_get_runtime_error(session);
         let runtime_err = if err_ptr.is_null() {
             None
         } else {
             Some(std::ffi::CStr::from_ptr(err_ptr).to_string_lossy().to_string())
         };
 
-        cide_native::capi::cide_session_destroy(session);
+        vitro_native::capi::vitro_session_destroy(session);
 
         if let Some(e) = runtime_err {
             if !e.is_empty() {
@@ -238,24 +238,24 @@ int main() {
 }
 "#;
     unsafe {
-        let session = cide_native::capi::cide_session_create();
+        let session = vitro_native::capi::vitro_session_create();
         let c_src = CString::new(src).unwrap();
-        let compile_ret = cide_native::capi::cide_compile(session, c_src.as_ptr() as *const c_char);
+        let compile_ret = vitro_native::capi::vitro_compile(session, c_src.as_ptr() as *const c_char);
         assert_eq!(compile_ret, 0);
 
         let input = CString::new("42").unwrap();
-        cide_native::capi::cide_set_input(session, input.as_ptr() as *const c_char);
+        vitro_native::capi::vitro_set_input(session, input.as_ptr() as *const c_char);
 
-        let run_ret = cide_native::capi::cide_run(session);
+        let run_ret = vitro_native::capi::vitro_run(session);
         assert_eq!(run_ret, 0);
 
-        let out_len = cide_native::capi::cide_get_output_length(session);
+        let out_len = vitro_native::capi::vitro_get_output_length(session);
         let mut buf = vec![0u8; out_len as usize + 1];
-        cide_native::capi::cide_get_output(session, buf.as_mut_ptr() as *mut c_char, buf.len() as i32);
+        vitro_native::capi::vitro_get_output(session, buf.as_mut_ptr() as *mut c_char, buf.len() as i32);
         let out_str = String::from_utf8_lossy(&buf);
         assert!(out_str.contains("got:42"), "Output: {}", out_str);
 
-        cide_native::capi::cide_session_destroy(session);
+        vitro_native::capi::vitro_session_destroy(session);
     }
 }
 
@@ -438,7 +438,7 @@ int main() {
 #[test]
 fn test_e2e_interactive_scanf() {
     unsafe {
-        let session = cide_native::capi::cide_session_create();
+        let session = vitro_native::capi::vitro_session_create();
         assert!(!session.is_null());
 
         let src = CString::new(
@@ -454,40 +454,40 @@ int main() {
         )
         .unwrap();
 
-        let compile_ret = cide_native::capi::cide_compile(session, src.as_ptr() as *const c_char);
+        let compile_ret = vitro_native::capi::vitro_compile(session, src.as_ptr() as *const c_char);
         assert_eq!(compile_ret, 0);
 
         // 第一次运行：没有输入，应该等待输入
-        let run_ret = cide_native::capi::cide_run(session);
+        let run_ret = vitro_native::capi::vitro_run(session);
         assert_eq!(run_ret, 2, "Expected waiting input (2), got {}", run_ret);
 
-        let waiting = cide_native::capi::cide_is_waiting_input(session);
+        let waiting = vitro_native::capi::vitro_is_waiting_input(session);
         assert_eq!(waiting, 1, "Expected waiting_input = 1");
 
         // 提供输入
         let line = CString::new("3 4").unwrap();
-        let provide_ret = cide_native::capi::cide_provide_input_line(session, line.as_ptr() as *const c_char);
+        let provide_ret = vitro_native::capi::vitro_provide_input_line(session, line.as_ptr() as *const c_char);
         assert_eq!(provide_ret, 0);
 
         // 再次运行：应该完成
-        let run_ret2 = cide_native::capi::cide_run(session);
+        let run_ret2 = vitro_native::capi::vitro_run(session);
         assert_eq!(run_ret2, 0, "Expected success (0), got {}", run_ret2);
 
-        let out_len = cide_native::capi::cide_get_output_length(session);
+        let out_len = vitro_native::capi::vitro_get_output_length(session);
         assert!(out_len > 0);
         let mut buf = vec![0u8; out_len as usize + 1];
-        cide_native::capi::cide_get_output(session, buf.as_mut_ptr() as *mut c_char, buf.len() as i32);
+        vitro_native::capi::vitro_get_output(session, buf.as_mut_ptr() as *mut c_char, buf.len() as i32);
         let out_str = String::from_utf8_lossy(&buf);
         assert!(out_str.contains("sum = 7"), "Output: {}", out_str);
 
-        cide_native::capi::cide_session_destroy(session);
+        vitro_native::capi::vitro_session_destroy(session);
     }
 }
 
 #[test]
 fn test_e2e_interactive_getchar() {
     unsafe {
-        let session = cide_native::capi::cide_session_create();
+        let session = vitro_native::capi::vitro_session_create();
         assert!(!session.is_null());
 
         let src = CString::new(
@@ -502,28 +502,28 @@ int main() {
         )
         .unwrap();
 
-        let compile_ret = cide_native::capi::cide_compile(session, src.as_ptr() as *const c_char);
+        let compile_ret = vitro_native::capi::vitro_compile(session, src.as_ptr() as *const c_char);
         assert_eq!(compile_ret, 0);
 
         // 没有输入，应该等待
-        let run_ret = cide_native::capi::cide_run(session);
+        let run_ret = vitro_native::capi::vitro_run(session);
         assert_eq!(run_ret, 2);
 
         // 提供输入
         let line = CString::new("X").unwrap();
-        cide_native::capi::cide_provide_input_line(session, line.as_ptr() as *const c_char);
+        vitro_native::capi::vitro_provide_input_line(session, line.as_ptr() as *const c_char);
 
-        let run_ret2 = cide_native::capi::cide_run(session);
+        let run_ret2 = vitro_native::capi::vitro_run(session);
         assert_eq!(run_ret2, 0);
 
-        let out_len = cide_native::capi::cide_get_output_length(session);
+        let out_len = vitro_native::capi::vitro_get_output_length(session);
         assert!(out_len > 0);
         let mut buf = vec![0u8; out_len as usize + 1];
-        cide_native::capi::cide_get_output(session, buf.as_mut_ptr() as *mut c_char, buf.len() as i32);
+        vitro_native::capi::vitro_get_output(session, buf.as_mut_ptr() as *mut c_char, buf.len() as i32);
         let out_str = String::from_utf8_lossy(&buf);
         assert!(out_str.contains("char = X"), "Output: {}", out_str);
 
-        cide_native::capi::cide_session_destroy(session);
+        vitro_native::capi::vitro_session_destroy(session);
     }
 }
 

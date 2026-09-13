@@ -75,117 +75,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cide_algorithm_steps"
-version = "0.1.0"
-
-[[package]]
-name = "cide_ast"
-version = "0.1.0"
-dependencies = [
- "cide_shared",
- "serde",
-]
-
-[[package]]
-name = "cide_codegen"
-version = "0.1.0"
-dependencies = [
- "cide_ast",
- "cide_cpp_frontend",
- "cide_runtime",
- "cide_shared",
-]
-
-[[package]]
-name = "cide_cpp_frontend"
-version = "0.1.0"
-dependencies = [
- "cide_ast",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "cide_lexer"
-version = "0.1.0"
-dependencies = [
- "cide_shared",
-]
-
-[[package]]
-name = "cide_native"
-version = "0.1.0"
-dependencies = [
- "cide_algorithm_steps",
- "cide_ast",
- "cide_codegen",
- "cide_cpp_frontend",
- "cide_lexer",
- "cide_parser",
- "cide_runtime",
- "cide_shared",
- "cide_typeck",
- "cide_vm",
- "console_error_panic_hook",
- "criterion",
- "js-sys",
- "libm",
- "serde",
- "serde_json",
- "wasm-bindgen",
- "wasm-bindgen-futures",
-]
-
-[[package]]
-name = "cide_parser"
-version = "0.1.0"
-dependencies = [
- "cide_ast",
- "cide_lexer",
- "cide_shared",
-]
-
-[[package]]
-name = "cide_runtime"
-version = "0.1.0"
-dependencies = [
- "cide_ast",
- "cide_shared",
- "serde",
-]
-
-[[package]]
-name = "cide_shared"
-version = "0.1.0"
-dependencies = [
- "serde",
-]
-
-[[package]]
-name = "cide_typeck"
-version = "0.1.0"
-dependencies = [
- "cide_ast",
- "cide_cpp_frontend",
- "cide_lexer",
- "cide_runtime",
- "cide_shared",
-]
-
-[[package]]
-name = "cide_vm"
-version = "0.1.0"
-dependencies = [
- "cide_ast",
- "cide_runtime",
- "cide_shared",
- "js-sys",
- "libm",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "clap"
 version = "4.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -602,6 +491,117 @@ name = "unicode-ident"
 version = "1.0.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e6e4313cd5fcd3dad5cafa179702e2b244f760991f45397d14d4ebf38247da75"
+
+[[package]]
+name = "vitro_algorithm_steps"
+version = "0.1.0"
+
+[[package]]
+name = "vitro_ast"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "vitro_shared",
+]
+
+[[package]]
+name = "vitro_codegen"
+version = "0.1.0"
+dependencies = [
+ "vitro_ast",
+ "vitro_cpp_frontend",
+ "vitro_runtime",
+ "vitro_shared",
+]
+
+[[package]]
+name = "vitro_cpp_frontend"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "vitro_ast",
+]
+
+[[package]]
+name = "vitro_lexer"
+version = "0.1.0"
+dependencies = [
+ "vitro_shared",
+]
+
+[[package]]
+name = "vitro_native"
+version = "0.1.0"
+dependencies = [
+ "console_error_panic_hook",
+ "criterion",
+ "js-sys",
+ "libm",
+ "serde",
+ "serde_json",
+ "vitro_algorithm_steps",
+ "vitro_ast",
+ "vitro_codegen",
+ "vitro_cpp_frontend",
+ "vitro_lexer",
+ "vitro_parser",
+ "vitro_runtime",
+ "vitro_shared",
+ "vitro_typeck",
+ "vitro_vm",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+]
+
+[[package]]
+name = "vitro_parser"
+version = "0.1.0"
+dependencies = [
+ "vitro_ast",
+ "vitro_lexer",
+ "vitro_shared",
+]
+
+[[package]]
+name = "vitro_runtime"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "vitro_ast",
+ "vitro_shared",
+]
+
+[[package]]
+name = "vitro_shared"
+version = "0.1.0"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "vitro_typeck"
+version = "0.1.0"
+dependencies = [
+ "vitro_ast",
+ "vitro_cpp_frontend",
+ "vitro_lexer",
+ "vitro_runtime",
+ "vitro_shared",
+]
+
+[[package]]
+name = "vitro_vm"
+version = "0.1.0"
+dependencies = [
+ "js-sys",
+ "libm",
+ "serde",
+ "serde_json",
+ "vitro_ast",
+ "vitro_runtime",
+ "vitro_shared",
+]
 
 [[package]]
 name = "walkdir"

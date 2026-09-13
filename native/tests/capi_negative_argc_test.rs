@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-//! U0#5 实锤回归锚：`cide_set_argv` 负 argc。
+//! U0#5 实锤回归锚：`vitro_set_argv` 负 argc。
 //!
 //! 修复前：`Vec::with_capacity(argc as usize)` 把负 argc 绕回 `usize::MAX`
 //! → 分配器 capacity overflow panic（被入口 guard 吞成静默无操作——
@@ -19,13 +19,13 @@ fn negative_argc_is_rejected_without_panic() {
         PANICS.fetch_add(1, Ordering::SeqCst);
     }));
     let result = std::panic::catch_unwind(|| unsafe {
-        let s = cide_native::capi::cide_session_create();
+        let s = vitro_native::capi::vitro_session_create();
         assert!(!s.is_null());
         let argv: [*const c_char; 2] = [c"prog".as_ptr(), c"-v".as_ptr()];
-        cide_native::capi::cide_set_argv(s, -5, argv.as_ptr());
+        vitro_native::capi::vitro_set_argv(s, -5, argv.as_ptr());
         // 负 argc 被忽略后会话仍可用（正常 argc 继续工作）
-        cide_native::capi::cide_set_argv(s, 1, argv.as_ptr());
-        cide_native::capi::cide_session_destroy(s);
+        vitro_native::capi::vitro_set_argv(s, 1, argv.as_ptr());
+        vitro_native::capi::vitro_session_destroy(s);
     });
     std::panic::set_hook(prev);
     assert!(result.is_ok(), "负 argc 不得 abort/panic 逃逸");

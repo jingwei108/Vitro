@@ -4,7 +4,7 @@
 > 已完成 C/C++ 引擎集成对接（capi 签名评审定稿、serve 主路径、15 用例冒烟集，见
 > `CAPI评审回复与实现状态.md`）。在此之上，其"多语言对比教学"要从静态并排面板升级为
 > **可执行白箱对照**，需要原生 C# 引擎：算法可视化自动检测 + 极细颗粒度纠正。
-> 其自研 Roslyn 转译路线（C# 降解为 C 再调 Cide）已实证**文本层降解撞语义错位**——报错
+> 其自研 Roslyn 转译路线（C# 降解为 C 再调 Vitro）已实证**文本层降解撞语义错位**——报错
 > 定位在生成代码行号、误区模式表无法映射 C# 引用语义——从反面验证了原生白箱前端的必要性。
 >
 > **立项三条件齐备**：锚定客户（13 章课程代码 = 天然验收用例集）、真实需求（对方明确的
@@ -29,7 +29,7 @@
 - 语言分派：`is_cpp_mode` 布尔穿透 → `enum SourceLang { C, Cpp, CSharp }` 单源化
   （现状唯一检测点 `compile_pipeline.rs:603`，`Session`/`CompileState` 无语言字段，9 处
   `"main.c"` 兜底字符串按扩展名生成）
-- 新增 `cide_csharp_frontend` crate（依赖只到 `cide_shared`/`cide_ast`）
+- 新增 `vitro_csharp_frontend` crate（依赖只到 `vitro_shared`/`vitro_ast`）
 - 新增 3 个 opcode（`TryBegin`/`TryEnd`/`Throw`，C++ 扩展以来首次——成本清单：
   `opcode.rs` 枚举 + `executor/mod.rs` 分发 + JIT 白名单 + 跳转重定位核对）
 
@@ -60,7 +60,7 @@
 **实现要点**（全部有仓库先例）：
 - Retain/Release 走 `CallHost(RETAIN/RELEASE)` 两个新 host id，**零新 opcode**（参数走
   操作数栈传 u32 地址，既有 host func 约定）；
-- 插桩点由 C# 前端按静态类型判定，工程性质 = `cide_codegen/cpp/raii.rs` 的 LIFO 析构
+- 插桩点由 C# 前端按静态类型判定，工程性质 = `vitro_codegen/cpp/raii.rs` 的 LIFO 析构
   插桩同族；
 - `refcount` 随 `MemorySnapshot.regions` 自动序列化——**时间旅行免费安全**；
 - 与真实 .NET 对象头的计数位置差异不可观测（子集无 unsafe、无 `sizeof(class)`）。
@@ -172,7 +172,7 @@ handler 栈进 `VMSnapshot`（新字段）。**UNWINDING 中间态也是可快�
 **支持**：值类型（struct 按值语义，栈分配）/ class（字段/方法/构造/this/静态成员，照搬
 C++ 多 Pass：类布局注册 → this 注入 → 方法降级 mangled C 函数）/ 继承 + 虚函数
 （虚表 + `CallPtr`）/ 数组 / foreach（`RangeFor` 先例）/ `List<T>`、`Dictionary<K,V>`
-（Phase 41 模式：JSON 接口声明为唯一真相来源，`cide_cpp_frontend/builtin_layout.rs`
+（Phase 41 模式：JSON 接口声明为唯一真相来源，`vitro_cpp_frontend/builtin_layout.rs`
 加载器换数据文件）/ try-catch-finally-throw / 7 个内置异常 / `e.Message` / 自定义
 异常类 / `throw;` / `Console.WriteLine/ReadLine`（host func 映射）。
 
@@ -267,7 +267,7 @@ S2.5（宿主资源域收口）、S3（C++ 收口）为 CS2 与 CS3 的双重硬
 | 批次 | 内容 | 关键验收 |
 |------|------|---------|
 | **CS0** | `SourceLang` enum + 语言分派单源化 + `"main.c"` 兜底 9 处按扩展名 | 全防线绿 |
-| **CS1** | `cide_csharp_frontend` 骨架：lexer/parser（§5 语法面）/薄 typeck/降级 codegen，Hello World + 值类型 | C# shadow 小集（SharpTutor dotnet golden）；**验收面 = ch01–04 课程代码**（对方提供） |
+| **CS1** | `vitro_csharp_frontend` 骨架：lexer/parser（§5 语法面）/薄 typeck/降级 codegen，Hello World + 值类型 | C# shadow 小集（SharpTutor dotnet golden）；**验收面 = ch01–04 课程代码**（对方提供） |
 | **CS2** | class/方法/构造/this/静态 + 继承虚函数 + ARC（§3 全部） | **预览版交付点**：白箱跑算法 + ARC 别名可视化，SharpTutor 透视模式试用（de-risk CS3 投入） |
 | **CS3a** | 3 opcode + handler 栈 + finally 插桩 + 内置异常映射 + `throw;`（含 §4.4）+ handler 栈快照 | 帧内 try/catch/finally/throw 全用例；除零/越界/空引用可捕获；无 handler 即 trap（契约稳定） |
 | **CS3b** | UNWINDING 状态机 + 跨帧展开 + 展开清理（§4.6）+ 展开中间态快照/seek 往返 | 第四组回放场景；栈展开动画字段（A 档）激活；展开中间态往返测试 |

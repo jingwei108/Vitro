@@ -1,12 +1,12 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use cide_native::engine::compile_pipeline::{run_compile_pipeline, setup_vm};
-use cide_native::session::Session;
-use cide_native::vm::core::CideVM;
+use vitro_native::engine::compile_pipeline::{run_compile_pipeline, setup_vm};
+use vitro_native::session::Session;
+use vitro_native::vm::core::VitroVM;
 
 fn make_session(source: &str) -> Session {
     let mut session = Session::default();
-    session.compile.compile_units.push(cide_native::session::CompileUnit {
+    session.compile.compile_units.push(vitro_native::session::CompileUnit {
         filename: "main.c".to_string(),
         source: source.to_string(),
     });
@@ -18,8 +18,8 @@ fn make_session(source: &str) -> Session {
     session
 }
 
-fn setup_vm_for_session(session: &mut Session) -> CideVM {
-    let mut vm = CideVM::new();
+fn setup_vm_for_session(session: &mut Session) -> VitroVM {
+    let mut vm = VitroVM::new();
     setup_vm(&mut vm, session);
     vm
 }
@@ -101,7 +101,7 @@ int main() {
     // 这个测试主要验证 memory 的 copy_from_slice 工作正常，
     // 具体地址取决于 bytecode gen，这里只比较整段内存
     let mem_full = match &snap.memory {
-        cide_native::vm::snapshot::MemoryImage::Full(v) => v.as_slice(),
+        vitro_native::vm::snapshot::MemoryImage::Full(v) => v.as_slice(),
         _ => panic!("expected full snapshot"),
     };
     assert_eq!(vm.memory_ref(), mem_full);
@@ -124,8 +124,8 @@ int main() {
     // 执行完整程序
     loop {
         match vm.step(&mut session.as_vm_context()) {
-            cide_native::vm::core::StepResult::Finished => break,
-            cide_native::vm::core::StepResult::Trap => panic!("trap: {}", vm.get_error()),
+            vitro_native::vm::core::StepResult::Finished => break,
+            vitro_native::vm::core::StepResult::Trap => panic!("trap: {}", vm.get_error()),
             _ => {}
         }
     }
@@ -174,7 +174,7 @@ int main() {
     // 恢复后 VM 应能继续执行而不 trap
     let result = vm.step(&mut session.as_vm_context());
     assert!(
-        !matches!(result, cide_native::vm::core::StepResult::Trap),
+        !matches!(result, vitro_native::vm::core::StepResult::Trap),
         "VM should continue after restore, got trap: {}",
         vm.get_error()
     );
@@ -197,8 +197,8 @@ int main() {
     let mut vm_a = setup_vm_for_session(&mut session_a);
     loop {
         match vm_a.step(&mut session_a.as_vm_context()) {
-            cide_native::vm::core::StepResult::Finished => break,
-            cide_native::vm::core::StepResult::Trap => panic!("path A trap: {}", vm_a.get_error()),
+            vitro_native::vm::core::StepResult::Finished => break,
+            vitro_native::vm::core::StepResult::Trap => panic!("path A trap: {}", vm_a.get_error()),
             _ => {}
         }
     }
@@ -225,8 +225,8 @@ int main() {
     // 继续执行到结束
     loop {
         match vm_b.step(&mut session_b.as_vm_context()) {
-            cide_native::vm::core::StepResult::Finished => break,
-            cide_native::vm::core::StepResult::Trap => panic!("path B trap: {}", vm_b.get_error()),
+            vitro_native::vm::core::StepResult::Finished => break,
+            vitro_native::vm::core::StepResult::Trap => panic!("path B trap: {}", vm_b.get_error()),
             _ => {}
         }
     }
@@ -326,7 +326,7 @@ int main() {
 
 #[test]
 fn test_checkpoint_manager_incremental_chain() {
-    use cide_vm::snapshot::CheckpointManager;
+    use vitro_vm::snapshot::CheckpointManager;
 
     let source = r#"
 int main() {
@@ -360,7 +360,7 @@ int main() {
 
     // 重建后的快照必须是 Full
     match &reconstructed.memory {
-        cide_native::vm::snapshot::MemoryImage::Full(_) => {}
+        vitro_native::vm::snapshot::MemoryImage::Full(_) => {}
         _ => panic!("reconstructed snapshot should be Full"),
     }
 
@@ -370,7 +370,7 @@ int main() {
     for _ in step..35 {
         if matches!(
             vm.step(&mut session.as_vm_context()),
-            cide_native::vm::core::StepResult::Finished
+            vitro_native::vm::core::StepResult::Finished
         ) {
             break;
         }
@@ -384,7 +384,7 @@ int main() {
 
 #[test]
 fn test_smart_checkpoint_triggers() {
-    use cide_vm::snapshot::CheckpointManager;
+    use vitro_vm::snapshot::CheckpointManager;
 
     let mut cp = CheckpointManager::new(20);
     cp.smart_mode = true;
@@ -397,8 +397,8 @@ fn test_smart_checkpoint_triggers() {
     // 模拟保存步 0 的检查点，使后续智能判断能感知到上一个检查点位置
     cp.checkpoints.push((
         0,
-        cide_vm::snapshot::VMSnapshot {
-            memory: cide_vm::snapshot::MemoryImage::Full(vec![0; 1024 * 1024]),
+        vitro_vm::snapshot::VMSnapshot {
+            memory: vitro_vm::snapshot::MemoryImage::Full(vec![0; 1024 * 1024]),
             stack: Vec::new(),
             call_stack: Vec::new(),
             ip: 0,
@@ -418,7 +418,7 @@ fn test_smart_checkpoint_triggers() {
             breakpoints: std::collections::HashSet::new(),
             global_count: 0,
             freed_logs: Vec::new(),
-            runtime: cide_vm::snapshot::RuntimeSnapshot {
+            runtime: vitro_vm::snapshot::RuntimeSnapshot {
                 output_chunks: Vec::new(),
                 trace: Vec::new(),
                 current_line: 0,
@@ -429,13 +429,13 @@ fn test_smart_checkpoint_triggers() {
                 vis_event_cache: Vec::new(),
                 ungetc_char: None,
             },
-            memory_state: cide_vm::snapshot::MemorySnapshot {
+            memory_state: vitro_vm::snapshot::MemorySnapshot {
                 regions: Vec::new(),
                 free_list: Vec::new(),
                 quarantine: std::collections::VecDeque::new(),
                 quarantine_bytes: 0,
-                quarantine_budget: cide_runtime::memory_state::DEFAULT_QUARANTINE_BUDGET,
-                heap_base: cide_runtime::HEAP_START,
+                quarantine_budget: vitro_runtime::memory_state::DEFAULT_QUARANTINE_BUDGET,
+                heap_base: vitro_runtime::HEAP_START,
                 heap_offset: 0,
                 alloc_counter: 0,
             },
@@ -484,7 +484,7 @@ int main() {
     // 用 snapshot_into 复写到另一个 VMSnapshot
     let mut reused_snap = vm.snapshot(&session.as_vm_context());
     // 先破坏 reused_snap 的内存，确保 copy 真正发生
-    if let cide_native::vm::snapshot::MemoryImage::Full(buf) = &mut reused_snap.memory {
+    if let vitro_native::vm::snapshot::MemoryImage::Full(buf) = &mut reused_snap.memory {
         buf.fill(0xAA);
     }
     vm.snapshot_into(&session.as_vm_context(), &mut reused_snap);

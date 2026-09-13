@@ -2,13 +2,13 @@
 //!
 //! 契约（见 `docs/current/06-出口与协议/CAPI评审回复与实现状态.md` §1）：
 //! - 复杂返回一律 **JSON 字符串 + rust-alloc 所有权**：调用方负责用
-//!   [`cide_free_string`] 释放，禁止 `free()` / `delete`；
+//!   [`vitro_free_string`] 释放，禁止 `free()` / `delete`；
 //! - 所有入口经 `catch_unwind`，panic 不跨 C 边界（V-P0-3 模式推广）；
 //! - 状态码：`0 = 成功 / 负数 = 入参错误或会话无效 / 正数 = 领域状态`（1 = trap、2 = waiting_input）；
 //! - Session 句柄**非线程安全**，跨线程访问须调用方自行同步；
 //! - 输入输出 UTF-8；程序输出以 `\n` 结行。
 //!
-//! 版本化承诺：**加函数 = minor，改签名/语义 = major**（`cide_abi_version`）。
+//! 版本化承诺：**加函数 = minor，改签名/语义 = major**（`vitro_abi_version`）。
 
 use crate::session::Session;
 use crate::session_api;
@@ -18,20 +18,25 @@ use std::ptr;
 
 /// capi 签名契约版本。
 ///
-/// 1.1.0（E-P1-5）：新增纯程序输出出口 `cide_get_output_length` 语义保持不变（展示视图），
-/// 追加 `cide_get_program_output_length` / `cide_get_program_output` /
-/// `cide_get_engine_notes_length` / `cide_get_engine_notes` / `cide_get_program_output_delta`
+/// 1.1.0（E-P1-5）：新增纯程序输出出口 `vitro_get_output_length` 语义保持不变（展示视图），
+/// 追加 `vitro_get_program_output_length` / `vitro_get_program_output` /
+/// `vitro_get_engine_notes_length` / `vitro_get_engine_notes` / `vitro_get_program_output_delta`
 /// —— 按"加函数 = minor"承诺升 minor。
 ///
-/// 1.2.0（2026-09-13，D5 收尾重构）：追加 `cide_get_compile_errors_length`，
+/// 1.2.0（2026-09-13，D5 收尾重构）：追加 `vitro_get_compile_errors_length`，
 /// 供驱动侧定长缓冲精确读取编译错误，消除变长窗口扫描的越界读依赖。
 ///
-/// 1.3.0（2026-09-13，W0-3 契约止血）：`cide_get_capabilities_json` 所有权
-/// 由"进程级静态指针、勿释放"改为"rust-alloc、`cide_free_string` 释放"，
+/// 1.3.0（2026-09-13，W0-3 契约止血）：`vitro_get_capabilities_json` 所有权
+/// 由"进程级静态指针、勿释放"改为"rust-alloc、`vitro_free_string` 释放"，
 /// 对齐书面契约（全部 JSON 函数 rust-alloc 所有权）。旧实现下按契约释放
 /// 即 UAF；契约测试 `capi_string_ownership_contract_test` 锚定新语义
 /// （两次调用返回不同指针 + 各自 free）。行为契约变更 → minor。
-pub const CIDE_ABI_VERSION: &str = "1.3.0";
+///
+/// 2.0.0（2026-09-14，项目更名 Vitro）：全部 C ABI 导出符号前缀
+/// `cide_*` → `vitro_*`（41 个入口），二进制名 `cide_native.dll` →
+/// `vitro_native.dll`。符号面 breaking → major。语义与 JSON 帧格式
+/// （wire format v0.1）零变化；消费方迁移 = 纯符号改名 + 重链接。
+pub const VITRO_ABI_VERSION: &str = "2.0.0";
 
 /// 把 Rust 字符串的所有权交给调用方（rust-alloc）。
 fn owned_c_string(s: String) -> *mut c_char {
@@ -73,23 +78,23 @@ fn cstr_opt(p: *const c_char) -> Option<String> {
 // ─── 版本与字符串所有权 ───────────────────────────────────────────────────────
 
 #[no_mangle]
-/// 返回 capi 签名契约版本（rust-alloc，须用 `cide_free_string` 释放）。
-pub extern "C" fn cide_abi_version() -> *mut c_char {
-    owned_c_string(CIDE_ABI_VERSION.to_string())
+/// 返回 capi 签名契约版本（rust-alloc，须用 `vitro_free_string` 释放）。
+pub extern "C" fn vitro_abi_version() -> *mut c_char {
+    owned_c_string(VITRO_ABI_VERSION.to_string())
 }
 
 #[no_mangle]
 /// 返回引擎版本串：crate 版本（+ 构建期注入的 git hash，若可用）。
-pub extern "C" fn cide_engine_version() -> *mut c_char {
+pub extern "C" fn vitro_engine_version() -> *mut c_char {
     owned_c_string(engine_version_string())
 }
 
-/// 引擎版本串的 Rust 侧单源（`cide_engine_version` 与 `capabilities.engine_version` 共用）。
+/// 引擎版本串的 Rust 侧单源（`vitro_engine_version` 与 `capabilities.engine_version` 共用）。
 ///
 /// 消费方可用它做**产物新鲜度自检**：串中的短哈希应等于构建所用提交；
 /// 回放/影子验证据此 fail fast，避免在陈旧二进制上拿到假绿。
 pub fn engine_version_string() -> String {
-    match option_env!("CIDE_GIT_HASH") {
+    match option_env!("VITRO_GIT_HASH") {
         Some(hash) => format!("{} ({})", env!("CARGO_PKG_VERSION"), hash),
         None => env!("CARGO_PKG_VERSION").to_string(),
     }
@@ -101,7 +106,7 @@ pub fn engine_version_string() -> String {
 /// # Safety
 /// - `p` 必须来自本库返回的、尚未释放的字符串指针；`p` 为 null 时安全无操作。
 /// - 不得对同一指针调用两次，也不得用 `free()` / `delete` 释放。
-pub unsafe extern "C" fn cide_free_string(p: *mut c_char) {
+pub unsafe extern "C" fn vitro_free_string(p: *mut c_char) {
     if !p.is_null() {
         drop(CString::from_raw(p));
     }
@@ -112,14 +117,14 @@ pub unsafe extern "C" fn cide_free_string(p: *mut c_char) {
 #[no_mangle]
 /// 错误码表机器可读导出（下游需求清单 B1）。
 ///
-/// 返回 **rust-alloc** 的 JSON 字符串，调用方负责用 [`cide_free_string`] 释放。
+/// 返回 **rust-alloc** 的 JSON 字符串，调用方负责用 [`vitro_free_string`] 释放。
 /// 形状：`{"catalog":[{code,code_str,lang,category,emoji,title,explanation,common_causes[]}]}`，
 /// 按 `code` 升序（跨构建可差分）。静态元数据；按具体源码行生成的 `fix_suggestion`
 /// 见 `compile_json` 诊断字段。
 ///
 /// # Safety
-/// 无入参；返回指针必须经 `cide_free_string` 释放，禁止 `free()`。
-pub unsafe extern "C" fn cide_get_error_catalog_json() -> *mut c_char {
+/// 无入参；返回指针必须经 `vitro_free_string` 释放，禁止 `free()`。
+pub unsafe extern "C" fn vitro_get_error_catalog_json() -> *mut c_char {
     guard(ptr::null_mut(), || {
         match CString::new(crate::session_api::error_catalog_json()) {
             Ok(c) => c.into_raw(),
@@ -132,8 +137,8 @@ pub unsafe extern "C" fn cide_get_error_catalog_json() -> *mut c_char {
 /// 最近一次错误，JSON：`{"kind":"compile|runtime|none","message":"..."}`。
 ///
 /// # Safety
-/// - `s` 必须是 `cide_session_create` 返回且未销毁的有效句柄。
-pub unsafe extern "C" fn cide_last_error(s: *mut Session) -> *mut c_char {
+/// - `s` 必须是 `vitro_session_create` 返回且未销毁的有效句柄。
+pub unsafe extern "C" fn vitro_last_error(s: *mut Session) -> *mut c_char {
     guard(ptr::null_mut(), || {
         if s.is_null() {
             return err_json("会话指针为空");
@@ -159,11 +164,11 @@ pub unsafe extern "C" fn cide_last_error(s: *mut Session) -> *mut c_char {
 /// `end_line` / `end_column` 为精确跨度（需动三处错误结构体），Phase 1 先给
 /// "起点 + 1"退化值——schema 先带字段，不欠债。
 ///
-/// 语义实现见 [`crate::session_api::compile`]（与 `cide_cli serve` 共用）。
+/// 语义实现见 [`crate::session_api::compile`]（与 `vitro_cli serve` 共用）。
 ///
 /// # Safety
-/// - `s` 必须是 `cide_session_create` 返回且未销毁的有效句柄。
-pub unsafe extern "C" fn cide_compile_json(s: *mut Session) -> *mut c_char {
+/// - `s` 必须是 `vitro_session_create` 返回且未销毁的有效句柄。
+pub unsafe extern "C" fn vitro_compile_json(s: *mut Session) -> *mut c_char {
     guard(ptr::null_mut(), || {
         if s.is_null() {
             return err_json("会话指针为空");
@@ -182,8 +187,8 @@ pub unsafe extern "C" fn cide_compile_json(s: *mut Session) -> *mut c_char {
 /// 语义实现见 [`crate::session_api::run`]。
 ///
 /// # Safety
-/// - `s` 必须是 `cide_session_create` 返回且未销毁的有效句柄。
-pub unsafe extern "C" fn cide_run_json(s: *mut Session) -> *mut c_char {
+/// - `s` 必须是 `vitro_session_create` 返回且未销毁的有效句柄。
+pub unsafe extern "C" fn vitro_run_json(s: *mut Session) -> *mut c_char {
     guard(ptr::null_mut(), || {
         if s.is_null() {
             return err_json("会话指针为空");
@@ -202,8 +207,8 @@ pub unsafe extern "C" fn cide_run_json(s: *mut Session) -> *mut c_char {
 /// 落入多字节字符中间时前移到下一个字符边界，保证 `delta` 为合法 UTF-8。
 ///
 /// # Safety
-/// - `s` 必须是 `cide_session_create` 返回且未销毁的有效句柄。
-pub unsafe extern "C" fn cide_get_output_delta(s: *mut Session, cursor: c_int) -> *mut c_char {
+/// - `s` 必须是 `vitro_session_create` 返回且未销毁的有效句柄。
+pub unsafe extern "C" fn vitro_get_output_delta(s: *mut Session, cursor: c_int) -> *mut c_char {
     guard(ptr::null_mut(), || {
         if s.is_null() {
             return err_json("会话指针为空");
@@ -216,13 +221,13 @@ pub unsafe extern "C" fn cide_get_output_delta(s: *mut Session, cursor: c_int) -
 /// 返回自 `cursor`（字节偏移）起的**纯程序 stdout** 增量（E-P1-5）：
 /// `{"delta":"...","cursor":<新游标>,"total":<总字节>,"stream":"stdout"}`。
 ///
-/// 与 `cide_get_output_delta`（展示视图，含引擎附注）的区别：这里只含学生程序自己写到
+/// 与 `vitro_get_output_delta`（展示视图，含引擎附注）的区别：这里只含学生程序自己写到
 /// stdout 的字节，**不含**"程序运行完成，返回值：N"、泄露报告与教学提示。判分、与 Clang
 /// golden 比对、第三方消费方应使用本函数，不要再对展示视图做正则清洗。
 ///
 /// # Safety
-/// - `s` 必须是 `cide_session_create` 返回且未销毁的有效句柄。
-pub unsafe extern "C" fn cide_get_program_output_delta(s: *mut Session, cursor: c_int) -> *mut c_char {
+/// - `s` 必须是 `vitro_session_create` 返回且未销毁的有效句柄。
+pub unsafe extern "C" fn vitro_get_program_output_delta(s: *mut Session, cursor: c_int) -> *mut c_char {
     guard(ptr::null_mut(), || {
         if s.is_null() {
             return err_json("会话指针为空");
@@ -241,8 +246,8 @@ pub unsafe extern "C" fn cide_get_program_output_delta(s: *mut Session, cursor: 
 /// 并返回"成功"—— 见 `Session::set_max_steps`）。
 ///
 /// # Safety
-/// - `s` 必须是 `cide_session_create` 返回且未销毁的有效句柄。
-pub unsafe extern "C" fn cide_set_max_steps(s: *mut Session, max_steps: c_int) -> c_int {
+/// - `s` 必须是 `vitro_session_create` 返回且未销毁的有效句柄。
+pub unsafe extern "C" fn vitro_set_max_steps(s: *mut Session, max_steps: c_int) -> c_int {
     guard(-1, || {
         if s.is_null() || max_steps <= 0 {
             return -1;
@@ -258,8 +263,8 @@ pub unsafe extern "C" fn cide_set_max_steps(s: *mut Session, max_steps: c_int) -
 /// 会话尚未编译时同样生效（见 `Session::set_call_depth_limit`）。
 ///
 /// # Safety
-/// - `s` 必须是 `cide_session_create` 返回且未销毁的有效句柄。
-pub unsafe extern "C" fn cide_set_call_depth_limit(s: *mut Session, depth: c_int) -> c_int {
+/// - `s` 必须是 `vitro_session_create` 返回且未销毁的有效句柄。
+pub unsafe extern "C" fn vitro_set_call_depth_limit(s: *mut Session, depth: c_int) -> c_int {
     guard(-1, || {
         if s.is_null() || depth <= 0 {
             return -1;
@@ -276,8 +281,8 @@ pub unsafe extern "C" fn cide_set_call_depth_limit(s: *mut Session, depth: c_int
 /// 后者服务时间旅行重放确定性。返回 0 成功，-1 表示会话无效。
 ///
 /// # Safety
-/// - `s` 必须是 `cide_session_create` 返回且未销毁的有效句柄。
-pub unsafe extern "C" fn cide_set_deterministic(s: *mut Session, on: c_int) -> c_int {
+/// - `s` 必须是 `vitro_session_create` 返回且未销毁的有效句柄。
+pub unsafe extern "C" fn vitro_set_deterministic(s: *mut Session, on: c_int) -> c_int {
     guard(-1, || {
         if s.is_null() {
             return -1;
@@ -292,8 +297,8 @@ pub unsafe extern "C" fn cide_set_deterministic(s: *mut Session, on: c_int) -> c
 /// 读取判分确定性模式当前状态（1 = 开，0 = 关，-1 = 会话无效）。
 ///
 /// # Safety
-/// - `s` 必须是 `cide_session_create` 返回且未销毁的有效句柄。
-pub unsafe extern "C" fn cide_get_deterministic(s: *mut Session) -> c_int {
+/// - `s` 必须是 `vitro_session_create` 返回且未销毁的有效句柄。
+pub unsafe extern "C" fn vitro_get_deterministic(s: *mut Session) -> c_int {
     guard(-1, || {
         if s.is_null() {
             return -1;
@@ -321,8 +326,8 @@ pub unsafe extern "C" fn cide_get_deterministic(s: *mut Session) -> c_int {
 /// [`堆有界隔离决议.md`]: ../../../docs/current/06-出口与协议/堆有界隔离决议.md
 ///
 /// # Safety
-/// - `s` 必须是 `cide_session_create` 返回且未销毁的有效句柄。
-pub unsafe extern "C" fn cide_set_quarantine_budget(s: *mut Session, budget_bytes: c_int) -> c_int {
+/// - `s` 必须是 `vitro_session_create` 返回且未销毁的有效句柄。
+pub unsafe extern "C" fn vitro_set_quarantine_budget(s: *mut Session, budget_bytes: c_int) -> c_int {
     guard(-1, || {
         if s.is_null() || budget_bytes < 0 {
             return -1;
@@ -336,12 +341,12 @@ pub unsafe extern "C" fn cide_set_quarantine_budget(s: *mut Session, budget_byte
 #[no_mangle]
 /// 读取当前堆隔离区预算（字节）。返回 -1 表示会话无效。
 ///
-/// 与 [`cide_set_quarantine_budget`] 成对：调用方可据此确认会话配置（判分/回放
+/// 与 [`vitro_set_quarantine_budget`] 成对：调用方可据此确认会话配置（判分/回放
 /// 场景需要保证两边预算一致）。
 ///
 /// # Safety
-/// - `s` 必须是 `cide_session_create` 返回且未销毁的有效句柄。
-pub unsafe extern "C" fn cide_get_quarantine_budget(s: *mut Session) -> c_int {
+/// - `s` 必须是 `vitro_session_create` 返回且未销毁的有效句柄。
+pub unsafe extern "C" fn vitro_get_quarantine_budget(s: *mut Session) -> c_int {
     guard(-1, || {
         if s.is_null() {
             return -1;
@@ -361,14 +366,14 @@ pub use crate::session_api::severity_name;
 
 #[no_mangle]
 /// 初始化统一模式（时间旅行）会话：装载 VM → 重建运行时 → 建立初始检查点。
-/// 必须在 `cide_step_next_json` / `cide_get_step_payloads_json` 之前调用。
+/// 必须在 `vitro_step_next_json` / `vitro_get_step_payloads_json` 之前调用。
 ///
 /// 返回 0 成功；-1 会话无效；-2 尚未编译成功。
 /// 语义实现见 [`crate::session_api::step_begin`]。
 ///
 /// # Safety
-/// - `s` 必须是 `cide_session_create` 返回且未销毁的有效句柄。
-pub unsafe extern "C" fn cide_step_begin(s: *mut Session) -> c_int {
+/// - `s` 必须是 `vitro_session_create` 返回且未销毁的有效句柄。
+pub unsafe extern "C" fn vitro_step_begin(s: *mut Session) -> c_int {
     guard(-1, || {
         if s.is_null() {
             return -1;
@@ -382,12 +387,12 @@ pub unsafe extern "C" fn cide_step_begin(s: *mut Session) -> c_int {
 /// `{"payloads":[...],"finished":bool,"trapped":bool,"waiting_input":bool,"paused":bool,`
 /// `"current_line":n,"trap_message":...,"cache_start_step":n}`。
 ///
-/// 命中断点时为 `paused=true`（断点在 `CideVM` 层判定）。
+/// 命中断点时为 `paused=true`（断点在 `VitroVM` 层判定）。
 /// 语义实现见 [`crate::session_api::step_next`]。
 ///
 /// # Safety
-/// - `s` 必须是 `cide_session_create` 返回且未销毁的有效句柄。
-pub unsafe extern "C" fn cide_step_next_json(s: *mut Session) -> *mut c_char {
+/// - `s` 必须是 `vitro_session_create` 返回且未销毁的有效句柄。
+pub unsafe extern "C" fn vitro_step_next_json(s: *mut Session) -> *mut c_char {
     guard(ptr::null_mut(), || {
         if s.is_null() {
             return err_json("会话指针为空");
@@ -407,8 +412,8 @@ pub unsafe extern "C" fn cide_step_next_json(s: *mut Session) -> *mut c_char {
 /// 语义实现见 [`crate::session_api::payloads`]。
 ///
 /// # Safety
-/// - `s` 必须是 `cide_session_create` 返回且未销毁的有效句柄。
-pub unsafe extern "C" fn cide_get_step_payloads_json(s: *mut Session, start: c_int, end: c_int) -> *mut c_char {
+/// - `s` 必须是 `vitro_session_create` 返回且未销毁的有效句柄。
+pub unsafe extern "C" fn vitro_get_step_payloads_json(s: *mut Session, start: c_int, end: c_int) -> *mut c_char {
     guard(ptr::null_mut(), || {
         if s.is_null() {
             return err_json("会话指针为空");
@@ -422,13 +427,13 @@ pub unsafe extern "C" fn cide_get_step_payloads_json(s: *mut Session, start: c_i
 
 #[no_mangle]
 /// 设置断点行号集合（入参为 JSON 整数数组，如 `[3, 7]`；空数组 `[]` 清空断点）。
-/// **应在 `cide_step_begin` 之后调用**——`step_begin` 会重建 VM 并清空断点。
+/// **应在 `vitro_step_begin` 之后调用**——`step_begin` 会重建 VM 并清空断点。
 /// 返回 0 成功；-1 表示会话无效或 JSON 非法。
 ///
 /// # Safety
-/// - `s` 必须是 `cide_session_create` 返回且未销毁的有效句柄。
+/// - `s` 必须是 `vitro_session_create` 返回且未销毁的有效句柄。
 /// - `lines_json` 若非空，必须指向以 NUL 结尾的有效 UTF-8 JSON 字符串。
-pub unsafe extern "C" fn cide_set_breakpoints(s: *mut Session, lines_json: *const c_char) -> c_int {
+pub unsafe extern "C" fn vitro_set_breakpoints(s: *mut Session, lines_json: *const c_char) -> c_int {
     guard(-1, || {
         if s.is_null() {
             return -1;

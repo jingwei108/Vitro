@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Cide 项目级 lint 检查脚本
+# Vitro 项目级 lint 检查脚本
 # 封装 Rust clippy / fmt 检查，便于本地验证与 CI 复用。
 
 set -euo pipefail

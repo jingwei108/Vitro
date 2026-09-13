@@ -22,16 +22,16 @@ fn cstr_to_str(s: *const c_char) -> Option<String> {
 }
 
 #[no_mangle]
-pub extern "C" fn cide_session_create() -> *mut Session {
+pub extern "C" fn vitro_session_create() -> *mut Session {
     guard(ptr::null_mut(), || Box::into_raw(Box::new(Session::default())))
 }
 
 #[no_mangle]
-/// cide_session_destroy 的 C API 封装。
+/// vitro_session_destroy 的 C API 封装。
 ///
 /// # Safety
-/// - `s` 必须是由 `cide_session_create` 返回的有效 `Session` 指针，且未被 `cide_session_destroy` 销毁。
-pub unsafe extern "C" fn cide_session_destroy(s: *mut Session) {
+/// - `s` 必须是由 `vitro_session_create` 返回的有效 `Session` 指针，且未被 `vitro_session_destroy` 销毁。
+pub unsafe extern "C" fn vitro_session_destroy(s: *mut Session) {
     guard((), || {
         if !s.is_null() {
             drop(Box::from_raw(s));
@@ -40,13 +40,13 @@ pub unsafe extern "C" fn cide_session_destroy(s: *mut Session) {
 }
 
 #[no_mangle]
-/// cide_compile 的 C API 封装。
+/// vitro_compile 的 C API 封装。
 ///
 /// # Safety
-/// - `s` 必须是由 `cide_session_create` 返回的有效 `Session` 指针，且未被 `cide_session_destroy` 销毁。
+/// - `s` 必须是由 `vitro_session_create` 返回的有效 `Session` 指针，且未被 `vitro_session_destroy` 销毁。
 /// - `source` 若非空，必须指向足够大的有效内存区域，供函数写入结果。
 /// - `source` 若非空，必须指向以 null 结尾的有效 UTF-8 字符串。
-pub unsafe extern "C" fn cide_compile(s: *mut Session, source: *const c_char) -> c_int {
+pub unsafe extern "C" fn vitro_compile(s: *mut Session, source: *const c_char) -> c_int {
     guard(-1, || {
         if s.is_null() || source.is_null() {
             return -1;
@@ -61,18 +61,18 @@ pub unsafe extern "C" fn cide_compile(s: *mut Session, source: *const c_char) ->
             filename: "main.c".to_string(),
             source: src.to_string(),
         });
-        cide_compile_all(s)
+        vitro_compile_all(s)
     })
 }
 
 #[no_mangle]
-/// cide_compile_unit 的 C API 封装。
+/// vitro_compile_unit 的 C API 封装。
 ///
 /// # Safety
-/// - `s` 必须是由 `cide_session_create` 返回的有效 `Session` 指针，且未被 `cide_session_destroy` 销毁。
+/// - `s` 必须是由 `vitro_session_create` 返回的有效 `Session` 指针，且未被 `vitro_session_destroy` 销毁。
 /// - `filename`, `source` 若非空，必须指向足够大的有效内存区域，供函数写入结果。
 /// - `filename`, `source` 若非空，必须指向以 null 结尾的有效 UTF-8 字符串。
-pub unsafe extern "C" fn cide_compile_unit(s: *mut Session, filename: *const c_char, source: *const c_char) -> c_int {
+pub unsafe extern "C" fn vitro_compile_unit(s: *mut Session, filename: *const c_char, source: *const c_char) -> c_int {
     guard(-1, || {
         if s.is_null() || filename.is_null() || source.is_null() {
             return -1;
@@ -95,11 +95,11 @@ pub unsafe extern "C" fn cide_compile_unit(s: *mut Session, filename: *const c_c
 }
 
 #[no_mangle]
-/// cide_compile_all 的 C API 封装。
+/// vitro_compile_all 的 C API 封装。
 ///
 /// # Safety
-/// - `s` 必须是由 `cide_session_create` 返回的有效 `Session` 指针，且未被 `cide_session_destroy` 销毁。
-pub unsafe extern "C" fn cide_compile_all(s: *mut Session) -> c_int {
+/// - `s` 必须是由 `vitro_session_create` 返回的有效 `Session` 指针，且未被 `vitro_session_destroy` 销毁。
+pub unsafe extern "C" fn vitro_compile_all(s: *mut Session) -> c_int {
     guard(-1, || {
         if s.is_null() {
             return -1;
@@ -115,11 +115,11 @@ pub unsafe extern "C" fn cide_compile_all(s: *mut Session) -> c_int {
 }
 
 #[no_mangle]
-/// cide_get_compile_errors 的 C API 封装。
+/// vitro_get_compile_errors 的 C API 封装。
 ///
 /// # Safety
-/// - `s` 必须是由 `cide_session_create` 返回的有效 `Session` 指针，且未被 `cide_session_destroy` 销毁。
-pub unsafe extern "C" fn cide_get_compile_errors(s: *mut Session) -> *const c_char {
+/// - `s` 必须是由 `vitro_session_create` 返回的有效 `Session` 指针，且未被 `vitro_session_destroy` 销毁。
+pub unsafe extern "C" fn vitro_get_compile_errors(s: *mut Session) -> *const c_char {
     guard(ptr::null(), || {
         if s.is_null() {
             return ptr::null();
@@ -140,15 +140,15 @@ pub unsafe extern "C" fn cide_get_compile_errors(s: *mut Session) -> *const c_ch
 }
 
 #[no_mangle]
-/// cide_get_compile_errors_length 的 C API 封装（ABI 1.2.0，加函数 = minor）。
+/// vitro_get_compile_errors_length 的 C API 封装（ABI 1.2.0，加函数 = minor）。
 ///
 /// 返回编译错误 JSON 的字节长度（不含 NUL 终止符），无错误时返回 0。
-/// 与 `cide_get_compile_errors` 配套：驱动侧可先取长度再用定长缓冲精确读取，
+/// 与 `vitro_get_compile_errors` 配套：驱动侧可先取长度再用定长缓冲精确读取，
 /// 不再依赖"NUL 终止字符串 + 变长窗口扫描"（对短于扫描窗口的分配是越界读）。
 ///
 /// # Safety
-/// - `s` 必须是由 `cide_session_create` 返回的有效 `Session` 指针，且未被 `cide_session_destroy` 销毁。
-pub unsafe extern "C" fn cide_get_compile_errors_length(s: *mut Session) -> c_int {
+/// - `s` 必须是由 `vitro_session_create` 返回的有效 `Session` 指针，且未被 `vitro_session_destroy` 销毁。
+pub unsafe extern "C" fn vitro_get_compile_errors_length(s: *mut Session) -> c_int {
     guard(0, || {
         if s.is_null() {
             return 0;
@@ -162,7 +162,7 @@ pub unsafe extern "C" fn cide_get_compile_errors_length(s: *mut Session) -> c_in
 /// E2：引擎能力清单 JSON（机器可读真实能力；无状态）。
 ///
 /// # 所有权（ABI 1.3.0 起对齐书面契约）
-/// 返回 **rust-alloc 所有权**缓冲，调用方必须以 `cide_free_string` 释放——
+/// 返回 **rust-alloc 所有权**缓冲，调用方必须以 `vitro_free_string` 释放——
 /// 与全部 `*_json` 出口同一契约（`CAPI评审回复与实现状态.md` §横切契约落实：
 /// "全部 JSON 函数为 rust-alloc 所有权"）。历史上本函数曾返回 `OnceLock`
 /// 静态指针（"无需释放"），下游按书面契约 free 即 UAF——W0-3 修复为每次
@@ -171,7 +171,7 @@ pub unsafe extern "C" fn cide_get_compile_errors_length(s: *mut Session) -> c_in
 /// # Safety
 /// 返回指针指向本次调用独占的 NUL 结尾 UTF-8 串；两次调用返回不同指针；
 /// 释放后指针失效。返回 NULL 仅在分配失败时。
-pub unsafe extern "C" fn cide_get_capabilities_json() -> *mut c_char {
+pub unsafe extern "C" fn vitro_get_capabilities_json() -> *mut c_char {
     guard(ptr::null_mut(), || {
         static CAPS: std::sync::OnceLock<String> = std::sync::OnceLock::new();
         let cached = CAPS
@@ -186,10 +186,10 @@ pub unsafe extern "C" fn cide_get_capabilities_json() -> *mut c_char {
 /// 设置命令行参数（供 `main(int argc, char *argv[])` 使用）。
 ///
 /// # Safety
-/// - `s` 必须是由 `cide_session_create` 返回的有效 `Session` 指针，且未被 `cide_session_destroy` 销毁。
+/// - `s` 必须是由 `vitro_session_create` 返回的有效 `Session` 指针，且未被 `vitro_session_destroy` 销毁。
 /// - `argv` 必须是长度为 `argc` 的 C 字符串指针数组，每个指针指向有效的以 NUL 结尾的字符串。
 /// - 字符串内容在调用期间必须保持有效；本函数会复制其内容到 Session 中。
-pub unsafe extern "C" fn cide_set_argv(s: *mut Session, argc: c_int, argv: *const *const c_char) {
+pub unsafe extern "C" fn vitro_set_argv(s: *mut Session, argc: c_int, argv: *const *const c_char) {
     guard((), || {
         if s.is_null() || argv.is_null() {
             return;
@@ -220,8 +220,8 @@ pub unsafe extern "C" fn cide_set_argv(s: *mut Session, argc: c_int, argv: *cons
 /// 批量模式下 getchar 在输入耗尽后立即返回 EOF，不进入等待状态。
 ///
 /// # Safety
-/// - `s` 必须是由 `cide_session_create` 返回的有效 `Session` 指针，且未被 `cide_session_destroy` 销毁。
-pub unsafe extern "C" fn cide_set_input_mode(s: *mut Session, is_batch: c_int) {
+/// - `s` 必须是由 `vitro_session_create` 返回的有效 `Session` 指针，且未被 `vitro_session_destroy` 销毁。
+pub unsafe extern "C" fn vitro_set_input_mode(s: *mut Session, is_batch: c_int) {
     guard((), || {
         if s.is_null() {
             return;
@@ -236,11 +236,11 @@ pub unsafe extern "C" fn cide_set_input_mode(s: *mut Session, is_batch: c_int) {
 }
 
 #[no_mangle]
-/// cide_run 的 C API 封装。
+/// vitro_run 的 C API 封装。
 ///
 /// # Safety
-/// - `s` 必须是由 `cide_session_create` 返回的有效 `Session` 指针，且未被 `cide_session_destroy` 销毁。
-pub unsafe extern "C" fn cide_run(s: *mut Session) -> c_int {
+/// - `s` 必须是由 `vitro_session_create` 返回的有效 `Session` 指针，且未被 `vitro_session_destroy` 销毁。
+pub unsafe extern "C" fn vitro_run(s: *mut Session) -> c_int {
     guard(-1, || {
         if s.is_null() || !(*s).compile.compiled {
             if !s.is_null() {
@@ -258,11 +258,11 @@ pub unsafe extern "C" fn cide_run(s: *mut Session) -> c_int {
 }
 
 #[no_mangle]
-/// cide_get_runtime_error 的 C API 封装。
+/// vitro_get_runtime_error 的 C API 封装。
 ///
 /// # Safety
-/// - `s` 必须是由 `cide_session_create` 返回的有效 `Session` 指针，且未被 `cide_session_destroy` 销毁。
-pub unsafe extern "C" fn cide_get_runtime_error(s: *mut Session) -> *const c_char {
+/// - `s` 必须是由 `vitro_session_create` 返回的有效 `Session` 指针，且未被 `vitro_session_destroy` 销毁。
+pub unsafe extern "C" fn vitro_get_runtime_error(s: *mut Session) -> *const c_char {
     guard(ptr::null(), || {
         if s.is_null() {
             return ptr::null();
@@ -283,16 +283,16 @@ pub unsafe extern "C" fn cide_get_runtime_error(s: *mut Session) -> *const c_cha
 }
 
 #[no_mangle]
-/// cide_set_input 的 C API 封装。
+/// vitro_set_input 的 C API 封装。
 ///
 /// 语义：**保留换行**的标准输入（C 的 stdin 是字节流，`getchar()` 需读到 `'\n'`）。
 /// 拆分实现见 `RuntimeState::split_stdin`（capi / FRB / serve 共用同一口径）。
 ///
 /// # Safety
-/// - `s` 必须是由 `cide_session_create` 返回的有效 `Session` 指针，且未被 `cide_session_destroy` 销毁。
+/// - `s` 必须是由 `vitro_session_create` 返回的有效 `Session` 指针，且未被 `vitro_session_destroy` 销毁。
 /// - `input` 若非空，必须指向足够大的有效内存区域，供函数写入结果。
 /// - `input` 若非空，必须指向以 null 结尾的有效 UTF-8 字符串。
-pub unsafe extern "C" fn cide_set_input(s: *mut Session, input: *const c_char) {
+pub unsafe extern "C" fn vitro_set_input(s: *mut Session, input: *const c_char) {
     guard((), || {
         if s.is_null() {
             return;
@@ -312,11 +312,11 @@ pub unsafe extern "C" fn cide_set_input(s: *mut Session, input: *const c_char) {
 }
 
 #[no_mangle]
-/// cide_is_waiting_input 的 C API 封装。
+/// vitro_is_waiting_input 的 C API 封装。
 ///
 /// # Safety
-/// - `s` 必须是由 `cide_session_create` 返回的有效 `Session` 指针，且未被 `cide_session_destroy` 销毁。
-pub unsafe extern "C" fn cide_is_waiting_input(s: *mut Session) -> c_int {
+/// - `s` 必须是由 `vitro_session_create` 返回的有效 `Session` 指针，且未被 `vitro_session_destroy` 销毁。
+pub unsafe extern "C" fn vitro_is_waiting_input(s: *mut Session) -> c_int {
     guard(0, || {
         if s.is_null() {
             return 0;
@@ -330,13 +330,13 @@ pub unsafe extern "C" fn cide_is_waiting_input(s: *mut Session) -> c_int {
 }
 
 #[no_mangle]
-/// cide_provide_input_line 的 C API 封装。
+/// vitro_provide_input_line 的 C API 封装。
 ///
 /// # Safety
-/// - `s` 必须是由 `cide_session_create` 返回的有效 `Session` 指针，且未被 `cide_session_destroy` 销毁。
+/// - `s` 必须是由 `vitro_session_create` 返回的有效 `Session` 指针，且未被 `vitro_session_destroy` 销毁。
 /// - `line` 若非空，必须指向足够大的有效内存区域，供函数写入结果。
 /// - `line` 若非空，必须指向以 null 结尾的有效 UTF-8 字符串。
-pub unsafe extern "C" fn cide_provide_input_line(s: *mut Session, line: *const c_char) -> c_int {
+pub unsafe extern "C" fn vitro_provide_input_line(s: *mut Session, line: *const c_char) -> c_int {
     guard(-1, || {
         if s.is_null() {
             return -1;
@@ -347,7 +347,7 @@ pub unsafe extern "C" fn cide_provide_input_line(s: *mut Session, line: *const c
             None => return -1,
         };
         session.runtime.push_stdin_text(&line_str);
-        // 关键顺序：**保留 `waiting_input=true`**，让后续 `cide_run` → `execute_run` 走
+        // 关键顺序：**保留 `waiting_input=true`**，让后续 `vitro_run` → `execute_run` 走
         // resume 分支（`is_resume = session.runtime.waiting_input`）。此前在此清位会让
         // execute_run 误判为新一次运行 → `reset_runtime` + `setup_vm` 从 main 重跑，
         // 已产生的输出被重复打印、且首个 scanf 会读到本次新喂入的文本（而非上次遗留）。
@@ -375,14 +375,14 @@ unsafe fn write_c_buf(text: &str, buf: *mut c_char, max_len: c_int) {
 }
 
 #[no_mangle]
-/// cide_get_output_length 的 C API 封装。
+/// vitro_get_output_length 的 C API 封装。
 ///
 /// **展示视图**（程序 stdout + stderr + 引擎附注按写入顺序拼接）。需要与 Clang golden
-/// 比对的纯净 stdout 请用 `cide_get_program_output_length`（E-P1-5）。
+/// 比对的纯净 stdout 请用 `vitro_get_program_output_length`（E-P1-5）。
 ///
 /// # Safety
-/// - `s` 必须是由 `cide_session_create` 返回的有效 `Session` 指针，且未被 `cide_session_destroy` 销毁。
-pub unsafe extern "C" fn cide_get_output_length(s: *mut Session) -> c_int {
+/// - `s` 必须是由 `vitro_session_create` 返回的有效 `Session` 指针，且未被 `vitro_session_destroy` 销毁。
+pub unsafe extern "C" fn vitro_get_output_length(s: *mut Session) -> c_int {
     guard(0, || {
         if s.is_null() {
             return 0;
@@ -395,11 +395,11 @@ pub unsafe extern "C" fn cide_get_output_length(s: *mut Session) -> c_int {
 /// 纯程序 stdout 的字节长度（不含引擎附注、不含 stderr）。
 ///
 /// E-P1-5：这是 Shadow Verification / 判分场景的**唯一**合法输出来源；此前消费方只能
-/// 对 `cide_get_output` 做正则清洗，程序自己打印"程序运行完成，返回值：N"时会被误删。
+/// 对 `vitro_get_output` 做正则清洗，程序自己打印"程序运行完成，返回值：N"时会被误删。
 ///
 /// # Safety
-/// - `s` 必须是由 `cide_session_create` 返回的有效 `Session` 指针，且未被 `cide_session_destroy` 销毁。
-pub unsafe extern "C" fn cide_get_program_output_length(s: *mut Session) -> c_int {
+/// - `s` 必须是由 `vitro_session_create` 返回的有效 `Session` 指针，且未被 `vitro_session_destroy` 销毁。
+pub unsafe extern "C" fn vitro_get_program_output_length(s: *mut Session) -> c_int {
     guard(0, || {
         if s.is_null() {
             return 0;
@@ -412,8 +412,8 @@ pub unsafe extern "C" fn cide_get_program_output_length(s: *mut Session) -> c_in
 /// 引擎附注（运行完成提示 / 内存泄漏报告 / 教学安全提示）的字节长度。
 ///
 /// # Safety
-/// - `s` 必须是由 `cide_session_create` 返回的有效 `Session` 指针，且未被 `cide_session_destroy` 销毁。
-pub unsafe extern "C" fn cide_get_engine_notes_length(s: *mut Session) -> c_int {
+/// - `s` 必须是由 `vitro_session_create` 返回的有效 `Session` 指针，且未被 `vitro_session_destroy` 销毁。
+pub unsafe extern "C" fn vitro_get_engine_notes_length(s: *mut Session) -> c_int {
     guard(0, || {
         if s.is_null() {
             return 0;
@@ -423,12 +423,12 @@ pub unsafe extern "C" fn cide_get_engine_notes_length(s: *mut Session) -> c_int 
 }
 
 #[no_mangle]
-/// cide_get_output 的 C API 封装（展示视图，语义同 `cide_get_output_length`）。
+/// vitro_get_output 的 C API 封装（展示视图，语义同 `vitro_get_output_length`）。
 ///
 /// # Safety
-/// - `s` 必须是由 `cide_session_create` 返回的有效 `Session` 指针，且未被 `cide_session_destroy` 销毁。
+/// - `s` 必须是由 `vitro_session_create` 返回的有效 `Session` 指针，且未被 `vitro_session_destroy` 销毁。
 /// - `buf` 若非空，必须指向足够大的有效内存区域，供函数写入结果。
-pub unsafe extern "C" fn cide_get_output(s: *mut Session, buf: *mut c_char, max_len: c_int) {
+pub unsafe extern "C" fn vitro_get_output(s: *mut Session, buf: *mut c_char, max_len: c_int) {
     guard((), || {
         if s.is_null() {
             return;
@@ -441,9 +441,9 @@ pub unsafe extern "C" fn cide_get_output(s: *mut Session, buf: *mut c_char, max_
 /// 复制纯程序 stdout 到缓冲区（max_len 含 NUL 终止符）。
 ///
 /// # Safety
-/// - `s` 必须是由 `cide_session_create` 返回的有效 `Session` 指针，且未被 `cide_session_destroy` 销毁。
+/// - `s` 必须是由 `vitro_session_create` 返回的有效 `Session` 指针，且未被 `vitro_session_destroy` 销毁。
 /// - `buf` 若非空，必须指向足够大的有效内存区域，供函数写入结果。
-pub unsafe extern "C" fn cide_get_program_output(s: *mut Session, buf: *mut c_char, max_len: c_int) {
+pub unsafe extern "C" fn vitro_get_program_output(s: *mut Session, buf: *mut c_char, max_len: c_int) {
     guard((), || {
         if s.is_null() {
             return;
@@ -456,9 +456,9 @@ pub unsafe extern "C" fn cide_get_program_output(s: *mut Session, buf: *mut c_ch
 /// 复制引擎附注到缓冲区（max_len 含 NUL 终止符）。
 ///
 /// # Safety
-/// - `s` 必须是由 `cide_session_create` 返回的有效 `Session` 指针，且未被 `cide_session_destroy` 销毁。
+/// - `s` 必须是由 `vitro_session_create` 返回的有效 `Session` 指针，且未被 `vitro_session_destroy` 销毁。
 /// - `buf` 若非空，必须指向足够大的有效内存区域，供函数写入结果。
-pub unsafe extern "C" fn cide_get_engine_notes(s: *mut Session, buf: *mut c_char, max_len: c_int) {
+pub unsafe extern "C" fn vitro_get_engine_notes(s: *mut Session, buf: *mut c_char, max_len: c_int) {
     guard((), || {
         if s.is_null() {
             return;
@@ -471,9 +471,9 @@ pub unsafe extern "C" fn cide_get_engine_notes(s: *mut Session, buf: *mut c_char
 /// 获取最近一次运行后的 JIT 统计信息。
 ///
 /// # Safety
-/// - `s` 必须是由 `cide_session_create` 返回的有效 `Session` 指针，且未被 `cide_session_destroy` 销毁。
+/// - `s` 必须是由 `vitro_session_create` 返回的有效 `Session` 指针，且未被 `vitro_session_destroy` 销毁。
 /// - `traces_compiled` 与 `steps_accelerated` 若非空，必须指向有效的 `c_int` 内存。
-pub unsafe extern "C" fn cide_get_jit_stats(
+pub unsafe extern "C" fn vitro_get_jit_stats(
     s: *mut Session,
     traces_compiled: *mut c_int,
     steps_accelerated: *mut c_int,

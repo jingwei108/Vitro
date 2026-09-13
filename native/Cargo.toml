@@ -1,9 +1,9 @@
 [workspace]
-members = ["crates/cide_algorithm_steps", "crates/cide_ast", "crates/cide_codegen", "crates/cide_cpp_frontend", "crates/cide_lexer", "crates/cide_parser", "crates/cide_runtime", "crates/cide_shared", "crates/cide_typeck", "crates/cide_vm", "."]
+members = ["crates/vitro_algorithm_steps", "crates/vitro_ast", "crates/vitro_codegen", "crates/vitro_cpp_frontend", "crates/vitro_lexer", "crates/vitro_parser", "crates/vitro_runtime", "crates/vitro_shared", "crates/vitro_typeck", "crates/vitro_vm", "."]
 resolver = "2"
 
 [package]
-name = "cide_native"
+name = "vitro_native"
 version = "0.1.0"
 edition = "2021"
 
@@ -31,16 +31,16 @@ too_many_lines = "warn"
 type_complexity = "allow"
 
 [dependencies]
-cide_algorithm_steps = { path = "crates/cide_algorithm_steps" }
-cide_ast = { path = "crates/cide_ast" }
-cide_cpp_frontend = { path = "crates/cide_cpp_frontend" }
-cide_lexer = { path = "crates/cide_lexer" }
-cide_parser = { path = "crates/cide_parser" }
-cide_runtime = { path = "crates/cide_runtime" }
-cide_typeck = { path = "crates/cide_typeck" }
-cide_shared = { path = "crates/cide_shared" }
-cide_codegen = { path = "crates/cide_codegen" }
-cide_vm = { path = "crates/cide_vm" }
+vitro_algorithm_steps = { path = "crates/vitro_algorithm_steps" }
+vitro_ast = { path = "crates/vitro_ast" }
+vitro_cpp_frontend = { path = "crates/vitro_cpp_frontend" }
+vitro_lexer = { path = "crates/vitro_lexer" }
+vitro_parser = { path = "crates/vitro_parser" }
+vitro_runtime = { path = "crates/vitro_runtime" }
+vitro_typeck = { path = "crates/vitro_typeck" }
+vitro_shared = { path = "crates/vitro_shared" }
+vitro_codegen = { path = "crates/vitro_codegen" }
+vitro_vm = { path = "crates/vitro_vm" }
 serde = { version = "~1.0.228", features = ["derive"] }
 serde_json = "~1.0.149"
 libm = "~0.2.16"
@@ -55,8 +55,8 @@ wasm-bindgen-futures = "0.4"
 criterion = { version = "0.5", features = ["html_reports"] }
 
 [[bin]]
-name = "cide_cli"
-path = "src/bin/cide_cli.rs"
+name = "vitro_cli"
+path = "src/bin/vitro_cli.rs"
 
 [[bench]]
 name = "vm_benchmark"

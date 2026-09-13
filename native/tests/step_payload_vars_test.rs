@@ -14,10 +14,10 @@
 //! 描述不得引用越界下标、同一步的 `semantic_label` 与 `algorithm_step.description`
 //! 必须一致、冒泡"第 k 趟"文案必须等于"第 k 大"。
 
-use cide_native::session::{CompileUnit, Session};
-use cide_native::session_api;
+use vitro_native::session::{CompileUnit, Session};
+use vitro_native::session_api;
 
-/// 逐 step 收集 payload（与 `cide_cli serve` 的 `step.next` 同一入口语义）。
+/// 逐 step 收集 payload（与 `vitro_cli serve` 的 `step.next` 同一入口语义）。
 fn collect_payloads(units: Vec<(&str, &str)>) -> Vec<serde_json::Value> {
     let mut session = Session::default();
     session.compile.compile_units = units

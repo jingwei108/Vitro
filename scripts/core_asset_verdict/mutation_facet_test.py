@@ -36,7 +36,7 @@ MUTATIONS = [
     {
         "id": "M1-ALGO-LABEL",
         "facet": "教学内容层（算法标注 description / semantic_label）",
-        "file": "native/crates/cide_algorithm_steps/src/sorting.rs",
+        "file": "native/crates/vitro_algorithm_steps/src/sorting.rs",
         "old": "            let kth = if n > 0 && i >= 0 && i < n {\n                (i + 1).to_string()",
         "new": "            let kth = if n > 0 && i >= 0 && i < n {\n                (n - i).to_string()",
         "desc": "重引入已修复的 P0-1「冒泡趟数教反」：第 k 趟显示第 n-k 大（埋雷验证）",
@@ -52,7 +52,7 @@ MUTATIONS = [
     {
         "id": "M3-TEMP-SLOT",
         "facet": "codegen 槽位系统（批量正确性）",
-        "file": "native/crates/cide_codegen/src/lib.rs",
+        "file": "native/crates/vitro_codegen/src/lib.rs",
         "old": ("        let slot = match index {\n"
                 "            0 => &mut self.temp_slot0,\n"
                 "            1 => &mut self.temp_slot1,\n"
@@ -66,7 +66,7 @@ MUTATIONS = [
     {
         "id": "M4-DIAG-TEXT",
         "facet": "诊断内容层（错误文案）",
-        "file": "native/crates/cide_typeck/src/expr/var.rs",
+        "file": "native/crates/vitro_typeck/src/expr/var.rs",
         "old": '"未声明的变量 \'{}\'"',
         "new": '"未定义标识符 \'{}\'"',
         "desc": "E3023 诊断文案改写（错误码不变，仅文案）",
@@ -74,7 +74,7 @@ MUTATIONS = [
     {
         "id": "M5-LEXER-DECIMAL",
         "facet": "词法（十进制整数字面量值）",
-        "file": "native/crates/cide_lexer/src/number.rs",
+        "file": "native/crates/vitro_lexer/src/number.rs",
         "old": "            val = text.parse::<u64>().unwrap_or(0);",
         "new": "            val = text.parse::<u64>().map(|v| v.wrapping_add(1)).unwrap_or(0);",
         "desc": "每个十进制整数字面量 +1（词法层语义破坏）",
@@ -92,7 +92,7 @@ MUTATIONS = [
 SHADOW_RE = {
     "match": re.compile(r"^\s*match:\s*(\d+)", re.M),
     "known_issue": re.compile(r"^\s*known_issue:\s*(\d+)", re.M),
-    "cide_better": re.compile(r"^\s*cide_better:\s*(\d+)", re.M),
+    "vitro_better": re.compile(r"^\s*vitro_better:\s*(\d+)", re.M),
 }
 FAILED_TEST_RE = re.compile(r"^test (\S+) \.\.\. FAILED", re.M)
 TEST_SUMMARY_RE = re.compile(r"test result: (ok|FAILED)\. (\d+) passed; (\d+) failed")
@@ -196,10 +196,10 @@ def main() -> int:
 
             # margin 计算
             shadow_changed = None
-            if all(sh.get(k) is not None for k in ("match", "known_issue", "cide_better")):
+            if all(sh.get(k) is not None for k in ("match", "known_issue", "vitro_better")):
                 shadow_changed = abs((sh["match"] or 0) - (base_shadow["match"] or 0)) + \
                                  abs((sh["known_issue"] or 0) - (base_shadow["known_issue"] or 0)) + \
-                                 abs((sh["cide_better"] or 0) - (base_shadow["cide_better"] or 0))
+                                 abs((sh["vitro_better"] or 0) - (base_shadow["vitro_better"] or 0))
             rec["shadow_cases_changed"] = shadow_changed
             rec["margin"] = (shadow_changed or 0) + tt["failed_count"]
             rec["detected"] = rec["margin"] > 0

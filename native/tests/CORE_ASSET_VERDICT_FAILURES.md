@@ -38,7 +38,7 @@
   `discard = start_step - frame_cache_start_step` 后直接 `split_off(discard)`；
   当 seek 目标远超程序实际步数时重放提前结束、缓存长度远小于 `discard` → 越界。
   对比同文件 `trim_frame_cache:80-81` 有 `discard.min(len)` 防御——**同一模式在一处设防、一处没设**。
-- **是否 Cide 限制**：否，是缺陷
+- **是否 Vitro 限制**：否，是缺陷
 - **是否标准不符**：不适用（引擎自身 API 崩溃）
 - **学生影响评级**：**P0**（拖进度条到程序末尾之后即崩溃；下游会话被一条请求杀死）
 - **修复方向**：`discard` 先 clamp 到 `frame_cache.len()`；越界 seek 语义显式化为"返回可用范围"
@@ -58,16 +58,16 @@
 - **来源**：`repro_panics.py` B 段；`interaction_probe.py` B 段
 - **最小复现** [动态实测]：`{"method":"payload.get","params":{"start":0,"end":-1}}` →
   `thread 'main' panicked at src\unified\engine.rs:416:29: range end index 18446744073709551615 out of range for slice of length 1`
-- **根因**（[静态亲读] `engine.rs:409-419` + `cide_cli.rs:742-744`）：serve 侧
+- **根因**（[静态亲读] `engine.rs:409-419` + `vitro_cli.rs:742-744`）：serve 侧
   `params.get("end").as_i64() as i32`，负值经 `end.min(cache_end) as usize` 回绕成 `usize::MAX`
-- **是否 Cide 限制**：否
+- **是否 Vitro 限制**：否
 - **学生影响评级**：**P0**（外部一条畸形 JSON 即可杀死会话）
 - **状态**：**OPEN**（路线图 U0#5 已列"负参三处"，本次给出确定的最小复现与行号）
 
 ### R-2026-09-04 serve 主循环无 `catch_unwind`：panic 直接终止会话
 
 - **来源**：`interaction_probe.py` B 段（30 条畸形输入，第 10 条死亡，仅 9 条响应）[动态实测]
-- **根因**（[静态亲读] `native/src/bin/cide_cli.rs:773-806`）：`cmd_serve` 循环内无 panic 护栏；
+- **根因**（[静态亲读] `native/src/bin/vitro_cli.rs:773-806`）：`cmd_serve` 循环内无 panic 护栏；
   `capi/first_batch.rs` 有 `catch_unwind`（第 48 行），**三条出口防护不对称**
 - **是否标准不符**：不适用
 - **学生影响评级**：**P0**（与 R-01/03 组合 = 一条请求杀死下游会话）
@@ -80,7 +80,7 @@
   （≈ **1.2~2.3 KB/步**）；同一会话 6 次远距 seek 峰值 513.7MB、每次 settle 回 ~57~59MB
 - **性质判定（对既有结论的修正）**：**瞬时 O(距离) 尖峰，未见跨次累积**——
   但按默认 `max_steps` 1000 万外推仍达 12~23GB，63.6GB 事故即发生在尖峰期间
-- **是否 Cide 限制**：否（教学机应能承受学生拖到任意步）
+- **是否 Vitro 限制**：否（教学机应能承受学生拖到任意步）
 - **学生影响评级**：**P0**（宿主磁盘被页面文件占满、机器不可用）
 - **验收线**：`峰值提交 / 重放步数 ≤ 64 B/步`（10 万步 ≤6.4MB）
 - **状态**：**OPEN**（路线图 U2#1 的验收标准"RSS 有界"本次量化为具体数字）
@@ -96,9 +96,9 @@
 - **实测**：`[警告] 1:18 被隐式转换为 char，可能会丢失精度。(E3053)` **重复 4 次**
   （同一行、同一列；条数 = 数组元素个数）
 - **clang 对照**（`clang -std=c23 -Wall -Wextra -Wconversion -Wsign-conversion`；
-  Cide 该警告族的设计意图即对齐此规则）：
+  Vitro 该警告族的设计意图即对齐此规则）：
 
-  | 代码 | Cide | clang |
+  | 代码 | Vitro | clang |
   |---|---|---|
   | `char c = 'e';` | 1 条 | **零警告** |
   | `char b[4] = {'e','f','g','h'};` | **4 条** | **零警告** |
@@ -107,7 +107,7 @@
   | `int n = 300; char c = n;` | 1 条 ✓ | 1 条 ✓（`-Wimplicit-int-conversion`，设计如此） |
 
 - **两条独立缺陷叠加**：① **误报**——字符常量在 C 中类型为 `int`，但 clang 的规则是
-  "常量且值在目标类型范围内则不警告"，Cide 缺该豁免；② **未去重**——数组初始化列表按元素
+  "常量且值在目标类型范围内则不警告"，Vitro 缺该豁免；② **未去重**——数组初始化列表按元素
   逐个报告，同行同列重复 N 次
 - **是否标准不符**：是。`char s[]={'a','b','c'}` 是教学第一天的基础写法，clang 零诊断
 - **学生影响评级**：**P0（教学反效果）**——学生首个 `char` 数组即收到 N 条"可能丢失精度"，
@@ -127,22 +127,22 @@
   for(i=0;i<200;i++){for(j=0;j<200;j++){inner=inner+1;}}
   printf("inner=%d i=%d j=%d\n",inner,i,j);return 0;}
   ```
-- **三路对照实测**：`cide_cli run`（executor + JIT）→ `inner=20200 i=200 j=0` ❌；
-  `cide_cli unified`（独立执行循环，1085838 步）与 clang → `inner=40000 i=200 j=200` ✅。
+- **三路对照实测**：`vitro_cli run`（executor + JIT）→ `inner=20200 i=200 j=0` ❌；
+  `vitro_cli unified`（独立执行循环，1085838 步）与 clang → `inner=40000 i=200 j=200` ✅。
   **debug 与 release 输出相同** → 纯逻辑缺陷，与优化无关（非 ICF/UB）。
 - **归因修正（重要）**：**与 `long long` 无关**——`sum` 改 `int` 的纯整数版、`long long`
   完全不参与循环的版本，与含 `long long` 的原版**输出完全一致**（三者均 ❌）。
   原始归因"循环体内写 long long"实测不成立。
 - **触发条件**：外层循环回边达 `JIT_THRESHOLD=100` **且**内层循环已被 JIT 化 **且**
   外层循环体不含条件分支。触发点 = 外层第 **102** 轮（99/100/101 轮均正确）。
-- **根因**：`cide_vm` 的 JIT fast path（`core/executor/mod.rs:14-16`）在 trace 录制期间
+- **根因**：`vitro_vm` 的 JIT fast path（`core/executor/mod.rs:14-16`）在 trace 录制期间
   **仍然生效**——录制推进到内层循环头时命中已编译的内层 trace，一次跑完整个内层循环，
   外层 trace 因此**缺失内层指令**却被 `RecordResult::Finish` 正常注册；此后每轮外层由该
   不完整 trace 执行 → **内层被完全跳过**。
 - **影响评级**：**P0**（**静默错值**＝教学引擎最坏失败模式；任何"嵌套纯计数循环"的合法教学
   程序，只要外层迭代 ≥102 即出错且零诊断）
 - **红→绿留痕（已建立）**：两条用例落地后实测 **665 用例 / match 644 / known_issue 3 /
-  cide_better 16 / output_gap 2 / exit 1**：
+  vitro_better 16 / output_gap 2 / exit 1**：
   `jit_nested_counting_loop` 与 `jit_nested_counting_loop_longlong`（后者固化"与 long long 无关"）。
   **修复前禁止**将其标 `known_issue`、禁止修改期望输出、禁止删除用例；修复后应转为
   `match 646 / output_gap 0`。
@@ -158,7 +158,7 @@
 
 | 编号 | 缺陷 | 实测证据 | 现状 | 验收线 |
 |---|---|---|---|---|
-| **D-2026-09-01** | 662 中 **22 例无外部 oracle**，全部被门禁算作通过；其中 **21 例零 stdout 比对**（`cide_better` 16 + 两侧编译失败 5） | `clang_oracle_audit.py` / `oracle_free_classification.py` [动态实测] | OPEN | 无 oracle = 0 且 `cide_better` = 0（每个用例二择一：补头转真 golden，或移 `gap/` 并写明"Cide 扩展"） |
+| **D-2026-09-01** | 662 中 **22 例无外部 oracle**，全部被门禁算作通过；其中 **21 例零 stdout 比对**（`vitro_better` 16 + 两侧编译失败 5） | `clang_oracle_audit.py` / `oracle_free_classification.py` [动态实测] | OPEN | 无 oracle = 0 且 `vitro_better` = 0（每个用例二择一：补头转真 golden，或移 `gap/` 并写明"Vitro 扩展"） |
 | **D-2026-09-02** | 驱动对**文件用例**不注入头文件，**13 例本可成为真 golden** | `oracle_gap_probe.py`：补 `#include` 后 13 例 `RESCUED_MATCH` [动态实测]（只在临时副本操作，未改动用例文件） | OPEN | 13 例归档明确、门禁可见 |
 | **D-2026-09-03** | 可视化四状态（`PointerStatus`）**margin = 0**（无防线） | `mutation_facet_test.py` M2：`Freed→Valid`，影子 0 + 测试 0 [动态实测] | OPEN | 同一突变检出 ≥3 |
 | **D-2026-09-04** | 兜底 `semantic_label` **margin = 0**（词汇闭包通过，行为一致性无验证） | M6：标签恒为"第 1 行"，影子 0 + 测试 0 [动态实测] | OPEN | 标注-行为一致性 property 检出 ≥3 |
@@ -166,7 +166,7 @@
 | **D-2026-09-06** | 诊断文案 margin = 1 | M4（E3023 文案改写）：仅 1 个测试拦截 [动态实测] | OPEN | margin ≥3 |
 | **D-2026-09-07** | 防线语料按**特性维度**生成，缺**现场形态维度**：学生形态 `int a[]={2,4,6,8,10}, y=0, x, *p;`（不定长数组初始化 + 标量 + 指针混合声明）在全防线语料中覆盖 = **0**（580 个文件用例里"声明列表逗号后接指针"仅 3 例，且均为 K&R 的 `char *p, *q, *r;` 同构写法；而单特性维度很密：不定长数组初始化 70 例、带变量下标 234 例） | 本次独立实测逐模式统计；对应缺陷 2026-06-07 已修，但修复只被**特性级**用例锚定，**形态级**零锚定 [动态实测] | **已关闭**：新增 `baseline/multidecl_array_pointer_mix.c`（自带 `<stdio.h>` → clang 真 golden；实测 663 用例 / match 644 / 门禁通过） | 该形态类缺陷回归时防线必须红 |
 | **D-2026-09-08** | **判定型脚本空转（防线自己没有防线）**——7 个实例：① `serve_smoke.py` 只测 happy path（60 条断言全绿 ↔ 同出口 2 个 P0 panic 并存）② `shadow_verify.py` 22 例无 oracle 计入通过（21 例零 stdout 比对）③ 同上 `.strip()` 宽松比对（尾部空白差异永久不可见）④ `oracle_gap_probe.py` 头文件清单漏 `stdbool.h`（"13 例可救"为下界，`keyword_compat` 误分类）⑤ `seek_accumulation.py` 把 `exit=1` 未完成样本计入增长阶拟合（`exponent_estimate: 0.996` 无效）⑥ `resource_longrun.py` 的 1M 点 `exit=1` 仍作数据点（U2 验收线因此被掩盖为可执行）⑦ `engineering_health.py` 阈值从未启用（只生成、不阻塞） | 本次独立实测/亲读 [动态实测]；根因：引擎侧有突变测试（`mutation_facet_test.py` 3/3 检出），**脚本侧从未做过** | OPEN | 每个判定型脚本留"注入必然违反 → 必须变红"记录；**J9 脚本可触发判据**落地（裁定 §13.2）；优先级 `shadow_verify` > `ci_three_tier_check` > `serve_smoke`（已证实空转） |
-| **D-2026-09-09** | **JIT 路径零覆盖（形状盲区）**：`CideVM` 的 JIT trace 是**第三条执行路径**，但 663 个既有用例对其**零覆盖**——教学用例循环 <100 次（不触发录制）、排序类循环体带条件分支（录制 `Abort` 退回解释）、单层循环（不存在外层 trace 穿透）三者**互补地**漏掉"嵌套纯计数循环"这一教科书形状 | R-2026-09-13 实测：同一程序解释器/unified 正确而 JIT 路径静默错值，**全部既有用例均未变红** [动态实测] | OPEN | 判据 **J10**：JIT 生效区间须有独立用例覆盖（`margin(JIT 路径) ≥ 3`）；**不得**以"解释器正确"推断"JIT 正确" |
+| **D-2026-09-09** | **JIT 路径零覆盖（形状盲区）**：`VitroVM` 的 JIT trace 是**第三条执行路径**，但 663 个既有用例对其**零覆盖**——教学用例循环 <100 次（不触发录制）、排序类循环体带条件分支（录制 `Abort` 退回解释）、单层循环（不存在外层 trace 穿透）三者**互补地**漏掉"嵌套纯计数循环"这一教科书形状 | R-2026-09-13 实测：同一程序解释器/unified 正确而 JIT 路径静默错值，**全部既有用例均未变红** [动态实测] | OPEN | 判据 **J10**：JIT 生效区间须有独立用例覆盖（`margin(JIT 路径) ≥ 3`）；**不得**以"解释器正确"推断"JIT 正确" |
 
 > **禁止事项提醒**：以上 7 条**不得**通过删除用例、改预期值、或把新用例标 `known_issue` 处理；
 > `@category: *bug*` 自我豁免通道（当前 4 例可用）**不得**被用来吞掉 D-2026-09-01 的差异。
@@ -184,7 +184,7 @@
 | **G5** | JIT 与解释器/host 语义分叉（文档记录，未独立复核） | U5 三路径差分矩阵 | 矩阵单元 100% 覆盖 |
 | **G6** | `regions` "14B/次无界 / O(N²)" 与本次实测（峰值平坦 8.6MB、耗时≈线性）**不一致** | 直接读 regions 条目数：1k/10k/100k/1M 四点 ×3 次 | 增长曲线可复现（任一方向） |
 | **G7** | C++ 面随机差分缺失（本次 10 族均为 C 子集） | 扩生成器到类/模板/容器/RAII：≥500 例 × 5 族 | 零未知分歧或全部归档 |
-| **G8** | `@category *bug*` 豁免通道与 `cide_better` 的逐例正当性 | 22 例 + 4 例逐例裁定 | 全部有归属，`cide_better` = 0 |
+| **G8** | `@category *bug*` 豁免通道与 `vitro_better` 的逐例正当性 | 22 例 + 4 例逐例裁定 | 全部有归属，`vitro_better` = 0 |
 
 ---
 
@@ -193,7 +193,7 @@
 - "exemption 通道到底多大" → 22 例无 oracle，21 例零比对（约为既有口径 6 例的 3.5 倍）；
 - "seek 重放到底多大" → 1.2~2.3KB/步，10M 步外推 12~23GB，且为**瞬时**尖峰非累积；
 - "662 的规模 realism" → 中位 9 行 / 115 步，`≥10k` 步仅 11 例；
-- "核心语义在随机输入下是否稳" → 1000 例 × 10 族三路（自写模型 × clang × Cide）一致；
+- "核心语义在随机输入下是否稳" → 1000 例 × 10 族三路（自写模型 × clang × Vitro）一致；
 - "防线判定逻辑是否可信" → 本次 6 个跨切面突变 4 个检出（margin 1~559），2 个零检出（本台账 D-03/D-04）。
 
 ---
@@ -209,8 +209,8 @@
   ② 新增 **R-2026-09-12**（`E3053` 误报 + 未去重，clang `-Wconversion` 逐例对照）。
   ③ 新增 **D-2026-09-07**（现场形态零覆盖）并**当日关闭**：新增用例
   `native/tests/cases/baseline/multidecl_array_pointer_mix.c`，实测影子 663 用例 /
-  match 644 / known_issue 3 / cide_better 16 / 无非预期差异（门禁通过）；
-  该用例自带 `<stdio.h>`，clang 侧有真 golden，**不落 `cide_better` 零 oracle 通道**。
+  match 644 / known_issue 3 / vitro_better 16 / 无非预期差异（门禁通过）；
+  该用例自带 `<stdio.h>`，clang 侧有真 golden，**不落 `vitro_better` 零 oracle 通道**。
   ④ **G1 状态变更**：真实学生现场由"0 条（输入不存在）"更新为 **2 条**（用户提供，
   覆盖 4 个问题）；但两条均为回忆提交，**仓库仍缺系统化现场归档入口**——这本身是需要补的能力。
   ⑤ 协议侧：`code_line` 跨文件全局行号在 `docs/spec/STEP_PAYLOAD_SCHEMA_V0_1.md` §8 #9
@@ -229,7 +229,7 @@
   （已确认缺陷 7 + 防线口径缺陷 9）。
   ② **红→绿留痕已建立**：新增 `baseline/jit_nested_counting_loop.c` 与
   `jit_nested_counting_loop_longlong.c`，实测 **665 用例 / match 644 / known_issue 3 /
-  cide_better 16 / output_gap 2 / exit 1**——门禁当前**红**，修复后应转
+  vitro_better 16 / output_gap 2 / exit 1**——门禁当前**红**，修复后应转
   `match 646 / output_gap 0`。**修复前禁止**标 `known_issue`、改期望值或删用例。
   ③ **归因修正入册**：该缺陷**与 `long long` 无关**（纯 `int` 版、`long long` 不参与循环版
   与原版输出完全一致）；触发点 = 外层第 **102** 轮；根因 = JIT fast path 在 trace 录制期间

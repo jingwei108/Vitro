@@ -16,7 +16,7 @@
 package main
 
 import (
-	"cide/scripts/internal/probeutil"
+	"vitro/scripts/internal/probeutil"
 
 	"bufio"
 	"bytes"

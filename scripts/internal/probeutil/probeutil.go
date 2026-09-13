@@ -1,6 +1,6 @@
 //go:build windows
 
-// Package probeutil 探针共享工具：探针资产目录锚点 + cide_cli 定位 +
+// Package probeutil 探针共享工具：探针资产目录锚点 + vitro_cli 定位 +
 // psapi 驻留内存采样 + 数值格式化（D5 收尾重构，自 resource_longrun /
 // seek_accumulation / interaction_probe 的重复实现单源化）。
 //
@@ -16,7 +16,7 @@ import (
 	"time"
 	"unsafe"
 
-	"cide/scripts/internal/capi"
+	"vitro/scripts/internal/capi"
 )
 
 // VerdictDir 返回探针资产目录 scripts/core_asset_verdict（基线 JSON /
@@ -26,19 +26,19 @@ func VerdictDir() string {
 	return filepath.Join(capi.ProjectRoot(), "scripts", "core_asset_verdict")
 }
 
-// MustFindCLI 定位 cide_cli.exe（release 优先，debug 兜底；找不到 fail loud）。
+// MustFindCLI 定位 vitro_cli.exe（release 优先，debug 兜底；找不到 fail loud）。
 func MustFindCLI() string {
 	native := filepath.Join(capi.ProjectRoot(), "native")
 	for _, rel := range []string{
-		filepath.Join("target", "release", "cide_cli.exe"),
-		filepath.Join("target", "debug", "cide_cli.exe"),
+		filepath.Join("target", "release", "vitro_cli.exe"),
+		filepath.Join("target", "debug", "vitro_cli.exe"),
 	} {
 		p := filepath.Join(native, rel)
 		if _, err := os.Stat(p); err == nil {
 			return p
 		}
 	}
-	capi.Fatal("找不到 cide_cli.exe（请先 cd native && cargo build --release）")
+	capi.Fatal("找不到 vitro_cli.exe（请先 cd native && cargo build --release）")
 	return ""
 }
 

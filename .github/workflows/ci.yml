@@ -118,8 +118,8 @@ jobs:
           path: native/tests/shadow_verification/reports/cpp_shadow_report.json
 
       # 出口 3 防线：serve JSON-lines 协议契约（id 关联 / 错误帧同构 / session.reset
-      # / 与 capi 共用的入口语义）。依赖上一步 Debug 构建的 cide_cli。
-      - name: cide_cli serve smoke (Exit 3 protocol contract)
+      # / 与 capi 共用的入口语义）。依赖上一步 Debug 构建的 vitro_cli。
+      - name: vitro_cli serve smoke (Exit 3 protocol contract)
         run: python scripts/serve_smoke.py
         shell: bash
 

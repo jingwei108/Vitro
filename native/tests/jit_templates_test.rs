@@ -1,12 +1,12 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use cide_native::engine::compile_pipeline::{run_compile_pipeline, setup_vm};
-use cide_native::session::Session;
-use cide_native::vm::core::CideVM;
+use vitro_native::engine::compile_pipeline::{run_compile_pipeline, setup_vm};
+use vitro_native::session::Session;
+use vitro_native::vm::core::VitroVM;
 
 fn make_session(source: &str) -> Session {
     let mut session = Session::default();
-    session.compile.compile_units.push(cide_native::session::CompileUnit {
+    session.compile.compile_units.push(vitro_native::session::CompileUnit {
         filename: "main.c".to_string(),
         source: source.to_string(),
     });
@@ -18,8 +18,8 @@ fn make_session(source: &str) -> Session {
     session
 }
 
-fn setup_vm_for_session(session: &mut Session) -> CideVM {
-    let mut vm = CideVM::new();
+fn setup_vm_for_session(session: &mut Session) -> VitroVM {
+    let mut vm = VitroVM::new();
     setup_vm(&mut vm, session);
     vm
 }

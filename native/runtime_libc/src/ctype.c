@@ -1,4 +1,4 @@
-/* Bytecode Libc: ctype 子集 —— 用 Cide-C 子集重写的纯算法实现 */
+/* Bytecode Libc: ctype 子集 —— 用 Vitro-C 子集重写的纯算法实现 */
 
 int isdigit(int c) {
     return c >= '0' && c <= '9';

@@ -7,7 +7,7 @@
   "panicked": true,
   "panic_line": "thread 'main' (24792) panicked at src\\unified\\engine.rs:400:49:",
   "panic_msg": "`at` split index (is 48001) should be <= len (is 10)",
-  "stderr": "cide_cli serve：JSON-lines 会话模式（EOF 或 shutdown 退出）\n\nthread 'main' (24792) panicked at src\\unified\\engine.rs:400:49:\n`at` split index (is 48001) should be <= len (is 10)\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+  "stderr": "vitro_cli serve：JSON-lines 会话模式（EOF 或 shutdown 退出）\n\nthread 'main' (24792) panicked at src\\unified\\engine.rs:400:49:\n`at` split index (is 48001) should be <= len (is 10)\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
   "responses_json": [
    "{\"id\":1,\"ok\":true,\"result\":{\"diagnostics\":[],\"ok\":true,\"preprocessor_trace\":[]}}",
    "{\"id\":2,\"ok\":true,\"result\":{\"max_collected_step\":-1,\"ready\":true}}"
@@ -21,7 +21,7 @@
   "panicked": true,
   "panic_line": "thread 'main' (24756) panicked at src\\unified\\engine.rs:400:49:",
   "panic_msg": "`at` split index (is 1001) should be <= len (is 10)",
-  "stderr": "cide_cli serve：JSON-lines 会话模式（EOF 或 shutdown 退出）\n\nthread 'main' (24756) panicked at src\\unified\\engine.rs:400:49:\n`at` split index (is 1001) should be <= len (is 10)\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+  "stderr": "vitro_cli serve：JSON-lines 会话模式（EOF 或 shutdown 退出）\n\nthread 'main' (24756) panicked at src\\unified\\engine.rs:400:49:\n`at` split index (is 1001) should be <= len (is 10)\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
   "responses_json": [
    "{\"id\":1,\"ok\":true,\"result\":{\"diagnostics\":[],\"ok\":true,\"preprocessor_trace\":[]}}",
    "{\"id\":2,\"ok\":true,\"result\":{\"max_collected_step\":-1,\"ready\":true}}",
@@ -36,7 +36,7 @@
   "panicked": true,
   "panic_line": "thread 'main' (19084) panicked at src\\unified\\engine.rs:416:29:",
   "panic_msg": "range end index 18446744073709551615 out of range for slice of length 1",
-  "stderr": "cide_cli serve：JSON-lines 会话模式（EOF 或 shutdown 退出）\n\nthread 'main' (19084) panicked at src\\unified\\engine.rs:416:29:\nrange end index 18446744073709551615 out of range for slice of length 1\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
+  "stderr": "vitro_cli serve：JSON-lines 会话模式（EOF 或 shutdown 退出）\n\nthread 'main' (19084) panicked at src\\unified\\engine.rs:416:29:\nrange end index 18446744073709551615 out of range for slice of length 1\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\n",
   "responses_json": [
    "{\"id\":1,\"ok\":true,\"result\":{\"diagnostics\":[],\"ok\":true,\"preprocessor_trace\":[]}}",
    "{\"id\":2,\"ok\":true,\"result\":{\"max_collected_step\":-1,\"ready\":true}}",
@@ -51,7 +51,7 @@
   "panicked": false,
   "panic_line": "",
   "panic_msg": "",
-  "stderr": "cide_cli serve：JSON-lines 会话模式（EOF 或 shutdown 退出）\n",
+  "stderr": "vitro_cli serve：JSON-lines 会话模式（EOF 或 shutdown 退出）\n",
   "responses_json": [
    "{\"id\":1,\"ok\":true,\"result\":{\"diagnostics\":[],\"ok\":true,\"preprocessor_trace\":[]}}",
    "{\"id\":2,\"ok\":true,\"result\":{\"max_collected_step\":-1,\"ready\":true}}",

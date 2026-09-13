@@ -1,8 +1,8 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use cide_native::diagnostics::error_codes::ErrorCode;
-use cide_native::engine::compile_pipeline::run_multi_file_pipeline;
-use cide_native::session::{CompileUnit, Session};
+use vitro_native::diagnostics::error_codes::ErrorCode;
+use vitro_native::engine::compile_pipeline::run_multi_file_pipeline;
+use vitro_native::session::{CompileUnit, Session};
 
 fn make_session() -> Session {
     Session::default()

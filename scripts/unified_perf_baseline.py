@@ -5,7 +5,7 @@
     python scripts/unified_perf_baseline.py [--report reports/unified_perf_baseline.md]
 
 说明:
-    使用 release 模式的 cide_cli 运行 native/benches/unified_perf_baseline.c，
+    使用 release 模式的 vitro_cli 运行 native/benches/unified_perf_baseline.c，
     测量产生约 10 万 VM 步的冒泡排序用例在后端统一模式下的执行耗时，
     并生成 Markdown 格式的基线报告。
 """
@@ -47,15 +47,15 @@ _ensure_utf8_console()
 ROOT = Path(__file__).resolve().parent.parent
 NATIVE_DIR = ROOT / "native"
 BENCH_SOURCE = NATIVE_DIR / "benches" / "unified_perf_baseline.c"
-CLI_EXE = NATIVE_DIR / "target" / "release" / "cide_cli.exe"
+CLI_EXE = NATIVE_DIR / "target" / "release" / "vitro_cli.exe"
 DEFAULT_MAX_STEPS = 200_000
 
 
 def build_cli() -> None:
-    """编译 release 版本的 cide_cli。"""
-    print("编译 release 版本 cide_cli...")
+    """编译 release 版本的 vitro_cli。"""
+    print("编译 release 版本 vitro_cli...")
     result = subprocess.run(
-        ["cargo", "build", "--release", "--bin", "cide_cli"],
+        ["cargo", "build", "--release", "--bin", "vitro_cli"],
         cwd=NATIVE_DIR,
         text=True,
         encoding="utf-8",
@@ -65,7 +65,7 @@ def build_cli() -> None:
     )
     if result.returncode != 0:
         print(result.stdout)
-        raise RuntimeError("cide_cli 编译失败")
+        raise RuntimeError("vitro_cli 编译失败")
 
 
 def run_baseline() -> dict:
@@ -120,7 +120,7 @@ def run_baseline() -> dict:
 def format_report(metrics: dict) -> str:
     """生成 Markdown 格式报告。"""
     now = time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime())
-    return f"""# Cide 统一模式后端性能基线
+    return f"""# Vitro 统一模式后端性能基线
 
 > 生成时间: {now}
 > 测试用例: `native/benches/unified_perf_baseline.c`（50 个逆序元素冒泡排序）
@@ -129,7 +129,7 @@ def format_report(metrics: dict) -> str:
 
 | 指标 | 数值 |
 |------|------|
-| CLI 可执行文件 | `native/target/release/cide_cli.exe` |
+| CLI 可执行文件 | `native/target/release/vitro_cli.exe` |
 | 统一模式最大步数限制 | {metrics['max_steps']:,} |
 | 编译配置 | release |
 

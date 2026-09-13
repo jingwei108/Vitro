@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
-提取 Cide 内置 C++ 容器类定义，生成 builtin_layout_data.json。
-输入: native/runtime_libc/cide/*.cpp
+提取 Vitro 内置 C++ 容器类定义，生成 builtin_layout_data.json。
+输入: native/runtime_libc/vitro/*.cpp
 输出: native/src/compiler/cpp_frontend/builtin_layout_data.json
 
 约定:
-- 容器类使用标准模板写法，如 `template <class T> class cide_vec { ... };`
-- 文件名到 (base_cide_name, base_cpp_name, type_args) 的映射由 FILE_RULES 维护
-- method_map 输出 mangled 方法名: {cide_name}__{method}
+- 容器类使用标准模板写法，如 `template <class T> class vitro_vec { ... };`
+- 文件名到 (base_vitro_name, base_cpp_name, type_args) 的映射由 FILE_RULES 维护
+- method_map 输出 mangled 方法名: {vitro_name}__{method}
 - sort_int.cpp 是自由函数模板，不参与布局提取
 """
 
@@ -18,10 +18,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 # 相对于项目根目录
-INPUT_DIR = Path("native/runtime_libc/cide")
+INPUT_DIR = Path("native/runtime_libc/vitro")
 OUTPUT_PATH = Path("native/src/compiler/cpp_frontend/builtin_layout_data.json")
 
-# 类型到 size 的映射（与 Cide VM 32/64 位模型对齐，当前用 4 字节指针）
+# 类型到 size 的映射（与 Vitro VM 32/64 位模型对齐，当前用 4 字节指针）
 TYPE_SIZE = {
     "int": 4,
     "float": 4,
@@ -35,12 +35,12 @@ TYPE_SIZE = {
     "double*": 4,
 }
 
-# 文件名 -> (base_cide_name, base_cpp_name, [type_arg, ...])
+# 文件名 -> (base_vitro_name, base_cpp_name, [type_arg, ...])
 # sort_int.cpp 是自由函数模板，不在这里注册
 FILE_RULES = {
-    "vector.cpp": ("cide_vec", "vector<T>", ["int", "float", "char"]),
-    "list.cpp": ("cide_list", "list<T>", ["int"]),
-    "string.cpp": ("cide_string", "string", ["char"]),
+    "vector.cpp": ("vitro_vec", "vector<T>", ["int", "float", "char"]),
+    "list.cpp": ("vitro_list", "list<T>", ["int"]),
+    "string.cpp": ("vitro_string", "string", ["char"]),
 }
 
 
@@ -66,18 +66,18 @@ def parse_type_str(s: str) -> str:
     return s.strip()
 
 
-def mangle_template_name(base_cide: str, type_arg: str) -> str:
+def mangle_template_name(base_vitro: str, type_arg: str) -> str:
     """与编译器 TypeChecker::mangle_template_name 保持一致的内置容器短名规则。"""
     special = {
-        ("cide_vec", "int"): "cide_vec_int",
-        ("cide_vec", "float"): "cide_vec_float",
-        ("cide_vec", "char"): "cide_vec_char",
-        ("cide_list", "int"): "cide_list_int",
-        ("cide_string", "char"): "cide_string",
+        ("vitro_vec", "int"): "vitro_vec_int",
+        ("vitro_vec", "float"): "vitro_vec_float",
+        ("vitro_vec", "char"): "vitro_vec_char",
+        ("vitro_list", "int"): "vitro_list_int",
+        ("vitro_string", "char"): "vitro_string",
     }
-    if (base_cide, type_arg) in special:
-        return special[(base_cide, type_arg)]
-    return f"{base_cide}__{type_arg}"
+    if (base_vitro, type_arg) in special:
+        return special[(base_vitro, type_arg)]
+    return f"{base_vitro}__{type_arg}"
 
 
 def cpp_type_name(base_cpp: str, type_arg: str) -> str:
@@ -178,7 +178,7 @@ def parse_fields_and_methods(body: str, class_name: str, base_class_name: str) -
     假设方法在类内 inline 实现。
 
     class_name 用于输出 method_map 中的 mangled 名；
-    base_class_name 是源码中的模板类名（如 cide_vec），用于识别构造函数。
+    base_class_name 是源码中的模板类名（如 vitro_vec），用于识别构造函数。
     """
     fields = []
     methods = []
@@ -192,7 +192,7 @@ def parse_fields_and_methods(body: str, class_name: str, base_class_name: str) -
             access = seg_no_colon
             continue
 
-        # 字段声明: type name;（支持模板指针类型如 cide_list_node<int>*）
+        # 字段声明: type name;（支持模板指针类型如 vitro_list_node<int>*）
         field_m = re.match(r'^([^(]+?)\s+(\w+)\s*$', seg)
         if field_m and '(' not in seg and ')' not in seg:
             ty = field_m.group(1).strip()
@@ -219,7 +219,7 @@ def parse_fields_and_methods(body: str, class_name: str, base_class_name: str) -
             continue
 
         # 普通方法: ret name(params) { ... }
-        # 支持返回类型如: void, int, float*, cide_list_node_int*
+        # 支持返回类型如: void, int, float*, vitro_list_node_int*
         mm = re.match(r'((?:[\w:]+(?:\s*\*)?\s+)+)(\w+)\s*\(([^)]*)\)', seg)
         if mm:
             ret_raw = mm.group(1).strip()
@@ -258,15 +258,15 @@ def parse_fields_and_methods(body: str, class_name: str, base_class_name: str) -
     return fields, methods
 
 
-def derive_mangled_method_name(cide_class: str, method: str) -> str:
-    """根据 Cide mangling 规则生成方法函数名。
+def derive_mangled_method_name(vitro_class: str, method: str) -> str:
+    """根据 Vitro mangling 规则生成方法函数名。
 
     普通方法: {class}__{method}
     析构函数 (源码 ~Class()): __dtor__{class}
     """
     if method == "destroy":
-        return f"__dtor__{cide_class}"
-    return f"{cide_class}__{method}"
+        return f"__dtor__{vitro_class}"
+    return f"{vitro_class}__{method}"
 
 
 def process_cpp_file(path: Path) -> list[dict] | None:
@@ -274,32 +274,32 @@ def process_cpp_file(path: Path) -> list[dict] | None:
     if path.name not in FILE_RULES:
         return None
 
-    base_cide, base_cpp, type_args = FILE_RULES[path.name]
+    base_vitro, base_cpp, type_args = FILE_RULES[path.name]
     text = path.read_text(encoding='utf-8')
     text = strip_comments(text)
 
-    body = extract_class_definition(text, base_cide)
+    body = extract_class_definition(text, base_vitro)
     if not body:
-        print(f"Warning: class {base_cide} not found in {path}", file=sys.stderr)
+        print(f"Warning: class {base_vitro} not found in {path}", file=sys.stderr)
         return None
 
     results = []
     for type_arg in type_args:
-        cide_name = mangle_template_name(base_cide, type_arg)
+        vitro_name = mangle_template_name(base_vitro, type_arg)
         cpp_name = cpp_type_name(base_cpp, type_arg)
 
         # 替换字段和方法中的模板参数 T
         replaced_body = replace_type_param(body, "T", type_arg)
-        fields, methods = parse_fields_and_methods(replaced_body, cide_name, base_cide)
+        fields, methods = parse_fields_and_methods(replaced_body, vitro_name, base_vitro)
         size = sum(parse_type_size(f["type"]) for f in fields)
 
         method_map = {}
         for m in methods:
-            mangled = derive_mangled_method_name(cide_name, m["name"])
+            mangled = derive_mangled_method_name(vitro_name, m["name"])
             method_map[m["name"]] = mangled
 
         results.append({
-            "cide_name": cide_name,
+            "vitro_name": vitro_name,
             "cpp_name": cpp_name,
             "source_file": str(path).replace("\\", "/"),
             "size": size,
@@ -320,15 +320,15 @@ def main():
         if results is None:
             continue
         for data in results:
-            cide_name = data["cide_name"]
-            all_classes[cide_name] = {
+            vitro_name = data["vitro_name"]
+            all_classes[vitro_name] = {
                 "cpp_name": data["cpp_name"],
                 "source_file": data["source_file"],
                 "size": data["size"],
                 "fields": data["fields"],
                 "methods": data["methods"],
             }
-            all_method_map[cide_name] = data["method_map"]
+            all_method_map[vitro_name] = data["method_map"]
 
     output = {
         "version": 2,

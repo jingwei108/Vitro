@@ -1,14 +1,14 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use cide_native::compiler::ast::{AccessSpec, ClassMember, Stmt, TemplateArg, TemplateParam, Type, TypeKind};
-use cide_native::compiler::lexer::Lexer;
-use cide_native::compiler::parser::Parser;
+use vitro_native::compiler::ast::{AccessSpec, ClassMember, Stmt, TemplateArg, TemplateParam, Type, TypeKind};
+use vitro_native::compiler::lexer::Lexer;
+use vitro_native::compiler::parser::Parser;
 
 fn parse_cpp(
     src: &str,
 ) -> (
-    Option<cide_native::compiler::ast::ProgramNode>,
-    Vec<cide_native::compiler::parser::ParseError>,
+    Option<vitro_native::compiler::ast::ProgramNode>,
+    Vec<vitro_native::compiler::parser::ParseError>,
 ) {
     let (tokens, _) = Lexer::with_mode(src, true).tokenize();
     Parser::with_mode(tokens, true).parse()
@@ -215,7 +215,7 @@ int main() { return 0; }
         }
     }
     match &program.templates[0].decl {
-        cide_native::compiler::ast::Templateable::Func(ref f) => {
+        vitro_native::compiler::ast::Templateable::Func(ref f) => {
             assert_eq!(f.name, "max");
             assert_eq!(f.params.len(), 2);
         }
@@ -234,7 +234,7 @@ int main() { return 0; }
     let program = program.unwrap();
     assert_eq!(program.templates.len(), 1);
     match &program.templates[0].decl {
-        cide_native::compiler::ast::Templateable::Class(ref c) => {
+        vitro_native::compiler::ast::Templateable::Class(ref c) => {
             assert_eq!(c.name, "Box");
             assert_eq!(c.members.len(), 1);
         }
@@ -259,7 +259,7 @@ int main() { return 0; }
     let program = program.unwrap();
     assert_eq!(program.templates.len(), 1);
     match &program.templates[0].decl {
-        cide_native::compiler::ast::Templateable::Class(ref c) => {
+        vitro_native::compiler::ast::Templateable::Class(ref c) => {
             assert_eq!(c.name, "unique_ptr");
             let method = match &c.members[2] {
                 ClassMember::Method { name, params, .. } => {
@@ -298,7 +298,7 @@ fn test_parser_cpp_mode_class_as_identifier_in_c() {
 // C++ Expression / Statement Tests (Step 4)
 // ============================================================================
 
-use cide_native::compiler::ast::Expr;
+use vitro_native::compiler::ast::Expr;
 
 #[test]
 fn test_parser_cpp_this_expr() {
@@ -415,7 +415,7 @@ int main() {
     if let Stmt::Block { stmts, .. } = body {
         if let Stmt::RangeFor { var, var_type, .. } = &stmts[2] {
             assert_eq!(var, "x");
-            assert!(matches!(var_type, cide_native::compiler::ast::Type::Auto));
+            assert!(matches!(var_type, vitro_native::compiler::ast::Type::Auto));
         } else {
             panic!("Expected RangeFor, got {:?}", stmts[2]);
         }
@@ -439,7 +439,7 @@ int main() {
     let body = program.funcs[0].body.as_ref().unwrap();
     if let Stmt::Block { stmts, .. } = body {
         if let Stmt::VarDecl { var_type, .. } = &stmts[0] {
-            if let cide_native::compiler::ast::Type::TemplateId { base, args, .. } = var_type {
+            if let vitro_native::compiler::ast::Type::TemplateId { base, args, .. } = var_type {
                 assert_eq!(base, "vector");
                 assert_eq!(args.len(), 1);
                 assert!(matches!(args[0], TemplateArg::Type(Type::Int { .. })));
@@ -469,8 +469,8 @@ int main() {
     let body = program.funcs[0].body.as_ref().unwrap();
     if let Stmt::Block { stmts, .. } = body {
         if let Stmt::VarDecl { var_type, .. } = &stmts[0] {
-            if let cide_native::compiler::ast::Type::Pointer { pointee, .. } = var_type {
-                if let cide_native::compiler::ast::Type::TemplateId { base, args, .. } = pointee.as_ref() {
+            if let vitro_native::compiler::ast::Type::Pointer { pointee, .. } = var_type {
+                if let vitro_native::compiler::ast::Type::TemplateId { base, args, .. } = pointee.as_ref() {
                     assert_eq!(base, "vector");
                     assert_eq!(args.len(), 1);
                     assert!(matches!(args[0], TemplateArg::Type(Type::Int { .. })));
@@ -612,7 +612,7 @@ int main() { return 0; }
         }
     }
     match &program.templates[0].decl {
-        cide_native::compiler::ast::Templateable::Class(c) => {
+        vitro_native::compiler::ast::Templateable::Class(c) => {
             assert_eq!(c.name, "Pair");
             assert_eq!(c.members.len(), 2);
         }

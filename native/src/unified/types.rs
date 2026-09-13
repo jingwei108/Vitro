@@ -79,8 +79,8 @@ pub struct ArraySnapshot {
     pub elements: Vec<String>,
 }
 
-impl From<cide_runtime::ArraySnapshotData> for ArraySnapshot {
-    fn from(value: cide_runtime::ArraySnapshotData) -> Self {
+impl From<vitro_runtime::ArraySnapshotData> for ArraySnapshot {
+    fn from(value: vitro_runtime::ArraySnapshotData) -> Self {
         Self {
             name: value.name,
             element_ty: value.element_ty,

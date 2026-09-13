@@ -1,24 +1,24 @@
-# Cide CLI 使用手册
+# Vitro CLI 使用手册
 
 > 最后核对日期：2026-09-11
-> 修订说明（2026-09-11）：去前端化——移除已删除的 `CIDE_CLI_EN.md` 链接，入口表述改为"无前端依赖"并补三出口交叉引用。
-> 出口定位：本文档描述的是"三出口一核心"中的**出口 3**（`cide_cli serve` JSON-lines 会话模式）；另两个出口为 C ABI（`native/src/capi/`）与 wasm32，完整清单与职责边界见 [`后端定位与白箱计划.md`](../../01-定位与路线 §2.2。
+> 修订说明（2026-09-11）：去前端化——移除已删除的 `VITRO_CLI_EN.md` 链接，入口表述改为"无前端依赖"并补三出口交叉引用。
+> 出口定位：本文档描述的是"三出口一核心"中的**出口 3**（`vitro_cli serve` JSON-lines 会话模式）；另两个出口为 C ABI（`native/src/capi/`）与 wasm32，完整清单与职责边界见 [`后端定位与白箱计划.md`](../../01-定位与路线 §2.2。
 
-`cide_cli` 是 Cide 项目 Rust 后端的命令行调试工具，**无前端依赖（headless 交互第一入口）**，可直接编译、运行和单步调试 C 代码。
+`vitro_cli` 是 Vitro 项目 Rust 后端的命令行调试工具，**无前端依赖（headless 交互第一入口）**，可直接编译、运行和单步调试 C 代码。
 
 ## 构建
 
 ```bash
 cd native
-cargo build --release --bin cide_cli
+cargo build --release --bin vitro_cli
 ```
 
-构建产物位于 `native/target/release/cide_cli`（Linux/macOS）或 `native/target/release/cide_cli.exe`（Windows）。
+构建产物位于 `native/target/release/vitro_cli`（Linux/macOS）或 `native/target/release/vitro_cli.exe`（Windows）。
 
 ## 基本用法
 
 ```bash
-cide_cli <command> <file> [options]
+vitro_cli <command> <file> [options]
 ```
 
 ## 命令
@@ -45,10 +45,10 @@ cide_cli <command> <file> [options]
 ```bash
 # 管道方式
 echo '#include <stdio.h>
-int main() { printf("hello\n"); return 0; }' | cide_cli run -
+int main() { printf("hello\n"); return 0; }' | vitro_cli run -
 
 # here-document 方式
-cide_cli compile - <<'EOF'
+vitro_cli compile - <<'EOF'
 #include <stdio.h>
 int main() {
     int a = 10, b = 20;
@@ -63,7 +63,7 @@ EOF
 ### 1. 编译并检查诊断
 
 ```bash
-cide_cli compile hello.c
+vitro_cli compile hello.c
 ```
 
 输出示例：
@@ -85,7 +85,7 @@ cide_cli compile hello.c
 ### 2. 全速运行
 
 ```bash
-cide_cli run hello.c
+vitro_cli run hello.c
 ```
 
 输出示例：
@@ -93,7 +93,7 @@ cide_cli run hello.c
 编译成功。
 
 === 运行输出 ===
-Hello, Cide CLI!
+Hello, Vitro CLI!
 
 程序运行完成，返回值：0
 ```
@@ -104,13 +104,13 @@ Hello, Cide CLI!
 # input.txt 内容：
 # 5 7
 
-cide_cli run sum.c -i input.txt
+vitro_cli run sum.c -i input.txt
 ```
 
 ### 4. 交互式单步调试
 
 ```bash
-cide_cli step hello.c
+vitro_cli step hello.c
 ```
 
 进入调试交互后，支持的命令：
@@ -138,7 +138,7 @@ cide_cli step hello.c
 ### 5. 统一模式（时间旅行引擎）
 
 ```bash
-cide_cli unified hello.c
+vitro_cli unified hello.c
 ```
 
 输出示例：
@@ -154,12 +154,12 @@ cide_cli unified hello.c
 sum=15
 ```
 
-统一模式会完整记录每一步的 VM 状态，支持检查点保存和回溯；`cide_cli serve` 的 `step.begin` / `step.next` / `seek` 与之共用同一 `UnifiedEngine`（三出口一套语义，见 §6）。
+统一模式会完整记录每一步的 VM 状态，支持检查点保存和回溯；`vitro_cli serve` 的 `step.begin` / `step.next` / `seek` 与之共用同一 `UnifiedEngine`（三出口一套语义，见 §6）。
 
 对于可能超过默认 10 万步限制的长程序，可使用 `--max-steps` 放宽限制：
 
 ```bash
-cide_cli unified long_sort.c --max-steps 500000
+vitro_cli unified long_sort.c --max-steps 500000
 ```
 
 ### 6. serve：JSON-lines 会话模式（Phase 1 出口 3）
@@ -168,7 +168,7 @@ cide_cli unified long_sort.c --max-steps 500000
 供 IDE 后端/判分服务/自动化脚本以任意语言消费，无需 ctypes 或 FFI。
 
 ```bash
-cide_cli serve
+vitro_cli serve
 ```
 
 协议契约：
@@ -221,7 +221,7 @@ cide_cli serve
 示例（一次会话跑完编译 → 运行 → 取输出 → 单步 → 收尾）：
 
 ```bash
-$ cide_cli serve <<'EOF'
+$ vitro_cli serve <<'EOF'
 {"id":1,"method":"compile","params":{"source":"#include <stdio.h>\nint main(){ printf(\"%d\", 1+2); return 0; }\n"}}
 {"id":2,"method":"run"}
 {"id":3,"method":"output.delta","params":{"cursor":0}}
@@ -242,7 +242,7 @@ EOF
 > 上述输出为 2026-09-11 实测（字段顺序由 JSON 对象语义决定，消费方不应依赖顺序）。
 >
 > **E-P1-5（输出通道）**：`output.delta` 默认返回 `stream:"display"` —— 即展示视图，除程序输出外
-> 还含 Cide 追加的"程序运行完成"提示与（有泄漏时的）泄漏报告，供 UI 原样显示。
+> 还含 Vitro 追加的"程序运行完成"提示与（有泄漏时的）泄漏报告，供 UI 原样显示。
 > 需要**纯净程序 stdout**（判分 / 与 Clang golden 比对）时传 `"stream":"stdout"`：
 >
 > ```json
@@ -253,7 +253,7 @@ EOF
 > `OutputKind` 给每段输出打标，消费方**不得**再对文本做正则清洗——此前散落十余处的
 > "程序运行完成"清洗规则已在 E-P1-5 中全部废除（程序自己打印同类文本时会被误删）。
 >
-> 与 `jq` 配合：`cide_cli serve < session.ndjson | jq -c 'select(.ok|not)'` 可只筛错误帧。
+> 与 `jq` 配合：`vitro_cli serve < session.ndjson | jq -c 'select(.ok|not)'` 可只筛错误帧。
 >
 > **输入语义（`InputMode`）**：`run` 的 `batch_input`（默认 `false`）决定"输入耗尽"的含义：
 >
@@ -263,12 +263,12 @@ EOF
 >   程序正常 `finished`——`while (scanf("%d", &n) != EOF)` 这类 C 第一课习语依赖此语义。
 >   **判分 / 批量路径应以 `batch_input:true` 为准**（一次性给全 stdin 时语义等价于 EOF）。
 >
-> CLI 的 `cide_cli run <file> -i <input>`（headless 批处理）固定走 Batch，无需额外参数。
+> CLI 的 `vitro_cli run <file> -i <input>`（headless 批处理）固定走 Batch，无需额外参数。
 >
 > **EOF 粘滞**（2026-09-12 补，对齐 C11 7.21.5.1 `feof`）：Batch 下**任一路径**首次判定
 > "流耗尽"即置位 `stdin_eof` 并把读取游标推到底——此后 `scanf`/`getchar` 一律返回 `-1`，
 > 未消费的尾部空白不会被"复活"重读。此前 `scanf` 触发的 EOF 对 `getchar` 不可见：
-> 输入 `7\n` 时 Clang 给 `r1=1 r2=-1 c=-1`，Cide 曾给 `c=10`。交互模式下调 `input.feed`
+> 输入 `7\n` 时 Clang 给 `r1=1 r2=-1 c=-1`，Vitro 曾给 `c=10`。交互模式下调 `input.feed`
 > 属"新内容到达"，会清除该粘滞位（管道语义下本不可复活，教学交互例外）。
 >
 > **交互喂入状态机**：`run` → `waiting_input` → `input.feed {text}` → `running`
@@ -288,10 +288,10 @@ EOF
 ```bash
 # 测试 printf
 echo '#include <stdio.h>
-int main() { printf("ok\n"); return 0; }' | cide_cli run -
+int main() { printf("ok\n"); return 0; }' | vitro_cli run -
 
 # 测试循环
-cide_cli unified - <<'EOF'
+vitro_cli unified - <<'EOF'
 #include <stdio.h>
 int main() {
     int s = 0;
@@ -302,7 +302,7 @@ int main() {
 EOF
 
 # 测试 scanf + 输入
-cat <<'EOF' | cide_cli run - -i /dev/stdin
+cat <<'EOF' | vitro_cli run - -i /dev/stdin
 #include <stdio.h>
 int main() { int a,b; scanf("%d%d",&a,&b); printf("%d\n",a+b); return 0; }
 EOF

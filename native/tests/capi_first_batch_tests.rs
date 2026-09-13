@@ -1,15 +1,15 @@
 //! capi 第一批集成测试（对应 `CAPI评审回复与实现状态.md` §8 review 基线第 3 条：
 //! 每个新函数带 capi 集成测试）。
 //!
-//! 契约验证点：JSON 字符串所有权（rust-alloc + `cide_free_string`）、状态码约定、
+//! 契约验证点：JSON 字符串所有权（rust-alloc + `vitro_free_string`）、状态码约定、
 //! 诊断 severity/end 字段、运行结果字段、输出游标增量、会话级保险丝。
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use std::ffi::{c_char, CStr, CString};
 
-use cide_native::capi;
-use cide_native::session::Session;
+use vitro_native::capi;
+use vitro_native::session::Session;
 
 /// 读取 rust-alloc 字符串并按契约释放。
 unsafe fn take_string(p: *mut c_char) -> String {
@@ -17,39 +17,39 @@ unsafe fn take_string(p: *mut c_char) -> String {
         return String::new();
     }
     let s = CStr::from_ptr(p).to_string_lossy().to_string();
-    capi::cide_free_string(p);
+    capi::vitro_free_string(p);
     s
 }
 
 fn compile_session(source: &str) -> *mut Session {
     unsafe {
-        let session = capi::cide_session_create();
+        let session = capi::vitro_session_create();
         assert!(!session.is_null(), "session 创建失败");
         let fname = CString::new("main.c").unwrap();
         let src = CString::new(source).unwrap();
-        capi::cide_compile_unit(session, fname.as_ptr(), src.as_ptr());
-        // cide_compile_unit 只收集单元，需触发真实编译
-        take_string(capi::cide_compile_json(session));
+        capi::vitro_compile_unit(session, fname.as_ptr(), src.as_ptr());
+        // vitro_compile_unit 只收集单元，需触发真实编译
+        take_string(capi::vitro_compile_json(session));
         session
     }
 }
 
 fn run_json(session: *mut Session) -> serde_json::Value {
     unsafe {
-        let s = take_string(capi::cide_run_json(session));
+        let s = take_string(capi::vitro_run_json(session));
         serde_json::from_str(&s).unwrap_or_else(|e| panic!("run_json 非法 JSON: {} / {}", e, s))
     }
 }
 
-/// 运行至结束并取出程序输出（含 Cide 追加的完成提示/泄漏报告）。
+/// 运行至结束并取出程序输出（含 Vitro 追加的完成提示/泄漏报告）。
 fn run_and_take_output(session: *mut Session) -> String {
     let v = run_json(session);
     assert_eq!(v["status"], "finished", "程序应正常结束: {}", v);
     unsafe {
-        let d = take_string(capi::cide_get_output_delta(session, 0));
+        let d = take_string(capi::vitro_get_output_delta(session, 0));
         let dv: serde_json::Value = serde_json::from_str(&d).unwrap();
         let text = dv["delta"].as_str().unwrap_or("").to_string();
-        capi::cide_session_destroy(session);
+        capi::vitro_session_destroy(session);
         text
     }
 }
@@ -59,20 +59,20 @@ fn run_and_take_output(session: *mut Session) -> String {
 #[test]
 fn test_abi_version_is_released_by_free_string() {
     unsafe {
-        let v = take_string(capi::cide_abi_version());
-        assert_eq!(v, capi::CIDE_ABI_VERSION, "ABI 版本串应与常量一致");
+        let v = take_string(capi::vitro_abi_version());
+        assert_eq!(v, capi::VITRO_ABI_VERSION, "ABI 版本串应与常量一致");
         // 再次调用确认指针所有权契约可重复使用（每次返回独立分配）
-        let v2 = take_string(capi::cide_abi_version());
+        let v2 = take_string(capi::vitro_abi_version());
         assert_eq!(v2, v);
         // null 释放必须安全
-        capi::cide_free_string(std::ptr::null_mut());
+        capi::vitro_free_string(std::ptr::null_mut());
     }
 }
 
 #[test]
 fn test_engine_version_non_empty() {
     unsafe {
-        let v = take_string(capi::cide_engine_version());
+        let v = take_string(capi::vitro_engine_version());
         assert!(!v.is_empty(), "engine_version 不应为空");
     }
 }
@@ -84,19 +84,19 @@ fn test_compile_errors_length_matches_string() {
     unsafe {
         // 干净会话：无编译错误 → length 0 且指针为 null
         let ok = compile_session("int main() { return 0; }");
-        assert_eq!(capi::cide_get_compile_errors_length(ok), 0, "无错误应返回 0");
-        assert!(capi::cide_get_compile_errors(ok).is_null(), "无错误应返回 null");
-        capi::cide_session_destroy(ok);
+        assert_eq!(capi::vitro_get_compile_errors_length(ok), 0, "无错误应返回 0");
+        assert!(capi::vitro_get_compile_errors(ok).is_null(), "无错误应返回 null");
+        capi::vitro_session_destroy(ok);
 
         // 编译失败会话：length > 0 且与 NUL 终止串字节数一致（不含 NUL）
         let bad = compile_session("int main() { int x = ; }");
-        let n = capi::cide_get_compile_errors_length(bad);
+        let n = capi::vitro_get_compile_errors_length(bad);
         assert!(n > 0, "编译错误时 length 应 > 0");
-        let p = capi::cide_get_compile_errors(bad);
+        let p = capi::vitro_get_compile_errors(bad);
         assert!(!p.is_null(), "编译错误时应返回非 null 指针");
         let bytes = CStr::from_ptr(p).to_bytes();
         assert_eq!(bytes.len(), n as usize, "length 应等于不含 NUL 的字节长度");
-        capi::cide_session_destroy(bad);
+        capi::vitro_session_destroy(bad);
     }
 }
 
@@ -106,10 +106,10 @@ fn test_compile_errors_length_matches_string() {
 fn test_last_error_none_when_clean() {
     let session = compile_session("int main(){ return 0; }\n");
     unsafe {
-        let s = take_string(capi::cide_last_error(session));
+        let s = take_string(capi::vitro_last_error(session));
         let v: serde_json::Value = serde_json::from_str(&s).unwrap();
         assert_eq!(v["kind"], "none");
-        capi::cide_session_destroy(session);
+        capi::vitro_session_destroy(session);
     }
 }
 
@@ -119,7 +119,7 @@ fn test_last_error_reports_runtime_trap() {
     let r = run_json(session);
     assert_eq!(r["status"], "trap");
     unsafe {
-        let s = take_string(capi::cide_last_error(session));
+        let s = take_string(capi::vitro_last_error(session));
         let v: serde_json::Value = serde_json::from_str(&s).unwrap();
         assert_eq!(v["kind"], "runtime");
         assert!(
@@ -127,7 +127,7 @@ fn test_last_error_reports_runtime_trap() {
             "运行期错误应透传领域错误码: {}",
             v["message"]
         );
-        capi::cide_session_destroy(session);
+        capi::vitro_session_destroy(session);
     }
 }
 
@@ -137,7 +137,7 @@ fn test_last_error_reports_runtime_trap() {
 fn test_compile_json_success_has_empty_or_warning_diagnostics() {
     let session = compile_session("int main(){ int x = 1; return x; }\n");
     unsafe {
-        let s = take_string(capi::cide_compile_json(session));
+        let s = take_string(capi::vitro_compile_json(session));
         let v: serde_json::Value = serde_json::from_str(&s).unwrap();
         assert_eq!(v["ok"], true, "合法程序应编译成功: {}", s);
         assert!(v["diagnostics"].is_array(), "diagnostics 必须是数组");
@@ -147,7 +147,7 @@ fn test_compile_json_success_has_empty_or_warning_diagnostics() {
                 assert_ne!(d["severity"], "error", "成功编译不应有 error 级诊断: {}", d);
             }
         }
-        capi::cide_session_destroy(session);
+        capi::vitro_session_destroy(session);
     }
 }
 
@@ -155,7 +155,7 @@ fn test_compile_json_success_has_empty_or_warning_diagnostics() {
 fn test_compile_json_error_reports_severity_and_end_columns() {
     let session = compile_session("int main(){ int x = ; return 0; }\n");
     unsafe {
-        let s = take_string(capi::cide_compile_json(session));
+        let s = take_string(capi::vitro_compile_json(session));
         let v: serde_json::Value = serde_json::from_str(&s).unwrap();
         assert_eq!(v["ok"], false, "语法错误应编译失败");
         let arr = v["diagnostics"].as_array().expect("必须有诊断");
@@ -166,7 +166,7 @@ fn test_compile_json_error_reports_severity_and_end_columns() {
         assert!(d["end_column"].as_i64().unwrap_or(0) > d["column"].as_i64().unwrap_or(0),
             "end_column 至少为起点 + 1（schema 先带字段）");
         assert!(d["code"].as_str().unwrap_or("").starts_with('E'), "code 应为 E 码形式");
-        capi::cide_session_destroy(session);
+        capi::vitro_session_destroy(session);
     }
 }
 
@@ -177,7 +177,7 @@ fn test_run_json_finished_reports_return_value_and_steps() {
     let session = compile_session("int main(){ return 7; }\n");
     // 先编译
     unsafe {
-        take_string(capi::cide_compile_json(session));
+        take_string(capi::vitro_compile_json(session));
     }
     let r = run_json(session);
     assert_eq!(r["ok"], true, "正常程序 ok 应为 true: {}", r);
@@ -185,17 +185,17 @@ fn test_run_json_finished_reports_return_value_and_steps() {
     assert_eq!(r["return_value"], 7, "return_value 应透传 main 返回值");
     assert!(r["steps_executed"].as_i64().unwrap_or(0) > 0, "steps_executed 应大于 0");
     assert_eq!(r["waiting_input"], false);
-    unsafe { capi::cide_session_destroy(session) };
+    unsafe { capi::vitro_session_destroy(session) };
 }
 
 #[test]
 fn test_run_json_without_compile_reports_not_compiled() {
     unsafe {
-        let session = capi::cide_session_create();
+        let session = capi::vitro_session_create();
         let r = run_json(session);
         assert_eq!(r["status"], "not_compiled");
         assert_eq!(r["ok"], false);
-        capi::cide_session_destroy(session);
+        capi::vitro_session_destroy(session);
     }
 }
 
@@ -205,13 +205,13 @@ fn test_run_json_without_compile_reports_not_compiled() {
 fn test_output_delta_cursor_semantics() {
     let session = compile_session("#include <stdio.h>\nint main(){ printf(\"abc\"); return 0; }\n");
     unsafe {
-        take_string(capi::cide_compile_json(session));
+        take_string(capi::vitro_compile_json(session));
     }
     let r = run_json(session);
     assert_eq!(r["status"], "finished");
 
     unsafe {
-        let first = take_string(capi::cide_get_output_delta(session, 0));
+        let first = take_string(capi::vitro_get_output_delta(session, 0));
         let v: serde_json::Value = serde_json::from_str(&first).unwrap();
         let delta = v["delta"].as_str().unwrap_or("");
         assert!(delta.starts_with("abc"), "初始游标应包含程序输出: {}", delta);
@@ -221,17 +221,17 @@ fn test_output_delta_cursor_semantics() {
         assert_eq!(total as usize, delta.len(), "游标为 0 时增量长度应等于总长度");
 
         // 再取一次：游标已到末尾，增量为空
-        let again = take_string(capi::cide_get_output_delta(session, cursor as i32));
+        let again = take_string(capi::vitro_get_output_delta(session, cursor as i32));
         let v2: serde_json::Value = serde_json::from_str(&again).unwrap();
         assert_eq!(v2["delta"], "", "游标之后的增量为空");
         assert_eq!(v2["cursor"], total);
 
         // 负游标按 0 处理
-        let neg = take_string(capi::cide_get_output_delta(session, -5));
+        let neg = take_string(capi::vitro_get_output_delta(session, -5));
         let v3: serde_json::Value = serde_json::from_str(&neg).unwrap();
         assert_eq!(v3["delta"].as_str().unwrap_or(""), delta, "负游标应按 0 处理");
 
-        capi::cide_session_destroy(session);
+        capi::vitro_session_destroy(session);
     }
 }
 
@@ -241,8 +241,8 @@ fn test_output_delta_cursor_semantics() {
 fn test_set_max_steps_traps_infinite_loop() {
     let session = compile_session("int main(){ for(;;){} return 0; }\n");
     unsafe {
-        take_string(capi::cide_compile_json(session));
-        assert_eq!(capi::cide_set_max_steps(session, 1000), 0, "设置步数上限应成功");
+        take_string(capi::vitro_compile_json(session));
+        assert_eq!(capi::vitro_set_max_steps(session, 1000), 0, "设置步数上限应成功");
     }
     let r = run_json(session);
     assert_eq!(r["status"], "trap", "死循环应被步数保险丝拦下: {}", r);
@@ -253,9 +253,9 @@ fn test_set_max_steps_traps_infinite_loop() {
     );
     unsafe {
         // 非法入参
-        assert_eq!(capi::cide_set_max_steps(std::ptr::null_mut(), 100), -1);
-        assert_eq!(capi::cide_set_max_steps(session, 0), -1);
-        capi::cide_session_destroy(session);
+        assert_eq!(capi::vitro_set_max_steps(std::ptr::null_mut(), 100), -1);
+        assert_eq!(capi::vitro_set_max_steps(session, 0), -1);
+        capi::vitro_session_destroy(session);
     }
 }
 
@@ -263,8 +263,8 @@ fn test_set_max_steps_traps_infinite_loop() {
 fn test_set_call_depth_limit_traps_deep_recursion() {
     let session = compile_session("int f(int n){ return f(n + 1); }\nint main(){ return f(0); }\n");
     unsafe {
-        take_string(capi::cide_compile_json(session));
-        assert_eq!(capi::cide_set_call_depth_limit(session, 50), 0);
+        take_string(capi::vitro_compile_json(session));
+        assert_eq!(capi::vitro_set_call_depth_limit(session, 50), 0);
     }
     let r = run_json(session);
     assert_eq!(r["status"], "trap", "无限递归应被调用深度保险丝拦下: {}", r);
@@ -273,7 +273,7 @@ fn test_set_call_depth_limit_traps_deep_recursion() {
         "trap 应说明调用深度超限: {}",
         r["trap"]
     );
-    unsafe { capi::cide_session_destroy(session) };
+    unsafe { capi::vitro_session_destroy(session) };
 }
 
 #[test]
@@ -284,15 +284,15 @@ fn test_set_deterministic_freezes_time() {
     let src = "#include <stdio.h>\nlong time(long *t);\nint main(){ printf(\"%d\", (int)time((long*)0)); return 0; }\n";
     let session = compile_session(src);
     unsafe {
-        take_string(capi::cide_compile_json(session));
-        assert_eq!(capi::cide_get_deterministic(session), 0, "默认关闭");
-        assert_eq!(capi::cide_set_deterministic(session, 1), 0);
-        assert_eq!(capi::cide_get_deterministic(session), 1);
+        take_string(capi::vitro_compile_json(session));
+        assert_eq!(capi::vitro_get_deterministic(session), 0, "默认关闭");
+        assert_eq!(capi::vitro_set_deterministic(session, 1), 0);
+        assert_eq!(capi::vitro_get_deterministic(session), 1);
     }
     let r = run_json(session);
     assert_eq!(r["status"], "finished", "确定性运行时不应 trap: {}", r);
     unsafe {
-        let out = take_string(capi::cide_get_output_delta(session, 0));
+        let out = take_string(capi::vitro_get_output_delta(session, 0));
         let v: serde_json::Value = serde_json::from_str(&out).unwrap();
         let delta = v["delta"].as_str().unwrap_or("");
         assert!(
@@ -300,7 +300,7 @@ fn test_set_deterministic_freezes_time() {
             "确定性模式下 time() 必须固定为 0（输出以 0 起）: {}",
             delta
         );
-        capi::cide_session_destroy(session);
+        capi::vitro_session_destroy(session);
     }
 }
 
@@ -309,13 +309,13 @@ fn test_set_deterministic_freezes_time() {
 #[test]
 fn test_step_begin_requires_compiled_session() {
     unsafe {
-        let session = capi::cide_session_create();
+        let session = capi::vitro_session_create();
         assert_eq!(
-            capi::cide_step_begin(session),
+            capi::vitro_step_begin(session),
             -2,
             "未编译会话初始化统一模式应返回 -2"
         );
-        capi::cide_session_destroy(session);
+        capi::vitro_session_destroy(session);
     }
 }
 
@@ -325,14 +325,14 @@ fn test_step_next_and_payload_schema_fields() {
         "#include <stdio.h>\nint main(){ int a = 1; int b = 2; printf(\"%d\", a + b); return 0; }\n",
     );
     unsafe {
-        assert_eq!(capi::cide_step_begin(session), 0, "已编译会话应能初始化统一模式");
+        assert_eq!(capi::vitro_step_begin(session), 0, "已编译会话应能初始化统一模式");
         for _ in 0..5 {
-            let s = take_string(capi::cide_step_next_json(session));
+            let s = take_string(capi::vitro_step_next_json(session));
             let v: serde_json::Value = serde_json::from_str(&s).unwrap();
             assert!(v["payloads"].is_array(), "每步应返回 payload 数组: {}", s);
             assert_eq!(v["trapped"], false, "正常程序不应 trap: {}", s);
         }
-        let s = take_string(capi::cide_get_step_payloads_json(session, 0, 100));
+        let s = take_string(capi::vitro_get_step_payloads_json(session, 0, 100));
         let v: serde_json::Value = serde_json::from_str(&s).unwrap();
         let arr = v["payloads"].as_array().expect("应有 payloads 数组");
         assert!(!arr.is_empty(), "累积步应有 payload: {}", s);
@@ -353,7 +353,7 @@ fn test_step_next_and_payload_schema_fields() {
         // 窗口语义字段
         assert!(v.get("cache_start_step").is_some());
         assert!(v.get("max_collected_step").is_some());
-        capi::cide_session_destroy(session);
+        capi::vitro_session_destroy(session);
     }
 }
 
@@ -363,14 +363,14 @@ fn test_set_breakpoints_pauses_on_hit() {
         "#include <stdio.h>\nint main(){\n    int a = 1;\n    printf(\"%d\", a);\n    return 0;\n}\n",
     );
     unsafe {
-        assert_eq!(capi::cide_step_begin(session), 0);
+        assert_eq!(capi::vitro_step_begin(session), 0);
         // 注意：必须在 step_begin 之后设置断点（step_begin 会重建 VM 并清空断点）
         let json = CString::new("[4]").unwrap();
-        assert_eq!(capi::cide_set_breakpoints(session, json.as_ptr()), 0);
+        assert_eq!(capi::vitro_set_breakpoints(session, json.as_ptr()), 0);
 
         let mut paused_seen = false;
         for _ in 0..200 {
-            let s = take_string(capi::cide_step_next_json(session));
+            let s = take_string(capi::vitro_step_next_json(session));
             let v: serde_json::Value = serde_json::from_str(&s).unwrap();
             if v["paused"].as_bool().unwrap_or(false) {
                 paused_seen = true;
@@ -384,9 +384,9 @@ fn test_set_breakpoints_pauses_on_hit() {
 
         // 非法入参
         let bad = CString::new("not-json").unwrap();
-        assert_eq!(capi::cide_set_breakpoints(session, bad.as_ptr()), -1);
-        assert_eq!(capi::cide_set_breakpoints(std::ptr::null_mut(), json.as_ptr()), -1);
-        capi::cide_session_destroy(session);
+        assert_eq!(capi::vitro_set_breakpoints(session, bad.as_ptr()), -1);
+        assert_eq!(capi::vitro_set_breakpoints(std::ptr::null_mut(), json.as_ptr()), -1);
+        capi::vitro_session_destroy(session);
     }
 }
 
@@ -421,17 +421,17 @@ fn test_set_quarantine_budget_controls_address_reuse() {
     let session = compile_session(QUARANTINE_PROBE);
     unsafe {
         assert_eq!(
-            capi::cide_set_quarantine_budget(session, -1),
+            capi::vitro_set_quarantine_budget(session, -1),
             -1,
             "负预算必须被拒绝"
         );
         assert_eq!(
-            capi::cide_set_quarantine_budget(session, 0),
+            capi::vitro_set_quarantine_budget(session, 0),
             0,
             "预算 0 表示关闭隔离，应被接受"
         );
         assert_eq!(
-            capi::cide_get_quarantine_budget(session),
+            capi::vitro_get_quarantine_budget(session),
             0,
             "读回应与写入一致"
         );
@@ -448,21 +448,21 @@ fn test_set_quarantine_budget_controls_address_reuse() {
 fn test_quarantine_budget_is_clamped_to_heap_limit() {
     let session = compile_session(QUARANTINE_PROBE);
     unsafe {
-        assert_eq!(capi::cide_set_quarantine_budget(session, i32::MAX), 0);
-        let budget = capi::cide_get_quarantine_budget(session);
+        assert_eq!(capi::vitro_set_quarantine_budget(session, i32::MAX), 0);
+        let budget = capi::vitro_get_quarantine_budget(session);
         assert!(
             budget > 0 && budget <= 1024 * 1024,
             "预算应被裁剪到堆上限（1MB）内，实际 {}",
             budget
         );
-        capi::cide_session_destroy(session);
+        capi::vitro_session_destroy(session);
     }
 }
 
 #[test]
 fn test_quarantine_budget_setter_rejects_null_session() {
     unsafe {
-        assert_eq!(capi::cide_set_quarantine_budget(std::ptr::null_mut(), 1024), -1);
-        assert_eq!(capi::cide_get_quarantine_budget(std::ptr::null_mut()), -1);
+        assert_eq!(capi::vitro_set_quarantine_budget(std::ptr::null_mut(), 1024), -1);
+        assert_eq!(capi::vitro_get_quarantine_budget(std::ptr::null_mut()), -1);
     }
 }

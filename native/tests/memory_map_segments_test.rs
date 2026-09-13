@@ -12,8 +12,8 @@
 //!   体内 `a` 指向调用者的 `x`，只看当前帧永远解不出名字（S3 §6 观测 #2：`target_addr`
 //!   正确而 `target_name == ""`）。
 
-use cide_native::session::{CompileUnit, Session};
-use cide_native::session_api;
+use vitro_native::session::{CompileUnit, Session};
+use vitro_native::session_api;
 
 const SWAP_SRC: &str = r#"#include <stdio.h>
 

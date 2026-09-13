@@ -109,7 +109,7 @@
   "badjson_out": 0,
   "died": false,
   "died_at": "",
-  "stderr": "cide_cli serve：JSON-lines 会话模式（EOF 或 shutdown 退出）\n",
+  "stderr": "vitro_cli serve：JSON-lines 会话模式（EOF 或 shutdown 退出）\n",
   "responses_detail": [
    {
     "i": 1,

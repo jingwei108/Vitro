@@ -1,9 +1,0 @@
-[package]
-name = "cide_runtime"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-cide_ast = { path = "../cide_ast" }
-cide_shared = { path = "../cide_shared" }
-serde = { version = "1.0", features = ["derive"] }

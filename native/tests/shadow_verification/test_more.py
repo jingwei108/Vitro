@@ -1,33 +1,33 @@
 import ctypes, sys, io
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-DLL = ctypes.CDLL("../../target/release/cide_native.dll")
-DLL.cide_session_create.restype = ctypes.c_void_p
-DLL.cide_session_destroy.argtypes = [ctypes.c_void_p]
-DLL.cide_compile.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
-DLL.cide_compile.restype = ctypes.c_int
-DLL.cide_run.argtypes = [ctypes.c_void_p]
-DLL.cide_run.restype = ctypes.c_int
-DLL.cide_get_program_output_length.argtypes = [ctypes.c_void_p]
-DLL.cide_get_program_output_length.restype = ctypes.c_int
-DLL.cide_get_program_output.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_int]
+DLL = ctypes.CDLL("../../target/release/vitro_native.dll")
+DLL.vitro_session_create.restype = ctypes.c_void_p
+DLL.vitro_session_destroy.argtypes = [ctypes.c_void_p]
+DLL.vitro_compile.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+DLL.vitro_compile.restype = ctypes.c_int
+DLL.vitro_run.argtypes = [ctypes.c_void_p]
+DLL.vitro_run.restype = ctypes.c_int
+DLL.vitro_get_program_output_length.argtypes = [ctypes.c_void_p]
+DLL.vitro_get_program_output_length.restype = ctypes.c_int
+DLL.vitro_get_program_output.argtypes = [ctypes.c_void_p, ctypes.c_char_p, ctypes.c_int]
 
 results = []
 
 def test(name, src):
-    s = ctypes.c_void_p(DLL.cide_session_create())
-    ret = DLL.cide_compile(s, src.encode())
+    s = ctypes.c_void_p(DLL.vitro_session_create())
+    ret = DLL.vitro_compile(s, src.encode())
     if ret != 0:
         results.append((name, "FAIL", ""))
-        DLL.cide_session_destroy(s)
+        DLL.vitro_session_destroy(s)
         return
-    DLL.cide_run(s)
+    DLL.vitro_run(s)
     # E-P1-5：纯程序 stdout 通道，不再做文本清洗。
-    n = DLL.cide_get_program_output_length(s)
+    n = DLL.vitro_get_program_output_length(s)
     buf = ctypes.create_string_buffer(n+1)
-    DLL.cide_get_program_output(s, buf, n+1)
+    DLL.vitro_get_program_output(s, buf, n+1)
     out = buf.value.decode("utf-8", "replace").strip()
     results.append((name, "OK", out))
-    DLL.cide_session_destroy(s)
+    DLL.vitro_session_destroy(s)
 
 cases = [
     ("double_init_zero", 'int main() { double d = 0.0; printf("%.0f", d); return 0; }'),

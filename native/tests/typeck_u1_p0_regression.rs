@@ -16,9 +16,9 @@
 //! 注意不能误伤合法形状：`int t[] = {1, 2};`（初始化器推断尺寸）、
 //! 函数参数 `int a[]`（退化为指针）、`extern int a[];`（不完整类型声明）。
 
-use cide_native::compiler::lexer::Lexer;
-use cide_native::compiler::parser::Parser;
-use cide_native::compiler::typeck::TypeChecker;
+use vitro_native::compiler::lexer::Lexer;
+use vitro_native::compiler::parser::Parser;
+use vitro_native::compiler::typeck::TypeChecker;
 
 /// 返回（类型错误数, 是否含关键词的错误消息列表）
 fn typeck_errors(source: &str) -> (usize, Vec<String>) {
@@ -56,7 +56,7 @@ fn u1_12_negative_array_size_is_rejected() {
 
 #[test]
 fn u1_12_zero_size_with_initializer_overflow_is_rejected() {
-    // 零尺寸 + 2 个初始化元素（clang 拒绝；Cide 修复前静默变 2 元素数组）
+    // 零尺寸 + 2 个初始化元素（clang 拒绝；Vitro 修复前静默变 2 元素数组）
     let (n, _msgs) = typecheck_errors_wrapper("int main() { int c[0] = {1, 2}; return c[1]; }");
     assert!(n > 0, "`int c[0] = {{1,2}};` 零尺寸带初始化器必须报错——修复前静默变成 2 元素数组");
 }
@@ -87,8 +87,8 @@ fn typecheck_errors_wrapper(source: &str) -> (usize, Vec<String>) {
 
 #[test]
 fn u1_02_init_list_call_element_not_silently_zeroed() {
-    use cide_native::engine::session_ops::{execute_run, reset_runtime};
-    use cide_native::session::{CompileUnit, Session};
+    use vitro_native::engine::session_ops::{execute_run, reset_runtime};
+    use vitro_native::session::{CompileUnit, Session};
 
     let mut session = Session::default();
     session.compile.compile_units.push(CompileUnit {
@@ -108,7 +108,7 @@ int main() {
     });
     reset_runtime(&mut session);
     let units = session.compile.compile_units.clone();
-    let out = cide_native::engine::compile_pipeline::run_multi_file_pipeline(&mut session, units, false);
+    let out = vitro_native::engine::compile_pipeline::run_multi_file_pipeline(&mut session, units, false);
     assert!(out.is_ok(), "编译失败：{:?}", out.err());
     let (ret, _) = execute_run(&mut session).expect("run");
     assert_eq!(ret, 0);
@@ -233,9 +233,9 @@ fn u1_07_leading_dot_float_is_legal() {
 
 #[test]
 fn u1_10_compound_literal_anon_struct_not_redeclared() {
-    use cide_native::engine::compile_pipeline::run_multi_file_pipeline;
-    use cide_native::engine::session_ops::{execute_run, reset_runtime};
-    use cide_native::session::{CompileUnit, Session};
+    use vitro_native::engine::compile_pipeline::run_multi_file_pipeline;
+    use vitro_native::engine::session_ops::{execute_run, reset_runtime};
+    use vitro_native::session::{CompileUnit, Session};
 
     let mut session = Session::default();
     session.compile.compile_units.push(CompileUnit {

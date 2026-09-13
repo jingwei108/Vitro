@@ -15,7 +15,7 @@
  * level -- only at the *feature* level. See D-2026-09-07.
  *
  * The case carries <stdio.h>, so clang compiles it and produces a real
- * golden (expected stdout: 14); it cannot fall into the cide_better /
+ * golden (expected stdout: 14); it cannot fall into the vitro_better /
  * no-oracle channel.
  *
  * See: native/tests/CORE_ASSET_VERDICT_FAILURES.md (D-2026-09-07)

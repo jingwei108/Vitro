@@ -17,40 +17,40 @@ use std::ffi::{c_char, CString};
 /// 与 crash_regression_tests.rs 相同的 C API 驱动方式（独立复制以避免跨测试文件依赖）。
 fn compile_and_run(source: &str) -> Result<(i32, Vec<String>), String> {
     unsafe {
-        let session = cide_native::capi::cide_session_create();
+        let session = vitro_native::capi::vitro_session_create();
         if session.is_null() {
             return Err("Failed to create session".to_string());
         }
 
         let fname = CString::new("main.c").map_err(|e| e.to_string())?;
         let src = CString::new(source).map_err(|e| e.to_string())?;
-        cide_native::capi::cide_compile_unit(session, fname.as_ptr() as *const c_char, src.as_ptr() as *const c_char);
-        let compile_ret = cide_native::capi::cide_compile_all(session);
+        vitro_native::capi::vitro_compile_unit(session, fname.as_ptr() as *const c_char, src.as_ptr() as *const c_char);
+        let compile_ret = vitro_native::capi::vitro_compile_all(session);
         if compile_ret != 0 {
-            let err_ptr = cide_native::capi::cide_get_compile_errors(session);
+            let err_ptr = vitro_native::capi::vitro_get_compile_errors(session);
             let err_msg = if err_ptr.is_null() {
                 "Unknown compile error".to_string()
             } else {
                 std::ffi::CStr::from_ptr(err_ptr).to_string_lossy().to_string()
             };
-            cide_native::capi::cide_session_destroy(session);
+            vitro_native::capi::vitro_session_destroy(session);
             return Err(err_msg);
         }
 
-        let run_ret = cide_native::capi::cide_run(session);
+        let run_ret = vitro_native::capi::vitro_run(session);
 
         let mut outputs = Vec::new();
-        let out_len = cide_native::capi::cide_get_output_length(session);
+        let out_len = vitro_native::capi::vitro_get_output_length(session);
         if out_len > 0 {
             let mut buf = vec![0u8; out_len as usize + 1];
-            cide_native::capi::cide_get_output(session, buf.as_mut_ptr() as *mut c_char, buf.len() as i32);
+            vitro_native::capi::vitro_get_output(session, buf.as_mut_ptr() as *mut c_char, buf.len() as i32);
             let out_str = String::from_utf8_lossy(&buf[..out_len as usize]);
             for line in out_str.lines() {
                 outputs.push(line.to_string());
             }
         }
 
-        let err_ptr = cide_native::capi::cide_get_runtime_error(session);
+        let err_ptr = vitro_native::capi::vitro_get_runtime_error(session);
         let runtime_err = if err_ptr.is_null() {
             None
         } else {
@@ -58,7 +58,7 @@ fn compile_and_run(source: &str) -> Result<(i32, Vec<String>), String> {
         };
 
         let _ = run_ret;
-        cide_native::capi::cide_session_destroy(session);
+        vitro_native::capi::vitro_session_destroy(session);
 
         if let Some(e) = runtime_err {
             if !e.is_empty() {
@@ -177,25 +177,25 @@ int main(int argc, char *argv[]) {
 }
 "#;
     unsafe {
-        let session = cide_native::capi::cide_session_create();
+        let session = vitro_native::capi::vitro_session_create();
         assert!(!session.is_null());
 
-        // 直接注入会话级 argv（等价于 cide_set_argv）
+        // 直接注入会话级 argv（等价于 vitro_set_argv）
         (*session).runtime.argc = 2;
         (*session).runtime.argv = vec!["prog".to_string(), "hello".to_string()];
 
         let fname = CString::new("main.c").unwrap();
         let src_c = CString::new(src).unwrap();
-        cide_native::capi::cide_compile_unit(session, fname.as_ptr() as *const c_char, src_c.as_ptr() as *const c_char);
-        assert_eq!(cide_native::capi::cide_compile_all(session), 0, "应编译成功");
+        vitro_native::capi::vitro_compile_unit(session, fname.as_ptr() as *const c_char, src_c.as_ptr() as *const c_char);
+        assert_eq!(vitro_native::capi::vitro_compile_all(session), 0, "应编译成功");
 
-        let _ = cide_native::capi::cide_run(session);
+        let _ = vitro_native::capi::vitro_run(session);
 
-        let out_len = cide_native::capi::cide_get_output_length(session);
+        let out_len = vitro_native::capi::vitro_get_output_length(session);
         let mut buf = vec![0u8; out_len as usize + 1];
-        cide_native::capi::cide_get_output(session, buf.as_mut_ptr() as *mut c_char, buf.len() as i32);
+        vitro_native::capi::vitro_get_output(session, buf.as_mut_ptr() as *mut c_char, buf.len() as i32);
         let out_str = String::from_utf8_lossy(&buf[..out_len as usize]).to_string();
-        cide_native::capi::cide_session_destroy(session);
+        vitro_native::capi::vitro_session_destroy(session);
 
         assert!(
             out_str.contains("argc=2 argv1=hello tag=77"),
@@ -237,29 +237,29 @@ static int big[8000];
 int main() { big[0] = 1; return big[0]; }
 "#;
     unsafe {
-        let session = cide_native::capi::cide_session_create();
+        let session = vitro_native::capi::vitro_session_create();
         assert!(!session.is_null());
         let fname = CString::new("main.c").unwrap();
         let src_c = CString::new(src).unwrap();
-        cide_native::capi::cide_compile_unit(session, fname.as_ptr() as *const c_char, src_c.as_ptr() as *const c_char);
-        assert_eq!(cide_native::capi::cide_compile_all(session), 0, "应编译成功");
+        vitro_native::capi::vitro_compile_unit(session, fname.as_ptr() as *const c_char, src_c.as_ptr() as *const c_char);
+        assert_eq!(vitro_native::capi::vitro_compile_all(session), 0, "应编译成功");
 
         let has_layout_warning = (*session).compile.diagnostics.iter().any(|d| {
             d.severity == 1 && d.message.contains("堆起点") && d.message.contains("上移")
         });
-        cide_native::capi::cide_session_destroy(session);
+        vitro_native::capi::vitro_session_destroy(session);
         assert!(has_layout_warning, "大全局应产生堆起点上移 warning");
     }
 }
 
-// ===================== 布局函数单元测试（cide_runtime） =====================
+// ===================== 布局函数单元测试（vitro_runtime） =====================
 
 #[test]
 fn test_compute_heap_base_layout_rules() {
-    use cide_runtime::{align4, argv_region_footprint, compute_heap_base, GLOBAL_REGION_LIMIT, GLOBAL_START, HEAP_START};
+    use vitro_runtime::{align4, argv_region_footprint, compute_heap_base, GLOBAL_REGION_LIMIT, GLOBAL_START, HEAP_START};
 
     // 上限常量：与旧字符串判据 MEM_SIZE/16 一致，不收紧存量行为
-    assert_eq!(GLOBAL_REGION_LIMIT, cide_runtime::MEM_SIZE / 16);
+    assert_eq!(GLOBAL_REGION_LIMIT, vitro_runtime::MEM_SIZE / 16);
     assert_eq!(GLOBAL_REGION_LIMIT, 0x1_0000);
 
     // 无全局数据 / 无 argv → 静态 HEAP_START（行为不变锚）

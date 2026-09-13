@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use cide_native::compiler::lexer::{Lexer, TokenType};
+use vitro_native::compiler::lexer::{Lexer, TokenType};
 
 fn tokenize(src: &str) -> Vec<(TokenType, String)> {
     let (tokens, errors) = Lexer::new(src).tokenize();
@@ -422,15 +422,15 @@ fn test_lexer_u8_string_prefix() {
 
 // ── E2：模块化预处理器 ──
 
-fn preprocess(src: &str) -> (Vec<cide_lexer::Token>, Vec<cide_lexer::LexerError>, Vec<cide_lexer::LexerWarning>, Vec<String>) {
-    let mut lexer = cide_lexer::Lexer::new(src);
+fn preprocess(src: &str) -> (Vec<vitro_lexer::Token>, Vec<vitro_lexer::LexerError>, Vec<vitro_lexer::LexerWarning>, Vec<String>) {
+    let mut lexer = vitro_lexer::Lexer::new(src);
     let (tokens, errors) = lexer.tokenize();
     let warnings = lexer.into_warnings();
     let trace = lexer.into_expansion_trace();
     (tokens, errors, warnings, trace)
 }
 
-fn token_texts(tokens: &[cide_lexer::Token]) -> Vec<String> {
+fn token_texts(tokens: &[vitro_lexer::Token]) -> Vec<String> {
     tokens.iter().map(|t| t.text.clone()).collect()
 }
 
@@ -464,7 +464,7 @@ fn test_preprocessor_stringize_keeps_raw_spelling() {
     // # 操作数不展开；间接一层才展开（C99 6.10.3.1 特例）
     let (tokens, errs, _, _) = preprocess("#define STR(x) #x\n#define XSTR(x) STR(x)\n#define V 9\nSTR(V) XSTR(V)\n");
     assert!(errs.is_empty(), "{:?}", errs);
-    let strings: Vec<_> = tokens.iter().filter(|t| t.ty == cide_lexer::TokenType::String).map(|t| t.text.clone()).collect();
+    let strings: Vec<_> = tokens.iter().filter(|t| t.ty == vitro_lexer::TokenType::String).map(|t| t.text.clone()).collect();
     assert_eq!(strings, vec!["V".to_string(), "9".to_string()], "{:?}", strings);
 }
 
@@ -479,7 +479,7 @@ fn test_preprocessor_paste_single_token() {
 fn test_preprocessor_paste_invalid_result_errors() {
     let (_, errs, _, _) = preprocess("#define BAD(a, b) a##b\nBAD(1, +)\n");
     assert!(
-        errs.iter().any(|e| e.code == cide_shared::ErrorCode::E1016_TokenPasteInvalid as i32),
+        errs.iter().any(|e| e.code == vitro_shared::ErrorCode::E1016_TokenPasteInvalid as i32),
         "拼接出非法结果应报 E1016，实际 {:?}",
         errs
     );
@@ -500,7 +500,7 @@ fn test_preprocessor_depth_fuse() {
     src.push_str(";\n");
     let (_, errs, _, _) = preprocess(&src);
     assert!(
-        errs.iter().any(|e| e.code == cide_shared::ErrorCode::E1017_ExpandDepthExceeded as i32),
+        errs.iter().any(|e| e.code == vitro_shared::ErrorCode::E1017_ExpandDepthExceeded as i32),
         "深嵌套应触发展开保险丝 E1017，实际 {:?}",
         errs
     );
@@ -521,7 +521,7 @@ fn test_preprocessor_depth_fuse_object_macro_chain() {
     src.push_str("#define M5 123\nint v = M0;\n");
     let (_, errs, _, _) = preprocess(&src);
     assert!(
-        errs.iter().any(|e| e.code == cide_shared::ErrorCode::E1017_ExpandDepthExceeded as i32),
+        errs.iter().any(|e| e.code == vitro_shared::ErrorCode::E1017_ExpandDepthExceeded as i32),
         "不同名对象宏链 5000 层应触发深度保险丝 E1017（而非栈溢出崩溃），实际 {:?}",
         errs
     );
@@ -541,7 +541,7 @@ fn test_preprocessor_byte_budget_large_literal_amplification() {
     let src = format!("#define S(x) x x\nconst char* big = {};\n", body);
     let (_, errs, _, _) = preprocess(&src);
     assert!(
-        errs.iter().any(|e| e.code == cide_shared::ErrorCode::E1017_ExpandDepthExceeded as i32),
+        errs.iter().any(|e| e.code == vitro_shared::ErrorCode::E1017_ExpandDepthExceeded as i32),
         "4KB 字面量 × 2^14 放大（67MB）应触发字节预算熔断 E1017（而非零诊断），实际 {:?}",
         errs
     );
@@ -569,7 +569,7 @@ fn test_preprocessor_shadowing_warning() {
     let (_, errs, warnings, _) = preprocess("#define W 1\n#define W 2\nint x = W;\n");
     assert!(errs.is_empty());
     assert!(
-        warnings.iter().any(|w| w.code == cide_shared::ErrorCode::W1018_MacroShadowing as i32),
+        warnings.iter().any(|w| w.code == vitro_shared::ErrorCode::W1018_MacroShadowing as i32),
         "不同体重定义应报 W1018，实际 {:?}",
         warnings
     );
@@ -583,7 +583,7 @@ fn test_preprocessor_side_effect_warning() {
     let (_, errs, warnings, _) = preprocess("#define SQ(x) ((x) * (x))\nint i = 3;\nint z = SQ(i++);\n");
     assert!(errs.is_empty());
     assert!(
-        warnings.iter().any(|w| w.code == cide_shared::ErrorCode::W1019_MacroArgSideEffect as i32),
+        warnings.iter().any(|w| w.code == vitro_shared::ErrorCode::W1019_MacroArgSideEffect as i32),
         "SQ(i++) 应报 W1019，实际 {:?}",
         warnings
     );
@@ -614,7 +614,7 @@ fn test_preprocessor_has_include() {
 
 #[test]
 fn test_preprocessor_include_once() {
-    // 无守卫双 include：Cide include-once 静默跳过（与 Clang 的差异已入 spec）
+    // 无守卫双 include：Vitro include-once 静默跳过（与 Clang 的差异已入 spec）
     let (tokens, errs, _, _) = preprocess("#define GVAL 3\n#include \"no_such_helper_x.h\"\nint z = GVAL;\n");
     let _ = tokens;
     // 不存在的头文件：静默跳过（既有行为），不应崩溃

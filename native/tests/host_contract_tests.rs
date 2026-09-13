@@ -5,15 +5,15 @@
 //! 目标：验证 Layer B（Rust Host Func）的每个函数在边界条件、安全注入、标准一致性上是否达标。
 //!
 //! 测试哲学：
-//! - NO_CODE_DISTORTION：不扭曲 C 语义去迎合 Cide。
+//! - NO_CODE_DISTORTION：不扭曲 C 语义去迎合 Vitro。
 //! - RECORD_DONT_HIDE：任何异常行为必须记录。
 //! - FIX_REAL_BUGS：测试失败时，修 Host Func 的实现，而不是改测试预期值让它通过。
 
-use cide_native::session::Session;
-use cide_native::vm::core::{CideVM, MEM_SIZE, NULL_TRAP_SIZE};
-use cide_native::vm::host_funcs::{
+use vitro_native::session::Session;
+use vitro_native::vm::core::{VitroVM, MEM_SIZE, NULL_TRAP_SIZE};
+use vitro_native::vm::host_funcs::{
     host_abort, host_acos, host_asin, host_atan, host_atan2, host_atoi, host_bsearch, host_calloc,
-    host_cide_assert_fail, host_clock, host_cos, host_cosh, host_exp, host_free, host_getchar, host_isblank,
+    host_vitro_assert_fail, host_clock, host_cos, host_cosh, host_exp, host_free, host_getchar, host_isblank,
     host_isgraph, host_ispunct, host_llabs, host_log, host_malloc, host_memset, host_pow, host_printf_n, host_putchar,
     host_puts, host_qsort, host_rand, host_realloc, host_remove, host_rename, host_scanf_n, host_sin, host_sinh,
     host_snprintf, host_sprintf, host_sqrt, host_srand, host_sscanf, host_strcat, host_strcmp, host_strcpy,
@@ -23,17 +23,17 @@ use cide_native::vm::host_funcs::{
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-fn fresh_session() -> (CideVM, Session) {
-    (CideVM::new(), Session::default())
+fn fresh_session() -> (VitroVM, Session) {
+    (VitroVM::new(), Session::default())
 }
 
 /// 在 VM 内存的合法区域写入一个 C 风格字符串，返回起始地址。
-fn write_test_string(vm: &mut CideVM, addr: u32, s: &str) {
+fn write_test_string(vm: &mut VitroVM, addr: u32, s: &str) {
     vm.write_cstring(addr, s);
 }
 
 /// 从 VM 内存读取一个 C 风格字符串（遇到 \0 停止）。
-fn read_test_string(vm: &CideVM, addr: u32) -> String {
+fn read_test_string(vm: &VitroVM, addr: u32) -> String {
     let mem = vm.memory_ref();
     let start = addr as usize;
     if start >= mem.len() {
@@ -145,7 +145,7 @@ fn test_free_already_freed_traps_double_free() {
     host_free(&mut vm, &mut session.as_vm_context());
 
     // 重置错误状态以便观察第二次 free
-    // CideVM 没有公开重置 error 的方法，但 trap 只在 error.is_empty() 时写入
+    // VitroVM 没有公开重置 error 的方法，但 trap 只在 error.is_empty() 时写入
     // 由于第一次 free 没有 trap，error 为空，第二次 free 应该触发 Double-Free
     vm.push(addr as u64);
     host_free(&mut vm, &mut session.as_vm_context());
@@ -242,7 +242,7 @@ fn test_strlen_null_address_returns_zero() {
     // VM 内存起始处为全 0，因此 read_cbytes(0) 返回空
     vm.push(0);
     host_strlen(&mut vm, &mut session.as_vm_context());
-    assert_eq!(vm.pop(), 0, "strlen(0) 在 Cide 中返回 0（VM 内存首字节为 0）");
+    assert_eq!(vm.pop(), 0, "strlen(0) 在 Vitro 中返回 0（VM 内存首字节为 0）");
 }
 
 // ─── strcpy 契约 ─────────────────────────────────────────────────────────────
@@ -441,7 +441,7 @@ fn test_scanf_integer() {
     vm.push(fmt as u64);
     host_scanf_n(&mut vm, &mut session.as_vm_context());
     assert!(!session.runtime.waiting_input, "scanf 有输入时不应进入 waiting_input");
-    let val = vm.load_i32(dst, &cide_runtime::instruction::SourceLoc::default());
+    let val = vm.load_i32(dst, &vitro_runtime::instruction::SourceLoc::default());
     assert_eq!(val, 42, "scanf(\"%%d\", ptr) 必须将 42 写入目标地址");
 }
 
@@ -457,8 +457,8 @@ fn test_scanf_multiple_integers() {
     vm.push(dst1 as u64);
     vm.push(fmt as u64);
     host_scanf_n(&mut vm, &mut session.as_vm_context());
-    let v1 = vm.load_i32(dst1, &cide_runtime::instruction::SourceLoc::default());
-    let v2 = vm.load_i32(dst2, &cide_runtime::instruction::SourceLoc::default());
+    let v1 = vm.load_i32(dst1, &vitro_runtime::instruction::SourceLoc::default());
+    let v2 = vm.load_i32(dst2, &vitro_runtime::instruction::SourceLoc::default());
     assert_eq!(v1, 10);
     assert_eq!(v2, 20);
 }
@@ -748,9 +748,9 @@ fn test_bsearch_found_existing_element() {
     let key = 0x2100;
     // arr = [10, 20, 30, 40, 50]
     for (i, &v) in [10i32, 20, 30, 40, 50].iter().enumerate() {
-        vm.store_i32(base + (i * 4) as u32, v, &cide_runtime::instruction::SourceLoc::default());
+        vm.store_i32(base + (i * 4) as u32, v, &vitro_runtime::instruction::SourceLoc::default());
     }
-    vm.store_i32(key, 30, &cide_runtime::instruction::SourceLoc::default());
+    vm.store_i32(key, 30, &vitro_runtime::instruction::SourceLoc::default());
     // args: key, base, nmemb=5, size=4, compar=0 (default byte comparison)
     vm.push(0); // compar
     vm.push(4); // size
@@ -768,9 +768,9 @@ fn test_bsearch_not_found_returns_null() {
     let base = 0x2000;
     let key = 0x2100;
     for (i, &v) in [10i32, 20, 30, 40, 50].iter().enumerate() {
-        vm.store_i32(base + (i * 4) as u32, v, &cide_runtime::instruction::SourceLoc::default());
+        vm.store_i32(base + (i * 4) as u32, v, &vitro_runtime::instruction::SourceLoc::default());
     }
-    vm.store_i32(key, 99, &cide_runtime::instruction::SourceLoc::default());
+    vm.store_i32(key, 99, &vitro_runtime::instruction::SourceLoc::default());
     vm.push(0);
     vm.push(4);
     vm.push(5);
@@ -786,7 +786,7 @@ fn test_bsearch_empty_array_returns_null() {
     let (mut vm, mut session) = fresh_session();
     let base = 0x2000;
     let key = 0x2100;
-    vm.store_i32(key, 10, &cide_runtime::instruction::SourceLoc::default());
+    vm.store_i32(key, 10, &vitro_runtime::instruction::SourceLoc::default());
     vm.push(0);
     vm.push(4);
     vm.push(0); // nmemb = 0
@@ -809,7 +809,7 @@ fn test_qsort_large_byte_array_default_compare() {
         vm.store_i8(
             base + i as u32,
             (127 - i) as i32,
-            &cide_runtime::instruction::SourceLoc::default(),
+            &vitro_runtime::instruction::SourceLoc::default(),
         );
     }
     // args: compar=0 (default byte comparison), size=1, nmemb=128, base
@@ -820,7 +820,7 @@ fn test_qsort_large_byte_array_default_compare() {
     host_qsort(&mut vm, &mut session.as_vm_context());
     // 默认字节比较对单字节元素即数值比较，排序后应为升序：0, 1, ..., 127
     for i in 0..n {
-        let v = vm.load_i8(base + i as u32, &cide_runtime::instruction::SourceLoc::default());
+        let v = vm.load_i8(base + i as u32, &vitro_runtime::instruction::SourceLoc::default());
         assert_eq!(
             v, i as i32,
             "qsort 128 单字节元素默认字节比较应升序排列，索引 {} 处期望 {}，实际 {}",
@@ -833,13 +833,13 @@ fn test_qsort_large_byte_array_default_compare() {
 fn test_qsort_single_element_noop() {
     let (mut vm, mut session) = fresh_session();
     let base = 0x2000;
-    vm.store_i32(base, 42, &cide_runtime::instruction::SourceLoc::default());
+    vm.store_i32(base, 42, &vitro_runtime::instruction::SourceLoc::default());
     vm.push(0);
     vm.push(4);
     vm.push(1);
     vm.push(base as u64);
     host_qsort(&mut vm, &mut session.as_vm_context());
-    assert_eq!(vm.load_i32(base, &cide_runtime::instruction::SourceLoc::default()), 42);
+    assert_eq!(vm.load_i32(base, &vitro_runtime::instruction::SourceLoc::default()), 42);
 }
 
 #[test]
@@ -940,8 +940,8 @@ fn test_sscanf_two_integers() {
     vm.push(src as u64);
     host_sscanf(&mut vm, &mut session.as_vm_context());
     let matched = vm.pop() as i32;
-    let v1 = vm.load_i32(dst1, &cide_runtime::instruction::SourceLoc::default());
-    let v2 = vm.load_i32(dst2, &cide_runtime::instruction::SourceLoc::default());
+    let v1 = vm.load_i32(dst1, &vitro_runtime::instruction::SourceLoc::default());
+    let v2 = vm.load_i32(dst2, &vitro_runtime::instruction::SourceLoc::default());
     assert_eq!(matched, 2, "sscanf 应返回成功匹配数 2");
     assert_eq!(v1, 10);
     assert_eq!(v2, 20);
@@ -980,7 +980,7 @@ fn test_sscanf_mixed_int_and_string() {
     vm.push(src as u64);
     host_sscanf(&mut vm, &mut session.as_vm_context());
     let matched = vm.pop() as i32;
-    let v = vm.load_i32(dst_int, &cide_runtime::instruction::SourceLoc::default());
+    let v = vm.load_i32(dst_int, &vitro_runtime::instruction::SourceLoc::default());
     let s = read_test_string(&vm, dst_str);
     assert_eq!(matched, 2);
     assert_eq!(v, 42);
@@ -1159,7 +1159,7 @@ fn test_strtol_endptr() {
     vm.push(s as u64);
     host_strtol(&mut vm, &mut Session::default().as_vm_context());
     assert_eq!(vm.pop() as i64, 123);
-    let end_addr = vm.load_i32(endptr, &cide_runtime::instruction::SourceLoc::default()) as u32;
+    let end_addr = vm.load_i32(endptr, &vitro_runtime::instruction::SourceLoc::default()) as u32;
     assert_eq!(end_addr, s + 3, "endptr 应指向 'a'");
 }
 
@@ -1171,11 +1171,11 @@ fn test_strtol_empty_sets_errno() {
     vm.write_memory(errno_addr, &0i32.to_le_bytes());
     // 将 errno 注入符号表
     let mut symbols = vm.get_symbols().to_vec();
-    symbols.push(cide_native::vm::core::VMSymbol {
+    symbols.push(vitro_native::vm::core::VMSymbol {
         name: "errno".to_string(),
         addr: errno_addr,
         is_local: false,
-        ty: cide_native::compiler::ast::Type::int(),
+        ty: vitro_native::compiler::ast::Type::int(),
         scope_depth: 0,
         func_name: String::new(),
         decl_line: 0,
@@ -1279,7 +1279,7 @@ fn test_clock_returns_non_negative() {
 #[test]
 fn test_assert_fail_sets_finished() {
     let (mut vm, mut session) = fresh_session();
-    host_cide_assert_fail(&mut vm, &mut session.as_vm_context());
+    host_vitro_assert_fail(&mut vm, &mut session.as_vm_context());
     assert!(vm.is_finished(), "assert_fail 必须设置 finished");
     assert_eq!(vm.exit_code(), 1);
     assert!(

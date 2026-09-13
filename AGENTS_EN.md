@@ -1,5 +1,5 @@
-<!-- From: d:\code\c_ide_rust\AGENTS.md -->
-# Cide Project Agent Guide
+<!-- From: AGENTS.md -->
+# Vitro Project Agent Guide
 
 > **Maintenance note (2026-09-11)**: This is the only English document kept in the repository.
 > It reflects the 2026-09-11 backend-only state and may lag behind the Chinese
@@ -9,16 +9,16 @@
 
 ## Project Overview
 
-> **Repositioning (2026-09-11)**: Cide has transitioned from a "cross-platform C IDE" into a **teaching C/C++ subset reference execution engine (white-box)** — this repository is backend-only (MIT license); the frontend is split out to the community and native mobile is dropped. See [`A-定位与路线/后端定位与白箱计划.md`](A-定位与路线/后端定位与白箱计划.md).
+> **Repositioning (2026-09-11)**: Vitro has transitioned from a "cross-platform C IDE" into a **teaching C/C++ subset reference execution engine (white-box)** — this repository is backend-only (MIT license); the frontend is split out to the community and native mobile is dropped. See [`A-定位与路线/后端定位与白箱计划.md`](A-定位与路线/后端定位与白箱计划.md).
 >
 > **Frontend split executed (2026-09-11)**: `CideFlutter/`, the FRB bridge (`native/src/api/` + `frb_generated`), the web deploy workflow and all Flutter build scripts have been removed. The last complete pre-split state is preserved by tag `before-frontend-split` (`git checkout before-frontend-split -- CideFlutter` to recover).
 
 Current architecture (one core, three exits):
 
-- **Core**: Rust workspace compiler/VM (`native/`, 10 sub-crates); pipeline Lexer → Parser → TypeChecker → BytecodeGen → CideVM
-- **Exit 1**: C ABI (`native/src/capi/`) — first consumption path of `cide_cli` and the shadow defenses (ctypes)
+- **Core**: Rust workspace compiler/VM (`native/`, 10 sub-crates); pipeline Lexer → Parser → TypeChecker → BytecodeGen → VitroVM
+- **Exit 1**: C ABI (`native/src/capi/`) — first consumption path of `vitro_cli` and the shadow defenses (ctypes)
 - **Exit 2**: wasm32 (smoke-tested: builds at 3.75MB with zero changes; C API full chain + safety checks work under wasm) — browser/white-box form
-- **Exit 3**: `cide_cli serve` JSON-lines session mode (id correlation / isomorphic error frames / `session.reset`; shares `native/src/session_api.rs` with capi) — headless interaction
+- **Exit 3**: `vitro_cli serve` JSON-lines session mode (id correlation / isomorphic error frames / `session.reset`; shares `native/src/session_api.rs` with capi) — headless interaction
 - **No git commits without permission**
 - **Honest records**: This project is a teaching C/CPP subset, with Clang as the standard. Any deviation between this project and the standard must be recorded.
 
@@ -34,21 +34,21 @@ Current architecture (one core, three exits):
 
 ```
 native/crates/          Compiler/runtime sub-crates (crate modularization in progress)
-  cide_shared/          Shared basics: SourceLoc, ErrorCode
-  cide_ast/             AST nodes and type system
-  cide_lexer/           Lexer
-  cide_parser/          Parser
-  cide_cpp_frontend/    C++ frontend support
-  cide_typeck/          Type checker
-  cide_codegen/         Bytecode generator
-  cide_runtime/         VM runtime shared data (memory state, opcode/instruction, symbol table)
-  cide_vm/              CideVM bytecode interpreter
+  vitro_shared/          Shared basics: SourceLoc, ErrorCode
+  vitro_ast/             AST nodes and type system
+  vitro_lexer/           Lexer
+  vitro_parser/          Parser
+  vitro_cpp_frontend/    C++ frontend support
+  vitro_typeck/          Type checker
+  vitro_codegen/         Bytecode generator
+  vitro_runtime/         VM runtime shared data (memory state, opcode/instruction, symbol table)
+  vitro_vm/              VitroVM bytecode interpreter
 native/src/compiler/    Remaining local modules: algorithm_detector, cfg, data_flow, intent (Rust)
 native/src/unified/     Unified mode / time-travel engine (Rust)
 native/src/engine/      Compiler pipeline and tools (Rust)
 native/src/capi/        C API (exit 1, public API, ABI-versioned) (Rust)
 native/src/session_api.rs Language-neutral session layer (shared by capi and serve; exits stay thin) (Rust)
-native/src/flutter_bridge.rs Legacy session wrapper (currently consumed by cide_cli; rename pending) (Rust)
+native/src/flutter_bridge.rs Legacy session wrapper (currently consumed by vitro_cli; rename pending) (Rust)
 native/src/diagnostics/ Structured diagnostics, auto-fix suggestions, knowledge graph, teaching reasoning (Rust)
 templates/              Algorithm template sources (source.c + meta.yaml; kept pending community-frontend adoption)
 docs/                   Design documents, incident reports
@@ -61,13 +61,13 @@ docs/                   Design documents, incident reports
 | Phase | Module | Status |
 |:------|:-------|:-------|
 | Phase 0 | Rust skeleton + C API stubs + Session types | ✅ Done |
-| Phase 1 | VM migration (CideVM + host funcs) | ✅ Done |
+| Phase 1 | VM migration (VitroVM + host funcs) | ✅ Done |
 | Phase 2a | Lexer | ✅ Done |
 | Phase 2b | AST | ✅ Done |
 | Phase 2c | Parser | ✅ Done |
 | Phase 2d | TypeChecker | ✅ Done |
 | Phase 2e | BytecodeGen | ✅ Done |
-| Phase 2f | C API `cide_compile_all` wiring | ✅ Done |
+| Phase 2f | C API `vitro_compile_all` wiring | ✅ Done |
 | Phase 3 | ~~C# frontend~~ → Flutter frontend end-to-end tests | ✅ Done |
 | Phase 4 | Android target build (cargo-ndk) | ✅ Done |
 | Phase 5 | Clean up legacy C++ / CMake files | ✅ Done |
@@ -93,7 +93,7 @@ docs/                   Design documents, incident reports
 | Phase 25 | Template JIT (Trace-based Loop Accelerator): hot-loop trace recording + pre-optimized function pointer sequence | ✅ Done |
 | Phase 26 | Flutter Bridge communication optimization: Stream mode, differential encoding `StepPayloadDelta`, symbol table dedup | ✅ Done |
 | Phase 27 | Data structure syntax expansion P0+P1: array decay, `unsigned` full pipeline, `const`, `extern`, VLA full pipeline | ✅ Done |
-| Phase 28 | CLI debugging tool `cide_cli`: `compile`/`run`/`step`/`unified`, supporting stdin pipes for quick testing | ✅ Done |
+| Phase 28 | CLI debugging tool `vitro_cli`: `compile`/`run`/`step`/`unified`, supporting stdin pipes for quick testing | ✅ Done |
 | Phase 29 | Bytecode Libc productization: build-time precompilation + fixed index segment + ctype/abs via bytecode path | ✅ Done |
 | Phase 30 | P0 syntax expansion: generic comma operator, Designated Initializer, offsetof + regression fixes | ✅ Done |
 | Phase 31 | C++ extension P0: Lexer/Parser/AST keyword and node expansion | ✅ Done |
@@ -105,13 +105,13 @@ docs/                   Design documents, incident reports
 | Phase 37 | C++ extension Stage 4: reference declaration and basic semantics (`int& r = x` full pipeline; `T&` parameter/return; reference auto-deref; implicit address-of; returning reference lvalue recognition) | ✅ Done |
 | Phase 38 | C++ extension Stage 5: implicit move constructor auto-generation (class with pointer/resource fields auto-generates `__ctor__{Class}__move`; `std::move` initialization calls move ctor; source pointer fields nulled to prevent double-free) | ✅ Done |
 | Phase 39 | C++ extension Stage 6: simplified `unique_ptr<T>` dogfooding + constructor initialization syntax `Type name(args);` + constructor overload/implicit default ctor | ✅ Done |
-| Phase 40 | C++ extension M6: test defense wrap-up — 59 new C++ E2E regression cases (core language / container algorithms / teaching OJ), `test_cide_e2e_cpp` in CI, Golden generated by Clang++ | ✅ Done |
+| Phase 40 | C++ extension M6: test defense wrap-up — 59 new C++ E2E regression cases (core language / container algorithms / teaching OJ), `test_vitro_e2e_cpp` in CI, Golden generated by Clang++ | ✅ Done |
 | Phase 41 | C++ built-in container layout decoupling: `.cpp` interface declarations as single source of truth + JSON loader, zero Rust hard-coding | ✅ Done |
 | Phase 42 | P0 syntax/stdlib expansion + code review report progress + performance optimization ([Unreleased]) | 🚧 In progress |
 
 ## Test Defenses
 
-Cide adopts **five layers of collaborative test defenses**. Core philosophy: *tests are not for boasting pass rates, but for honestly discovering potential problems*. Any failure must be recorded truthfully; modifying test expectations to beautify data is prohibited.
+Vitro adopts **five layers of collaborative test defenses**. Core philosophy: *tests are not for boasting pass rates, but for honestly discovering potential problems*. Any failure must be recorded truthfully; modifying test expectations to beautify data is prohibited.
 
 ```
 ┌────────────────────────────────────────────────────────────────┐
@@ -123,7 +123,7 @@ Cide adopts **five layers of collaborative test defenses**. Core philosophy: *te
 ├────────────────────────────────────────────────────────────────┤
 │  Defense 3: Three-tier contract verification (Phase A~C)        │
 │  ├─ 3a Host Contract: Rust unit tests directly verify Host Func boundary behavior │
-│  ├─ 3b Bytecode Self-Consistency: C source → Clang vs Cide self-hosting │
+│  ├─ 3b Bytecode Self-Consistency: C source → Clang vs Vitro self-hosting │
 │  └─ 3c Differential Stress: cross-compare multiple implementations of the same feature │
 ├────────────────────────────────────────────────────────────────┤
 │  Defense 2: K&R real-program regression (existing) + LeetCode (started, Phase 4) │
@@ -136,12 +136,12 @@ Cide adopts **five layers of collaborative test defenses**. Core philosophy: *te
 
 ### Defense 1: Shadow Verification
 
-The same C source is compiled and executed by both **Clang** and **Cide**, and stdout outputs are compared for exact match. Golden outputs must come from Clang, never from Cide itself.
+The same C source is compiled and executed by both **Clang** and **Vitro**, and stdout outputs are compared for exact match. Golden outputs must come from Clang, never from Vitro itself.
 
-- **Coverage**: 321 Baseline cases + 82 template-generated cases + 81 K&R cases + 138 LeetCode problems + 14 gap cases (636 C Shadow Verification cases total, 617 exact match + 16 cide_better + 3 known_issue, counting match + cide_better + known_issue; re-measured 2026-09-11); 100 C++ cases (C++ Shadow Verification, 98 match + 2 recorded `clang_compile_fail`: `cpp_cide_vec_class` / `cpp_cide_list_class` cannot be compiled directly by Clang++ because they use Cide built-in containers; measured 2026-06-28, re-verified 2026-09-11)
-- **stdin (`.in`) injection (added 2026-09-11)**: a case may ship a sibling `.in` file; Clang and Cide are fed the **same bytes** (the cache key includes the real stdin). Previously the defense always ran in batch mode with no stdin — 29 `.in` files under `knr/` were never used, producing **false matches** where "no input on both sides" happened to agree. Enabling it immediately exposed a newline-dropping defect in input injection (`getchar()` could never read `'\n'`; 19 `output_gap` cases), fixed by unifying on `RuntimeState::split_stdin`
-- **Output channels (E-P1-5, 2026-09-11)**: comparison reads the engine's **program-stdout channel only** (capi `cide_get_program_output*`, ABI 1.1.0) — engine notes ("程序运行完成，返回值：N", leak reports, teaching warnings) and stderr each have their own channel. **Drivers must not regex-clean output any more**: the dozen or so scattered cleaning rules disagreed with each other and deleted real output when a teaching program printed look-alike text (false-positive `output_gap`); all of them were removed. The single read entry point is the driver's built-in structured-channel helper (`readChannel`/`ptrToGoString` in `scripts/shadow_verify.go`; the former Python companion `cide_output.py` was retired with the main driver); a DLL missing the new symbols fails fast instead of falling back to cleaning. Regression case `baseline/engine_note_lookalike.c` pins this contract
-- **Drivers**: `go run ./scripts/shadow_verify` (C main driver, final step of the D5 language migration on 2026-09-13: took over CI after full-dimension dual-run parity with the Python version, `shadow_verify.py` retired. Shape: two-stage pipeline — Clang side concurrent (`--jobs N`, 0 = auto min(CPU,16)), Cide side serialized under a mutex (DLL is not thread-safe, empirically); measured ~26s for a cold full re-run of 663 cases, ~5s warm. `--refresh-clang` forces a full re-run (nightly CI anti-drift); `--rebuild` rebuilds when the release DLL is older than engine sources; the Clang result cache uses a Go-owned schema (`go1`) co-existing with legacy Python entries in the same directory with disjoint key spaces; transient environment failures (timeout / spawn failure / 0xC0000005 image crash) are retried and never cached), `go run ./scripts/shadow_verify_cpp` (C++ driver since 2026-09-12, D5 migration step 1: Clang 16-way concurrency, 24.75s → 5.2s; self-managed `.shadow_cpp_tmp/` working directory)
+- **Coverage**: 321 Baseline cases + 82 template-generated cases + 81 K&R cases + 138 LeetCode problems + 14 gap cases (636 C Shadow Verification cases total, 617 exact match + 16 vitro_better + 3 known_issue, counting match + vitro_better + known_issue; re-measured 2026-09-11); 100 C++ cases (C++ Shadow Verification, 98 match + 2 recorded `clang_compile_fail`: `cpp_vitro_vec_class` / `cpp_vitro_list_class` cannot be compiled directly by Clang++ because they use Vitro built-in containers; measured 2026-06-28, re-verified 2026-09-11)
+- **stdin (`.in`) injection (added 2026-09-11)**: a case may ship a sibling `.in` file; Clang and Vitro are fed the **same bytes** (the cache key includes the real stdin). Previously the defense always ran in batch mode with no stdin — 29 `.in` files under `knr/` were never used, producing **false matches** where "no input on both sides" happened to agree. Enabling it immediately exposed a newline-dropping defect in input injection (`getchar()` could never read `'\n'`; 19 `output_gap` cases), fixed by unifying on `RuntimeState::split_stdin`
+- **Output channels (E-P1-5, 2026-09-11)**: comparison reads the engine's **program-stdout channel only** (capi `vitro_get_program_output*`, ABI 1.1.0) — engine notes ("程序运行完成，返回值：N", leak reports, teaching warnings) and stderr each have their own channel. **Drivers must not regex-clean output any more**: the dozen or so scattered cleaning rules disagreed with each other and deleted real output when a teaching program printed look-alike text (false-positive `output_gap`); all of them were removed. The single read entry point is the driver's built-in structured-channel helper (`readChannel`/`ptrToGoString` in `scripts/shadow_verify.go`; the former Python companion `vitro_output.py` was retired with the main driver); a DLL missing the new symbols fails fast instead of falling back to cleaning. Regression case `baseline/engine_note_lookalike.c` pins this contract
+- **Drivers**: `go run ./scripts/shadow_verify` (C main driver, final step of the D5 language migration on 2026-09-13: took over CI after full-dimension dual-run parity with the Python version, `shadow_verify.py` retired. Shape: two-stage pipeline — Clang side concurrent (`--jobs N`, 0 = auto min(CPU,16)), Vitro side serialized under a mutex (DLL is not thread-safe, empirically); measured ~26s for a cold full re-run of 663 cases, ~5s warm. `--refresh-clang` forces a full re-run (nightly CI anti-drift); `--rebuild` rebuilds when the release DLL is older than engine sources; the Clang result cache uses a Go-owned schema (`go1`) co-existing with legacy Python entries in the same directory with disjoint key spaces; transient environment failures (timeout / spawn failure / 0xC0000005 image crash) are retried and never cached), `go run ./scripts/shadow_verify_cpp` (C++ driver since 2026-09-12, D5 migration step 1: Clang 16-way concurrency, 24.75s → 5.2s; self-managed `.shadow_cpp_tmp/` working directory)
 - **Reports**: `native/tests/shadow_verification/reports/`
 
 ### Defense 2: K&R Real-Program Regression (existing) + LeetCode (planned)
@@ -161,7 +161,7 @@ The same feature may simultaneously exist as VM Builtin, Rust Host, and Bytecode
 | Sub-layer | Goal | Key files |
 |:----------|:-----|:----------|
 | **3a Host Contract** | Verify Layer B Host Func boundary conditions and safety injection (UAF/Double-Free/Buffer Overflow) | `native/tests/host_contract_tests.rs` |
-| **3b Bytecode Self-Consistency** | Can Cide compiler + VM correctly compile and run "its own standard library" | `native/tests/bytecode_libc_consistency.rs` + `bytecode_libc_consistency/src/*.c` |
+| **3b Bytecode Self-Consistency** | Can Vitro compiler + VM correctly compile and run "its own standard library" | `native/tests/bytecode_libc_consistency.rs` + `bytecode_libc_consistency/src/*.c` |
 | **3c Differential Stress** | Cross-validate Host and Bytecode versions of the same feature; results must always match | `native/tests/differential_stress.rs` |
 
 - **Failure records**: `HOST_CONTRACT_FAILURES.md`, `BYTECODE_LIBC_FAILURES.md`, `DIFFERENTIAL_FAILURES.md`
@@ -238,34 +238,34 @@ The C teaching subset supported by this project covers **Phase 1 ~ Phase 5+** ca
 
 **Explicitly not supported**: bitfield, global VLA, full preprocessor (only `#define` constant macros + `#include` standard library stubs)
 
-**C++ subset boundaries (honest record)**: class types as template arguments for built-in containers such as `vector<T>` / `list<T>`, non-type template parameters, nested class `Outer::Inner` instantiation, const reference parameters, default arguments, and user-defined copy constructors are not yet supported (recorded 2026-06-26). These features are outside the current Cide C++ teaching subset (Stages 0~6) and will be extended as teaching needs evolve.
+**C++ subset boundaries (honest record)**: class types as template arguments for built-in containers such as `vector<T>` / `list<T>`, non-type template parameters, nested class `Outer::Inner` instantiation, const reference parameters, default arguments, and user-defined copy constructors are not yet supported (recorded 2026-06-26). These features are outside the current Vitro C++ teaching subset (Stages 0~6) and will be extended as teaching needs evolve.
 
 ## Known Limitations
 
 ### Currently Not Supported
-- ~~**Parameterized macro calls followed by semicolon**~~ — **Fixed (extension, 2026-06-25)**. During parametric macro expansion, `cide_lexer` dynamically wraps a brace-enclosed macro body as `do { ... } while(0)` when the call is immediately followed by a semicolon, so `SWAP(int,x,y);` now parses correctly inside `if/else` and similar contexts. Regression test added at `end_to_end_extra_test::test_e2e_parametric_macro_swap_semicolon`.
-  - ⚠️ **Behavioral difference from Clang**: Clang rejects `if (...) { ... }; else ...` with "expected expression"; Cide supports this common teaching idiom via automatic wrapping. For strict Clang compatibility, use `do { ... } while(0)` in the macro body.
+- ~~**Parameterized macro calls followed by semicolon**~~ — **Fixed (extension, 2026-06-25)**. During parametric macro expansion, `vitro_lexer` dynamically wraps a brace-enclosed macro body as `do { ... } while(0)` when the call is immediately followed by a semicolon, so `SWAP(int,x,y);` now parses correctly inside `if/else` and similar contexts. Regression test added at `end_to_end_extra_test::test_e2e_parametric_macro_swap_semicolon`.
+  - ⚠️ **Behavioral difference from Clang**: Clang rejects `if (...) { ... }; else ...` with "expected expression"; Vitro supports this common teaching idiom via automatic wrapping. For strict Clang compatibility, use `do { ... } while(0)` in the macro body.
 - ~~**VLA bounds checking**~~ — **Fixed (2026-06-25)**. `gen_index` now emits runtime bounds checking when the first dimension of a VLA is a variable expression: new `TrapBoundsVla` opcode evaluates the VLA dimension expression at index time and compares the index against the runtime bound in the VM. Regression case added at `baseline/vla_bounds.c`. VLA parameters that have decayed to pointers (e.g. `void f(int n, int a[n])`) still cannot be checked because their bound is not available at the use site.
 - ~~**`#include` non-standard library paths**~~ — **Fixed (2026-06-25)**. `#include "header.h"` now loads custom headers relative to the source file directory; standard libraries still use stubs. Regression cases added at `baseline/include_custom_header.c` and `include_custom_header.h`. Absolute paths, system include search paths (`<>` non-standard libraries), and recursive includes remain future work.
 - ~~**`va_list` / `va_start` / `va_arg` / `va_end`**~~ — **Fixed (2026-06-25)**. Custom variadic functions now work end-to-end: `va_list` is modeled as `char*`, `va_start`/`va_arg`/`va_end` are implemented via internal host functions, and `va_arg` reads by dereferencing the address according to the target type. Common types such as `int`, `double`, and `long long` are supported (following C default argument promotions: `float` → `double`, `char` → `int`). Regression case added at `baseline/variadic.c`.
-- **Global VLA** — variable-length arrays in global/static scope are prohibited by the C99 standard itself (Clang reports "variable length array declaration not allowed at file scope"); Cide intentionally does not support this.
+- **Global VLA** — variable-length arrays in global/static scope are prohibited by the C99 standard itself (Clang reports "variable length array declaration not allowed at file scope"); Vitro intentionally does not support this.
 - **VFS text mode newline conversion (fixed)** — as of 2026-06-15, Windows text-mode newline conversion is fully implemented: in `"r"`/`"w"` mode, `\n` is expanded to `\r\n` on write and collapsed to `\n` on read; `fseek`/`ftell` distinguish logical/physical cursor to match Windows CRT behavior. `vfs_io_extensions.c` and `file_fread.c` are restored to matching.
 
-### Known Behavioral Differences Between Cide and Clang (Honest Records)
+### Known Behavioral Differences Between Vitro and Clang (Honest Records)
 
-The following inconsistencies between Cide and Clang were discovered during LeetCode defense filling:
+The following inconsistencies between Vitro and Clang were discovered during LeetCode defense filling:
 
 - ~~**Compound side-effect array indexing**~~ — **Fixed (2026-06-25)**. Root cause: `gen_mem_inc_dec` (pre-/post-increment/decrement memory operation) and `gen_assign` reused the same temporary slot (`temp_slot0`) for Index assignment, so the side effect of the right-hand index expression overwrote the left-hand address temporary. The fix uses `temp_slot3` to save the new value in `gen_mem_inc_dec`; regression case added at `baseline/side_effect_index.c`.
-- ~~**Function returning `double` value is incorrect**~~ — **Fixed (2026-06-25)**. Root cause: the `return` statement did not insert an implicit cast for the return expression, so `return 2.5;` (where `2.5` is parsed as a `float` literal) generated `PushConstF` instead of `PushConstD` when the function return type was `double`. The fix calls `insert_implicit_cast` after `check_assignable` in `cide_typeck::decl.rs`; regression case added at `baseline/float_func_return.c`. `lc_4.c` has been restored to the original `double` return implementation.
-- ~~**`scanf` `%s` format specifier not supported**~~ — **Fixed (2026-06-25)**. `host_scanf_n`/`host_sscanf` in `crates/cide_vm/src/host/io.rs` now handle the `'s'` specifier: skip leading whitespace, read a sequence of non-whitespace characters, and write them to the target buffer terminated by `'\0'`. Regression case added at `baseline/scanf_string.c` (based on `sscanf` to avoid uncontrollable input between Shadow Verification cases).
-- ~~**`fputs(str, stdout)` produces no output**~~ — **Fixed (2026-06-19)**. `host_fputs` in `crates/cide_vm/src/host/file.rs` now recognizes the lexer-predefined `stdout`(1)/`stderr`(2) macro fds and appends the string to the program output; writing to ordinary `FILE*` streams remains unchanged. (Since E-P1-5 these land in the structured `stdout` / `stderr` channels.)
+- ~~**Function returning `double` value is incorrect**~~ — **Fixed (2026-06-25)**. Root cause: the `return` statement did not insert an implicit cast for the return expression, so `return 2.5;` (where `2.5` is parsed as a `float` literal) generated `PushConstF` instead of `PushConstD` when the function return type was `double`. The fix calls `insert_implicit_cast` after `check_assignable` in `vitro_typeck::decl.rs`; regression case added at `baseline/float_func_return.c`. `lc_4.c` has been restored to the original `double` return implementation.
+- ~~**`scanf` `%s` format specifier not supported**~~ — **Fixed (2026-06-25)**. `host_scanf_n`/`host_sscanf` in `crates/vitro_vm/src/host/io.rs` now handle the `'s'` specifier: skip leading whitespace, read a sequence of non-whitespace characters, and write them to the target buffer terminated by `'\0'`. Regression case added at `baseline/scanf_string.c` (based on `sscanf` to avoid uncontrollable input between Shadow Verification cases).
+- ~~**`fputs(str, stdout)` produces no output**~~ — **Fixed (2026-06-19)**. `host_fputs` in `crates/vitro_vm/src/host/file.rs` now recognizes the lexer-predefined `stdout`(1)/`stderr`(2) macro fds and appends the string to the program output; writing to ordinary `FILE*` streams remains unchanged. (Since E-P1-5 these land in the structured `stdout` / `stderr` channels.)
 - **`fprintf` to a custom `FILE*` does not reach the file** — **Pre-existing deviation (recorded 2026-09-11, audited alongside E-P1-5)**. `host_fprintf_n` does not interpret its `stream` argument: `stderr` is now correctly routed to the stderr channel, but `fprintf(fp, ...)` (with `fp` from `fopen`) is emitted as stdout instead of being written to the VFS file (unlike Clang). Teaching code mostly pairs `fprintf` with `stderr`, so none of the 633 Shadow cases hit this; use `fputs`/`fwrite`/`fputc` when writing to files.
 - ~~**`FILE*` still reported as memory leak after `fclose`**~~ — **Fixed (2026-06-25)**. Root cause: `host_fclose` only closed the VFS file descriptor but did not release the 4-byte `FILE*` struct allocated on the VM Heap by `host_fopen`. The fix adds `MemoryState::free_region` and calls it from `host_fclose`; non-heap streams such as `stdout`/`stderr` are safely ignored when no matching region is found. Regression case added at `baseline/fclose_leak.c`.
 - ~~**VLA bounds checking missing**~~ — **Fixed (2026-06-25)**. `gen_index` now emits runtime bounds checking for VLAs whose first dimension is a variable expression via the new `TrapBoundsVla` opcode; the VM compares the index against the runtime-evaluated bound. Regression case added at `baseline/vla_bounds.c`. VLA parameters decayed to pointers are still unchecked.
-- ~~**Parameterized macro calls followed by semicolon**~~ — **Fixed (extension, 2026-06-25)**. `cide_lexer` dynamically wraps brace-enclosed parametric macro bodies as `do { ... } while(0)` when the call is followed by a semicolon, allowing `SWAP(int,x,y);` to parse inside `if/else`. Regression test added at `end_to_end_extra_test::test_e2e_parametric_macro_swap_semicolon`.
-  - ⚠️ **Behavioral difference from Clang**: Clang rejects the unwrapped `{ ... };` form, while Cide supports it as a teaching convenience.
+- ~~**Parameterized macro calls followed by semicolon**~~ — **Fixed (extension, 2026-06-25)**. `vitro_lexer` dynamically wraps brace-enclosed parametric macro bodies as `do { ... } while(0)` when the call is followed by a semicolon, allowing `SWAP(int,x,y);` to parse inside `if/else`. Regression test added at `end_to_end_extra_test::test_e2e_parametric_macro_swap_semicolon`.
+  - ⚠️ **Behavioral difference from Clang**: Clang rejects the unwrapped `{ ... };` form, while Vitro supports it as a teaching convenience.
 - **Pointer compound assignment `+=` / `-=`** — **Supported (2026-06-28)**. `int* p; p += n;` and `p -= n;` are supported end-to-end with pointee-size scaling; `void* p; p += n;` uses 1-byte steps as a GCC/Clang extension. Function pointer arithmetic, pointer-pointer `+=` / `-=`, and other compound operators (`*=`, `/=`, etc.) remain errors. Regression cases added at `baseline/pointer_add_assign*.c`.
-  - ⚠️ **Behavioral difference from Clang**: `void*` arithmetic is a GCC/Clang extension and is undefined in strict C; prefer concrete pointer types in teaching. The value returned by a compound assignment expression is an rvalue pointer in Cide, differing from the C standard lvalue semantics, though this is rarely relied upon in teaching code.
+  - ⚠️ **Behavioral difference from Clang**: `void*` arithmetic is a GCC/Clang extension and is undefined in strict C; prefer concrete pointer types in teaching. The value returned by a compound assignment expression is an rvalue pointer in Vitro, differing from the C standard lvalue semantics, though this is rarely relied upon in teaching code.
 
 > Historical feature details and bug-fix records are in [`CHANGELOG.md`](CHANGELOG.md) and [`C-语言子集/C语言子集规范.md`](C-语言子集/C语言子集规范.md).
 
@@ -274,10 +274,10 @@ The following inconsistencies between Cide and Clang were discovered during Leet
 ```bash
 # Build the Rust engine (Debug / Release)
 cd native && cargo build            # Debug
-cd native && cargo build --release  # Output: native/target/release/cide_native.dll
+cd native && cargo build --release  # Output: native/target/release/vitro_native.dll
 
 # Build the CLI debug tool
-cd native && cargo build --release --bin cide_cli
+cd native && cargo build --release --bin vitro_cli
 
 # Build the wasm32 exit (browser/white-box form; smoke-tested at 3.75MB)
 cd native && cargo build --target wasm32-unknown-unknown --release
@@ -291,7 +291,7 @@ go run ./scripts/shadow_verify
 go run ./scripts/shadow_verify_cpp
 
 # serve protocol smoke
-cargo build --bin cide_cli && python scripts/serve_smoke.py
+cargo build --bin vitro_cli && python scripts/serve_smoke.py
 ```
 
 > Historical frontend builds (Flutter / Android / iOS) were removed with the frontend; scripts live under tag `before-frontend-split`.
@@ -300,21 +300,21 @@ cargo build --bin cide_cli && python scripts/serve_smoke.py
 
 ### Native Layer Debugging (Rust)
 1. Project properties → Debug → **Enable native code debugging**
-2. Set breakpoints in `cide_compile_all` / `cide_run` in `native/src/capi/mod.rs`
+2. Set breakpoints in `vitro_compile_all` / `vitro_run` in `native/src/capi/mod.rs`
 3. PDB warning (`apphost.pdb` missing) can be safely ignored
-4. Frontend-less debugging: `cide_cli step <file>` interactive stepping (`p` prints variables / `o` prints output), or `cide_cli serve` JSON-lines sessions
+4. Frontend-less debugging: `vitro_cli step <file>` interactive stepping (`p` prints variables / `o` prints output), or `vitro_cli serve` JSON-lines sessions
 
 ### Memory Leak Localization
 - Parser infinite loop symptom: memory grows slowly and continuously (~100MB/s), AST nodes or error messages keep accumulating
 
 ## CLI Debugging Tool
 
-The project provides an independent command-line debugging tool `cide_cli` that operates the Rust backend compiler/VM directly (no frontend dependency; the first entry point for headless debugging).
+The project provides an independent command-line debugging tool `vitro_cli` that operates the Rust backend compiler/VM directly (no frontend dependency; the first entry point for headless debugging).
 
 ### Build
 
 ```bash
-cd native && cargo build --release --bin cide_cli
+cd native && cargo build --release --bin vitro_cli
 ```
 
 ### Commands
@@ -338,10 +338,10 @@ cd native && cargo build --release --bin cide_cli
 ```bash
 # Pipe directly
 echo '#include <stdio.h>
-int main() { printf("hello\n"); return 0; }' | cide_cli run -
+int main() { printf("hello\n"); return 0; }' | vitro_cli run -
 
 # here-document compile
-cide_cli compile - <<'EOF'
+vitro_cli compile - <<'EOF'
 #include <stdio.h>
 int main() {
     int a = 10, b = 20;
@@ -351,16 +351,16 @@ int main() {
 EOF
 
 # Run with input file
-cide_cli run sum.c -i input.txt
+vitro_cli run sum.c -i input.txt
 
 # Unified mode execution
-cide_cli unified hello.c
+vitro_cli unified hello.c
 
 # Unified mode with increased step limit (for long programs or performance baseline)
-cide_cli unified long_sort.c --max-steps 500000
+vitro_cli unified long_sort.c --max-steps 500000
 
 # Precompile bytecode artifact (with Bytecode Libc)
-cide_cli export main.c libc_helper.c -o bundle.json --builtin-libc
+vitro_cli export main.c libc_helper.c -o bundle.json --builtin-libc
 ```
 
 Full documentation: [`B-构建与上手/CLI使用手册.md`](B-构建与上手/CLI使用手册.md).

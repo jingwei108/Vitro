@@ -1,0 +1,9 @@
+[package]
+name = "vitro_parser"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+vitro_shared = { path = "../vitro_shared" }
+vitro_ast = { path = "../vitro_ast" }
+vitro_lexer = { path = "../vitro_lexer" }

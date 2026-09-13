@@ -10,7 +10,7 @@
 #   powershell -NoProfile -File scripts\diag_mem.ps1 -ProcId 12345
 #
 #   # 启动并采样一条命令（命令 + 参数）：
-#   powershell -NoProfile -File scripts\diag_mem.ps1 -FilePath native\target\release\cide_cli.exe -Args "serve"
+#   powershell -NoProfile -File scripts\diag_mem.ps1 -FilePath native\target\release\vitro_cli.exe -Args "serve"
 #
 #   # 带阈值：超过 400MB commit 即告警并以 exit 1 结束（不杀进程，只观测）
 #   powershell -NoProfile -File scripts\diag_mem.ps1 -ProcId 12345 -ThresholdMB 400

@@ -10,11 +10,11 @@
 //! - 记录所有偏差：即使偏差极小，也要记录。
 //! - 不通过删减测试用例来消除差异。
 
-use cide_native::engine::compile_pipeline::{run_multi_file_pipeline, setup_vm};
-use cide_native::session::{CompileUnit, Session};
-use cide_native::vm::context::VmContext;
-use cide_native::vm::core::CideVM;
-use cide_native::vm::host_funcs::{
+use vitro_native::engine::compile_pipeline::{run_multi_file_pipeline, setup_vm};
+use vitro_native::session::{CompileUnit, Session};
+use vitro_native::vm::context::VmContext;
+use vitro_native::vm::core::VitroVM;
+use vitro_native::vm::host_funcs::{
     host_abs, host_atoi, host_isalnum, host_isalpha, host_iscntrl, host_isdigit, host_islower, host_isprint,
     host_isspace, host_isupper, host_isxdigit, host_memcpy, host_memmove, host_strcmp, host_strlen, host_strncpy,
     host_tolower, host_toupper,
@@ -24,7 +24,7 @@ const BC_STDLIB: &str = include_str!("../runtime_libc/src/stdlib.c");
 const BC_STRING: &str = include_str!("../runtime_libc/src/string.c");
 
 /// 编译 Bytecode Libc 源码并加载到 VM。
-fn prepare_bc_vm(sources: &[(&str, &str)]) -> (CideVM, Session) {
+fn prepare_bc_vm(sources: &[(&str, &str)]) -> (VitroVM, Session) {
     let mut units = vec![CompileUnit {
         filename: "main.c".to_string(),
         source: "int main() { return 0; }\n".to_string(),
@@ -39,14 +39,14 @@ fn prepare_bc_vm(sources: &[(&str, &str)]) -> (CideVM, Session) {
     let mut session = Session::default();
     run_multi_file_pipeline(&mut session, units, false).expect("Bytecode Libc 编译失败");
 
-    let mut vm = CideVM::new();
+    let mut vm = VitroVM::new();
     setup_vm(&mut vm, &session);
 
     (vm, session)
 }
 
 /// 查找 VM 中已注册函数的索引。
-fn find_func_idx(vm: &CideVM, name: &str) -> u32 {
+fn find_func_idx(vm: &VitroVM, name: &str) -> u32 {
     vm.get_func_index(name)
         .unwrap_or_else(|| panic!("函数 {} 未在 VM 中注册", name))
 }
@@ -61,7 +61,7 @@ fn test_diff_abs() {
     let inputs = [-5i32, 0, 5, -123, 2147483647];
     for &n in &inputs {
         // Host 路径
-        let mut hvm = CideVM::new();
+        let mut hvm = VitroVM::new();
         let mut hsess = Session::default();
         hvm.push(n as u64);
         host_abs(&mut hvm, &mut hsess.as_vm_context());
@@ -186,7 +186,7 @@ fn test_diff_strcmp() {
 }
 
 /// 从 VM 内存读取 C 风格字符串（遇到 \0 停止）。
-fn read_test_string(vm: &CideVM, addr: u32) -> String {
+fn read_test_string(vm: &VitroVM, addr: u32) -> String {
     let mem = vm.memory_ref();
     let start = addr as usize;
     if start >= mem.len() {
@@ -198,13 +198,13 @@ fn read_test_string(vm: &CideVM, addr: u32) -> String {
 
 // ─── ctype 差分测试（批量） ─────────────────────────────────────────────────
 
-fn diff_ctype_test(func_name: &str, inputs: &[i32], host_fn: fn(&mut CideVM, &mut VmContext<'_>)) {
+fn diff_ctype_test(func_name: &str, inputs: &[i32], host_fn: fn(&mut VitroVM, &mut VmContext<'_>)) {
     let (mut vm, mut session) = prepare_bc_vm(&[("ctype.c", BC_CTYPE)]);
     let func_idx = find_func_idx(&vm, func_name);
 
     for &c in inputs {
         // Host 路径
-        let mut hvm = CideVM::new();
+        let mut hvm = VitroVM::new();
         let mut hsess = Session::default();
         hvm.push(c as u64);
         host_fn(&mut hvm, &mut hsess.as_vm_context());

@@ -2,9 +2,9 @@ use crate::session::Session;
 use crate::unified::collector::{self, StepCollector};
 use crate::unified::trace_analyzer::TraceAnalyzer;
 use crate::unified::types::{AutoStepResult, SeekResult, StepMeta, StepPayload};
-use crate::vm::core::{CideVM, StepResult};
+use crate::vm::core::{VitroVM, StepResult};
 use crate::vm::snapshot::VMSnapshot;
-use cide_vm::snapshot::CheckpointManager;
+use vitro_vm::snapshot::CheckpointManager;
 
 /// 统一模式引擎：整合检查点管理、数据收集和批量执行。
 ///
@@ -100,7 +100,7 @@ impl UnifiedEngine {
     /// 调用者应确保 VM 已初始化（`setup_vm` 已调用）。
     pub fn run_batch(
         &mut self,
-        vm: &mut CideVM,
+        vm: &mut VitroVM,
         session: &mut Session,
         batch_size: i32,
     ) -> Result<AutoStepResult, String> {
@@ -239,7 +239,7 @@ impl UnifiedEngine {
     ///
     /// 如果目标步已在当前 `frame_cache` 窗口中，直接返回；
     /// 否则从最近检查点恢复 VM 并正向重放，然后只保留目标步附近窗口内的帧。
-    pub fn seek_to(&mut self, target: i32, vm: &mut CideVM, session: &mut Session) -> SeekResult {
+    pub fn seek_to(&mut self, target: i32, vm: &mut VitroVM, session: &mut Session) -> SeekResult {
         // 目标已在当前窗口中
         if let Some(idx) = self.frame_cache_index(target) {
             return SeekResult {
@@ -271,7 +271,7 @@ impl UnifiedEngine {
         self.frame_cache.clear();
         self.frame_cache_start_step = checkpoint_step;
 
-        if std::env::var("CIDE_SEEK_DEBUG").is_ok() {
+        if std::env::var("VITRO_SEEK_DEBUG").is_ok() {
             eprintln!(
                 "[seek_debug] cp={checkpoint_step} target={target} cache_start={} len={}",
                 self.frame_cache_start_step,
@@ -333,7 +333,7 @@ impl UnifiedEngine {
 
         self.finish_replay_window(target);
 
-        if std::env::var("CIDE_SEEK_DEBUG").is_ok() {
+        if std::env::var("VITRO_SEEK_DEBUG").is_ok() {
             eprintln!(
                 "[seek_debug] 重放完成 cache_start={} len={}",
                 self.frame_cache_start_step,

@@ -1,5 +1,5 @@
-// cabi_smoke.go — Go syscall 驱动 cide_native.dll 的 C ABI 冒烟（D5 前置验证）。
-// 验证三类边界：版本串（rust-alloc 字符串：指针取回 + cide_free_string 释放）、句柄指针往返。
+// cabi_smoke.go — Go syscall 驱动 vitro_native.dll 的 C ABI 冒烟（D5 前置验证）。
+// 验证三类边界：版本串（rust-alloc 字符串：指针取回 + vitro_free_string 释放）、句柄指针往返。
 // 运行：go run cabi_smoke.go（需先 cargo build --release）
 // vet 说明：`go vet -unsafeptr=false cabi_smoke.go` 零告警。unsafeptr 单项豁免是已裁定的：
 // DLL Call 返回值天然是 uintptr，转 unsafe.Pointer 是 Win32 互操作的必然形态
@@ -10,21 +10,31 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+	"runtime"
 	"syscall"
 	"unsafe"
 )
 
+// dllPath 以本源文件位置推导仓库根，摆脱对本地目录名的绝对路径依赖
+// （go run 模式下 runtime.Caller 返回源文件真实路径）。
+var dllPath = func() string {
+	_, this, _, _ := runtime.Caller(0) // <repo>/scripts/gosmoke/cabi_smoke.go
+	root := filepath.Dir(filepath.Dir(filepath.Dir(this)))
+	return filepath.Join(root, "native", "target", "release", "vitro_native.dll")
+}()
+
 var (
-	dll         = syscall.NewLazyDLL(`D:\code\c_ide_rust\native\target\release\cide_native.dll`)
-	abiVersion  = dll.NewProc("cide_abi_version")
-	engineVer   = dll.NewProc("cide_engine_version")
-	freeString  = dll.NewProc("cide_free_string")
-	sessionNew  = dll.NewProc("cide_session_create")
-	sessionFree = dll.NewProc("cide_session_destroy")
+	dll         = syscall.NewLazyDLL(dllPath)
+	abiVersion  = dll.NewProc("vitro_abi_version")
+	engineVer   = dll.NewProc("vitro_engine_version")
+	freeString  = dll.NewProc("vitro_free_string")
+	sessionNew  = dll.NewProc("vitro_session_create")
+	sessionFree = dll.NewProc("vitro_session_destroy")
 )
 
 // cString 从 C 字符串指针读 NUL 结尾内容为 Go string（只读扫描，不接管所有权）。
-// 这是共享 DLL helper 的雏形——cide_output.py 的 "restype 必须 c_void_p" 口径在 Go 侧的对应物。
+// 这是共享 DLL helper 的雏形——vitro_output.py 的 "restype 必须 c_void_p" 口径在 Go 侧的对应物。
 // vet 合规要求 uintptr → unsafe.Pointer 转换与解引用在同一表达式内完成，不得先存变量再转。
 func cString(ptr uintptr) string {
 	if ptr == 0 {
@@ -52,27 +62,27 @@ func main() {
 	// ① ABI 版本（返回 rust-alloc 字符串 "1.1.0"，不是整数——capi/first_batch.rs:66）
 	abip, _, _ := abiVersion.Call()
 	if abip == 0 {
-		fmt.Fprintln(os.Stderr, "cide_abi_version 返回 NULL")
+		fmt.Fprintln(os.Stderr, "vitro_abi_version 返回 NULL")
 		os.Exit(1)
 	}
 	abi := cString(abip)
 	_, _, _ = freeString.Call(abip) // rust-alloc 所有权契约：立即归还
-	fmt.Printf("cide_abi_version = %q\n", abi)
+	fmt.Printf("vitro_abi_version = %q\n", abi)
 
 	// ② 引擎版本串（同契约）
 	vp, _, _ := engineVer.Call()
 	if vp == 0 {
-		fmt.Fprintln(os.Stderr, "cide_engine_version 返回 NULL")
+		fmt.Fprintln(os.Stderr, "vitro_engine_version 返回 NULL")
 		os.Exit(1)
 	}
 	ver := cString(vp)
 	_, _, _ = freeString.Call(vp)
-	fmt.Printf("cide_engine_version = %q\n", ver)
+	fmt.Printf("vitro_engine_version = %q\n", ver)
 
 	// ③ 句柄指针往返：create → destroy（非 NULL 即契约成立）
 	sh, _, _ := sessionNew.Call()
 	if sh == 0 {
-		fmt.Fprintln(os.Stderr, "cide_session_create 返回 NULL")
+		fmt.Fprintln(os.Stderr, "vitro_session_create 返回 NULL")
 		os.Exit(1)
 	}
 	fmt.Printf("session handle = 0x%x\n", sh)

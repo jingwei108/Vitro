@@ -10,11 +10,11 @@
 use std::collections::BTreeSet;
 use std::ffi::{c_char, CStr, CString};
 
-use cide_native::capi;
-use cide_native::session::Session;
-use cide_native::unified::contracts;
-use cide_native::unified::types::{PointerStatus, StepPayload};
-use cide_native::unified::vocabulary;
+use vitro_native::capi;
+use vitro_native::session::Session;
+use vitro_native::unified::contracts;
+use vitro_native::unified::types::{PointerStatus, StepPayload};
+use vitro_native::unified::vocabulary;
 
 /// schema v0.1 顶层 14 字段（`docs/spec/STEP_PAYLOAD_SCHEMA_V0_1.md` §1）。
 const TOP_LEVEL_FIELDS: [&str; 14] = [
@@ -39,18 +39,18 @@ unsafe fn take_string(p: *mut c_char) -> String {
         return String::new();
     }
     let s = CStr::from_ptr(p).to_string_lossy().to_string();
-    capi::cide_free_string(p);
+    capi::vitro_free_string(p);
     s
 }
 
 fn compile_session(source: &str) -> *mut Session {
     unsafe {
-        let session = capi::cide_session_create();
+        let session = capi::vitro_session_create();
         assert!(!session.is_null(), "session 创建失败");
         let fname = CString::new("main.c").unwrap();
         let src = CString::new(source).unwrap();
-        capi::cide_compile_unit(session, fname.as_ptr(), src.as_ptr());
-        let diag = take_string(capi::cide_compile_json(session));
+        capi::vitro_compile_unit(session, fname.as_ptr(), src.as_ptr());
+        let diag = take_string(capi::vitro_compile_json(session));
         let v: serde_json::Value = serde_json::from_str(&diag).unwrap();
         assert_eq!(v["ok"], true, "示例程序应编译成功: {}", diag);
         session
@@ -60,14 +60,14 @@ fn compile_session(source: &str) -> *mut Session {
 fn step_until(session: *mut Session, steps: usize) -> Vec<serde_json::Value> {
     let mut collected = Vec::new();
     unsafe {
-        // 统一模式必须显式初始化（cide_step_begin 装载 VM + 建初始检查点）
+        // 统一模式必须显式初始化（vitro_step_begin 装载 VM + 建初始检查点）
         assert_eq!(
-            capi::cide_step_begin(session),
+            capi::vitro_step_begin(session),
             0,
             "统一模式会话初始化失败（会话须已编译成功）"
         );
         for _ in 0..steps {
-            let s = take_string(capi::cide_step_next_json(session));
+            let s = take_string(capi::vitro_step_next_json(session));
             let v: serde_json::Value = serde_json::from_str(&s).unwrap();
             for p in v["payloads"].as_array().cloned().unwrap_or_default() {
                 collected.push(p);
@@ -106,7 +106,7 @@ int main() {
 fn test_step_payload_top_level_fields_frozen() {
     let session = compile_session(SAMPLE);
     let payloads = step_until(session, 60);
-    unsafe { capi::cide_session_destroy(session) };
+    unsafe { capi::vitro_session_destroy(session) };
 
     assert!(!payloads.is_empty(), "应至少收集到一个 payload");
     let expected: BTreeSet<String> = TOP_LEVEL_FIELDS.iter().map(|s| s.to_string()).collect();
@@ -124,7 +124,7 @@ fn test_step_payload_top_level_fields_frozen() {
 fn test_substructure_fields_frozen() {
     let session = compile_session(SAMPLE);
     let payloads = step_until(session, 60);
-    unsafe { capi::cide_session_destroy(session) };
+    unsafe { capi::vitro_session_destroy(session) };
 
     let mut saw_local = false;
     let mut saw_array = false;
@@ -238,7 +238,7 @@ fn test_frame_cache_window_2000_frames_with_20pct_trim() {
     assert!(steps > 2000, "样本应产生 >2000 步以触发窗口裁剪，实际 {}", steps);
 
     unsafe {
-        let s = take_string(capi::cide_get_step_payloads_json(session, 0, i32::MAX));
+        let s = take_string(capi::vitro_get_step_payloads_json(session, 0, i32::MAX));
         let v: serde_json::Value = serde_json::from_str(&s).unwrap();
         let window = v["payloads"].as_array().expect("payloads 必须是数组");
         let cache_start = v["cache_start_step"].as_i64().unwrap_or(-1);
@@ -255,7 +255,7 @@ fn test_frame_cache_window_2000_frames_with_20pct_trim() {
             first_step, cache_start,
             "窗口首帧步号必须等于 cache_start_step"
         );
-        capi::cide_session_destroy(session);
+        capi::vitro_session_destroy(session);
     }
 }
 
@@ -316,7 +316,7 @@ fn all_keys_recursive(value: &serde_json::Value, out: &mut BTreeSet<String>) {
 fn test_v0_1_reserved_fields_absent() {
     let session = compile_session(SAMPLE);
     let payloads = step_until(session, 200);
-    unsafe { capi::cide_session_destroy(session) };
+    unsafe { capi::vitro_session_destroy(session) };
     assert!(!payloads.is_empty(), "应至少收集到一个 payload");
 
     let reserved: BTreeSet<&str> = contracts::RESERVED_FIELDS_V0_2.into_iter().collect();
@@ -353,7 +353,7 @@ fn test_reserved_field_names_frozen() {
 fn test_semantic_label_vocabulary_closed() {
     let session = compile_session(VOCABULARY_SAMPLE);
     let payloads = step_until(session, 5_000);
-    unsafe { capi::cide_session_destroy(session) };
+    unsafe { capi::vitro_session_destroy(session) };
     assert!(!payloads.is_empty(), "词汇闭包样本应产生步数据");
 
     let mut seen: BTreeSet<&'static str> = BTreeSet::new();

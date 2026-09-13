@@ -1,4 +1,4 @@
-# Cide 项目 Rust 代码统一格式化配置
+# Vitro 项目 Rust 代码统一格式化配置
 # 使用: cargo fmt
 
 edition = "2021"

@@ -1,9 +1,9 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use cide_native::compiler::codegen::BytecodeGen;
-use cide_native::compiler::lexer::Lexer;
-use cide_native::compiler::parser::Parser;
-use cide_native::compiler::typeck::TypeChecker;
+use vitro_native::compiler::codegen::BytecodeGen;
+use vitro_native::compiler::lexer::Lexer;
+use vitro_native::compiler::parser::Parser;
+use vitro_native::compiler::typeck::TypeChecker;
 
 #[test]
 fn test_debug_delete_array() {

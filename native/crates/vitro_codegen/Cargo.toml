@@ -1,0 +1,10 @@
+[package]
+name = "vitro_codegen"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+vitro_shared = { path = "../vitro_shared" }
+vitro_ast = { path = "../vitro_ast" }
+vitro_runtime = { path = "../vitro_runtime" }
+vitro_cpp_frontend = { path = "../vitro_cpp_frontend" }

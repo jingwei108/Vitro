@@ -4,7 +4,7 @@
 //! 用于测量 `UnifiedEngine` 在 release 模式下的单步执行耗时与内存占用。
 //!
 //! 运行方式：
-//!   cd native && cargo run --release --bin cide_cli -- unified benches/unified_perf_baseline.c --max-steps 200000
+//!   cd native && cargo run --release --bin vitro_cli -- unified benches/unified_perf_baseline.c --max-steps 200000
 
 #include <stdio.h>
 

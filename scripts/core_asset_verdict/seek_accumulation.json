@@ -33,7 +33,7 @@
   "iters": 50000,
   "killed_by_watchdog": false,
   "peak_commit_mb": 513.7,
-  "stderr_tail": "cide_cli serve：JSON-lines 会话模式（EOF 或 shutdown 退出）\n",
+  "stderr_tail": "vitro_cli serve：JSON-lines 会话模式（EOF 或 shutdown 退出）\n",
   "steps_est": 500000,
   "timeline": [
    {

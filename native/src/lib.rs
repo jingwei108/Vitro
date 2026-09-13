@@ -20,4 +20,4 @@ pub mod session;
 pub mod session_api;
 pub mod shared;
 pub mod unified;
-pub use cide_vm as vm;
+pub use vitro_vm as vm;

@@ -4,14 +4,14 @@
 开发流程：
 1. 修改 native/runtime_libc/src/*.c
 2. 运行 python scripts/precompile_bytecode_libc.py
-3. git add native/crates/cide_vm/src/bytecode_libc_data.json native/crates/cide_runtime/src/bytecode_libc_index.rs
+3. git add native/crates/vitro_vm/src/bytecode_libc_data.json native/crates/vitro_runtime/src/bytecode_libc_index.rs
 4. git commit
 
 CI 检查：
     python scripts/precompile_bytecode_libc.py --check
 
 `--check` 以 `source_digest`（源文件内容 SHA-256）判定产物是否与
-`native/runtime_libc/{src,cide}/` 同步，**不依赖文件 mtime**。
+`native/runtime_libc/{src,vitro}/` 同步，**不依赖文件 mtime**。
 
 > 2026-09-11 修复：旧实现比较 mtime。CI 干净检出时 git 不保留 mtime，
 > 且 `actions/checkout` 按路径顺序写文件（`native/crates/...` 先于
@@ -31,15 +31,15 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 NATIVE_DIR = os.path.join(PROJECT_ROOT, "native")
 RUNTIME_LIBC_SRC_DIRS = [
     os.path.join(NATIVE_DIR, "runtime_libc", "src"),
-    os.path.join(NATIVE_DIR, "runtime_libc", "cide"),
+    os.path.join(NATIVE_DIR, "runtime_libc", "vitro"),
 ]
-VM_DIR = os.path.join(NATIVE_DIR, "crates", "cide_vm", "src")
+VM_DIR = os.path.join(NATIVE_DIR, "crates", "vitro_vm", "src")
 OUTPUT_JSON = os.path.join(VM_DIR, "bytecode_libc_data.json")
 OUTPUT_RS = os.path.join(
-    NATIVE_DIR, "crates", "cide_runtime", "src", "bytecode_libc_index.rs"
+    NATIVE_DIR, "crates", "vitro_runtime", "src", "bytecode_libc_index.rs"
 )
 LAYOUT_JSON = os.path.join(
-    NATIVE_DIR, "crates", "cide_cpp_frontend", "src", "builtin_layout_data.json"
+    NATIVE_DIR, "crates", "vitro_cpp_frontend", "src", "builtin_layout_data.json"
 )
 
 # 摘要 schema 版本：源文件集合或摘要算法变化时递增，
@@ -54,7 +54,7 @@ def source_files(include_headers: bool = True) -> list:
     """返回 runtime_libc 下参与预编译的源文件（按路径排序）。
 
     `include_headers=True` 用于内容摘要（头文件变化同样需要重新生成）；
-    传给 `cide_cli export` 时应为 `False`（只传 .c/.cpp）。
+    传给 `vitro_cli export` 时应为 `False`（只传 .c/.cpp）。
     """
     exts = SOURCE_EXTS if include_headers else (".c", ".cpp")
     files = []
@@ -88,13 +88,13 @@ def compute_source_digest() -> str:
     return "sha256:" + h.hexdigest()
 
 
-def find_cide_cli() -> str:
-    """查找 cide_cli 可执行文件路径。"""
+def find_vitro_cli() -> str:
+    """查找 vitro_cli 可执行文件路径。"""
     candidates = [
-        os.path.join(NATIVE_DIR, "target", "release", "cide_cli.exe"),
-        os.path.join(NATIVE_DIR, "target", "release", "cide_cli"),
-        os.path.join(NATIVE_DIR, "target", "debug", "cide_cli.exe"),
-        os.path.join(NATIVE_DIR, "target", "debug", "cide_cli"),
+        os.path.join(NATIVE_DIR, "target", "release", "vitro_cli.exe"),
+        os.path.join(NATIVE_DIR, "target", "release", "vitro_cli"),
+        os.path.join(NATIVE_DIR, "target", "debug", "vitro_cli.exe"),
+        os.path.join(NATIVE_DIR, "target", "debug", "vitro_cli"),
     ]
     for c in candidates:
         if os.path.exists(c):
@@ -102,23 +102,23 @@ def find_cide_cli() -> str:
     return ""
 
 
-def build_cide_cli() -> str:
-    """构建 cide_cli，返回可执行文件路径。"""
-    print("Building cide_cli...")
+def build_vitro_cli() -> str:
+    """构建 vitro_cli，返回可执行文件路径。"""
+    print("Building vitro_cli...")
     subprocess.run(
-        ["cargo", "build", "--release", "--bin", "cide_cli"],
+        ["cargo", "build", "--release", "--bin", "vitro_cli"],
         cwd=NATIVE_DIR,
         check=True,
     )
-    exe = find_cide_cli()
+    exe = find_vitro_cli()
     if not exe:
-        raise RuntimeError("cide_cli build succeeded but executable not found")
+        raise RuntimeError("vitro_cli build succeeded but executable not found")
     print(f"  -> {exe}")
     return exe
 
 
 def precompile(exe: str) -> dict:
-    """调用 cide_cli export 预编译 runtime_libc。"""
+    """调用 vitro_cli export 预编译 runtime_libc。"""
     # Stage 2b: .cpp files now contain full C++ implementations,
     # and legacy .c container implementations are being removed.
     source_paths = source_files(include_headers=False)
@@ -161,18 +161,18 @@ def precompile(exe: str) -> dict:
 def validate_precompiled(data: dict) -> None:
     """校验预编译产物符合 Stage 2b 要求：
 
-    1. runtime_libc/cide/ 下不应存在旧 .c 实现。
+    1. runtime_libc/vitro/ 下不应存在旧 .c 实现。
     2. builtin_layout 中注册的方法必须在产物中可用。
-    3. 不应残留旧 C 风格函数名（如 cide_vec_init_int）。
+    3. 不应残留旧 C 风格函数名（如 vitro_vec_init_int）。
     """
-    cide_dir = os.path.join(NATIVE_DIR, "runtime_libc", "cide")
+    vitro_dir = os.path.join(NATIVE_DIR, "runtime_libc", "vitro")
     legacy_c_files = [
-        f for f in os.listdir(cide_dir) if f.endswith(".c")
-    ] if os.path.isdir(cide_dir) else []
+        f for f in os.listdir(vitro_dir) if f.endswith(".c")
+    ] if os.path.isdir(vitro_dir) else []
     if legacy_c_files:
         raise RuntimeError(
             f"发现遗留 C 容器实现: {legacy_c_files}. "
-            "Stage 2b 要求 runtime_libc/cide/ 只保留 .cpp 实现。"
+            "Stage 2b 要求 runtime_libc/vitro/ 只保留 .cpp 实现。"
         )
 
     if not os.path.exists(LAYOUT_JSON):
@@ -183,11 +183,11 @@ def validate_precompiled(data: dict) -> None:
 
     func_index = data["func_index"]
     missing = []
-    for cide_name, cls in layout["classes"].items():
-        method_map = layout.get("method_map", {}).get(cide_name, {})
+    for vitro_name, cls in layout["classes"].items():
+        method_map = layout.get("method_map", {}).get(vitro_name, {})
         for method, mangled in method_map.items():
             if mangled not in func_index:
-                missing.append(f"{cide_name}.{method} -> {mangled}")
+                missing.append(f"{vitro_name}.{method} -> {mangled}")
     if missing:
         raise RuntimeError(
             "以下内置容器方法未在预编译产物中找到:\n  " + "\n  ".join(missing)
@@ -195,28 +195,28 @@ def validate_precompiled(data: dict) -> None:
 
     # 旧 C 风格函数名黑名单（Stage 2b 之前的命名）
     old_prefixes = (
-        "cide_vec_init_",
-        "cide_vec_push_",
-        "cide_vec_pop_",
-        "cide_vec_get_",
-        "cide_vec_size_",
-        "cide_vec_destroy_",
-        "cide_vec_clear_",
-        "cide_list_init_",
-        "cide_list_push_",
-        "cide_list_pop_",
-        "cide_list_get_",
-        "cide_list_size_",
-        "cide_list_destroy_",
-        "cide_list_clear_",
-        "cide_string_init",
-        "cide_string_push_",
-        "cide_string_pop_",
-        "cide_string_get_",
-        "cide_string_size",
-        "cide_string_destroy",
-        "cide_string_clear",
-        "cide_string_c_str",
+        "vitro_vec_init_",
+        "vitro_vec_push_",
+        "vitro_vec_pop_",
+        "vitro_vec_get_",
+        "vitro_vec_size_",
+        "vitro_vec_destroy_",
+        "vitro_vec_clear_",
+        "vitro_list_init_",
+        "vitro_list_push_",
+        "vitro_list_pop_",
+        "vitro_list_get_",
+        "vitro_list_size_",
+        "vitro_list_destroy_",
+        "vitro_list_clear_",
+        "vitro_string_init",
+        "vitro_string_push_",
+        "vitro_string_pop_",
+        "vitro_string_get_",
+        "vitro_string_size",
+        "vitro_string_destroy",
+        "vitro_string_clear",
+        "vitro_string_c_str",
     )
     stale = [name for name in func_index if name.startswith(old_prefixes)]
     if stale:
@@ -357,9 +357,9 @@ def main() -> int:
             os.remove(f)
             print(f"  removed: {f}")
 
-    exe = find_cide_cli()
+    exe = find_vitro_cli()
     if not exe:
-        exe = build_cide_cli()
+        exe = build_vitro_cli()
 
     data = precompile(exe)
     write_outputs(data)

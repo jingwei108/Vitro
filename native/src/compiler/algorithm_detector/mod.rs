@@ -40,7 +40,7 @@ fn detect_in_func(func: &crate::compiler::ast::FuncDecl) -> Vec<AlgorithmMatch> 
     matches.extend(string::detect(&name_lower, &features, &func.name, func.loc.line));
     matches.extend(math::detect(&name_lower, &features, &func.name, func.loc.line));
 
-    // U1#1 P1-a：dp 检测接线——`cide_algorithm_steps::dp::infer_dp` 早已实现
+    // U1#1 P1-a：dp 检测接线——`vitro_algorithm_steps::dp::infer_dp` 早已实现
     // 但检测器无 dp 分支（孤儿，41 个 build_match 无一产出 dp）。dpFib/
     // dpKnapsack/dpLCS/dpLIS 的状态机都在 main 或独立函数里，以 `dp[`
     // 状态表访问 + 循环为结构特征；命名含 dp/lcs/lis/knapsack 亦命中。

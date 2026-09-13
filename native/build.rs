@@ -1,4 +1,4 @@
-//! 构建期注入 git 短哈希 → `CIDE_GIT_HASH`（`cide_engine_version()` 消费，
+//! 构建期注入 git 短哈希 → `VITRO_GIT_HASH`（`vitro_engine_version()` 消费，
 //! S5 A4 / 回放纪律 #2 的版本锚定依赖：版本串必须含锚定 commit）。
 use std::path::PathBuf;
 use std::process::Command;
@@ -40,5 +40,5 @@ fn main() {
 
     // ── 哈希注入 ────────────────────────────────────────────────────────────
     let hash = git(&["rev-parse", "--short", "HEAD"]).unwrap_or_else(|| "unknown".to_string());
-    println!("cargo:rustc-env=CIDE_GIT_HASH={}", hash);
+    println!("cargo:rustc-env=VITRO_GIT_HASH={}", hash);
 }

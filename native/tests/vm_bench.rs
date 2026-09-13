@@ -17,9 +17,9 @@
 //!    `traces_compiled == 0 && steps_accelerated == 0`；声明 `expect_jit` 的形状
 //!    断言 JIT 分支确实产生了加速步。
 
-use cide_native::engine::compile_pipeline::run_multi_file_pipeline;
-use cide_native::engine::session_ops::{execute_run, reset_runtime};
-use cide_native::session::{CompileUnit, Session};
+use vitro_native::engine::compile_pipeline::run_multi_file_pipeline;
+use vitro_native::engine::session_ops::{execute_run, reset_runtime};
+use vitro_native::session::{CompileUnit, Session};
 use std::time::Instant;
 
 const ROUNDS: usize = 5;
@@ -46,7 +46,7 @@ fn compile(source: &str) -> Session {
 
 fn timed_run(session: &mut Session) -> (f64, i32) {
     // 嵌套形状修复后内层真正执行（修复前外层 trace 穿透内层、步数被跳过），
-    // 1k×1k 会撞默认 10M 步上限——基准显式放宽到 50M，语义与 cide_cli --max-steps 一致。
+    // 1k×1k 会撞默认 10M 步上限——基准显式放宽到 50M，语义与 vitro_cli --max-steps 一致。
     if let Some(vm) = session.vm.as_mut() {
         vm.set_max_steps(50_000_000);
     }

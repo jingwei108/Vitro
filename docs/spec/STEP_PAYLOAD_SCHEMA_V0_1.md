@@ -6,13 +6,13 @@
 > 后续演进走 **§9 v0.2 激活轨道**（预留位激活 / 新增字段），纪律不变：**字段只增不改语义**。
 > 归属：主计划 [`后端定位与白箱计划.md`](../current/01-定位与路线/后端定位与白箱计划.md) §3.2 协议层
 > 实现锚点：`native/src/unified/types.rs`（类型定义）、`collector.rs`（字段来源）、`engine.rs`（窗口与 seek）、`stream.rs`（差分编码）、`contracts.rs`（版本轨道与行为契约）、`vocabulary.rs`（受控词汇表）、`native/src/capi/first_batch.rs`（出口序列化）
-> 消费者：capi 第一批（`cide_step_next_json` / `cide_get_step_payloads_json`）、`cide_cli serve`、wasm 绑定、任何第三方语言
+> 消费者：capi 第一批（`vitro_step_next_json` / `vitro_get_step_payloads_json`）、`vitro_cli serve`、wasm 绑定、任何第三方语言
 > 最后核对日期：2026-09-12
 > 修订说明（2026-09-12）：v0.1 冻结；新增 §9 v0.2 激活轨道与附录 B 受控词汇表；
 > §2.5 `target_name` 补跨帧解析口径（下游 D3）；§8 #1/#9 计划列指向 §9。
-> 修订说明（2026-09-11）：去前端化——§0 明示"语言中立、不依赖任何前端实现"；§7 回放输入的"Flutter frameCache"改为"原生前端 frameCache 消费序列（已切割的历史资产）"并指向 `cide_cli serve` 复现口径。字段定义与校验记录保持原样。
+> 修订说明（2026-09-11）：去前端化——§0 明示"语言中立、不依赖任何前端实现"；§7 回放输入的"Flutter frameCache"改为"原生前端 frameCache 消费序列（已切割的历史资产）"并指向 `vitro_cli serve` 复现口径。字段定义与校验记录保持原样。
 
-本文档是**协议层**定义：任何语言按此即可解析 Cide 的步数据，无需了解 Rust 内部表示。引擎内部优化（CoW 快照等）不得改变本文档的字段语义。
+本文档是**协议层**定义：任何语言按此即可解析 Vitro 的步数据，无需了解 Rust 内部表示。引擎内部优化（CoW 快照等）不得改变本文档的字段语义。
 
 ---
 
@@ -20,7 +20,7 @@
 
 | 约定 | 说明 |
 |---|---|
-| 传输编码 | UTF-8 JSON。capi 每个入口返回**完整 JSON 字符串**（rust-alloc 所有权，须用 `cide_free_string` 释放）；`cide_cli serve` 为 NDJSON（每行一个 JSON 对象） |
+| 传输编码 | UTF-8 JSON。capi 每个入口返回**完整 JSON 字符串**（rust-alloc 所有权，须用 `vitro_free_string` 释放）；`vitro_cli serve` 为 NDJSON（每行一个 JSON 对象） |
 | 字段命名 | `snake_case`（与 Rust serde 默认一致） |
 | 枚举取值 | **字符串字面量**，大小写敏感（如 `"Valid"` / `"Read"`） |
 | 步号 | `step_index` 从 **0** 开始，一步 = VM 执行一条字节码指令（含透明的 `StepEvent` 调试指令） |
@@ -28,7 +28,7 @@
 | 地址 | 1MB 线性内存空间内的 `u32`（`0x1000` 起为全局区、`0x5000` 起为堆区、栈区自高地址向下） |
 | 可空 | JSON `null`；消费方须同时容忍**字段缺省**（只增不改前提下新字段可能不出现在旧数据里） |
 | 版本化纪律 | **字段只增不改语义**；新增字段必须可空/有默认值；消费方必须忽略未知字段；废弃走双写过渡期 |
-| 版本获取 | `cide_abi_version()`（capi 契约版本）+ `cide_engine_version()`（引擎版本，含构建期 git hash） |
+| 版本获取 | `vitro_abi_version()`（capi 契约版本）+ `vitro_engine_version()`（引擎版本，含构建期 git hash） |
 | 语言中立 | **本 schema 语言中立，不依赖任何前端实现**：字段语义只由引擎与出口定义，任何前端（含已切割的历史前端资产）都只是消费方；回放校验以出口 JSON 为准（§7.1） |
 
 ---
@@ -253,7 +253,7 @@
 
 seek 到第 N 步后，`local_vars` / `call_stack` / `array_snapshots` / `pointer_snapshots` / `heatmap_count` 均以**第 N 步的快照**为准（而非"当前最新状态"）。消费方据此重绘所有视图，不需要自行回退状态。
 
-`cide_get_step_payloads_json(start, end)` 的响应携带 `cache_start_step` 与 `max_collected_step`，消费方据此判断"我要的区间是否还在窗口内"。
+`vitro_get_step_payloads_json(start, end)` 的响应携带 `cache_start_step` 与 `max_collected_step`，消费方据此判断"我要的区间是否还在窗口内"。
 
 ---
 
@@ -301,7 +301,7 @@ seek 到第 N 步后，`local_vars` / `call_stack` / `array_snapshots` / `pointe
 
 ## 6. 出口形状（capi 与 serve 共用同一语义）
 
-### 6.1 `cide_step_next_json(session)`
+### 6.1 `vitro_step_next_json(session)`
 
 ```json
 {
@@ -318,13 +318,13 @@ seek 到第 N 步后，`local_vars` / `call_stack` / `array_snapshots` / `pointe
 
 `paused: true` 表示命中断点（断点在 VM 层判定）。`payloads` 在本入口固定为 1 个元素（单步推进），批量推进属第三批 `run_auto_steps`。
 
-### 6.2 `cide_get_step_payloads_json(session, start, end)`
+### 6.2 `vitro_get_step_payloads_json(session, start, end)`
 
 ```json
 { "payloads": [ /* StepPayload[]，已裁剪到窗口内 */ ], "cache_start_step": 0, "max_collected_step": 137 }
 ```
 
-### 6.3 `cide_cli serve` 帧
+### 6.3 `vitro_cli serve` 帧
 
 NDJSON；请求带 `id`，响应回填同一 `id`；错误帧与成功帧**同构**（`{"id":n,"ok":false,"error":{"code":…,"message":…}}`）。方法名与 capi 入口一一对应，见 [`CLI使用手册.md`](../current/02-构建与上手/CLI使用手册.md)。
 
@@ -332,21 +332,21 @@ NDJSON；请求带 `id`，响应回填同一 `id`；错误帧与成功帧**同�
 
 ## 7. 回放场景校验记录
 
-> 校验输入分两类：**我方（Cide）现有消费序列**（原生前端 frameCache 消费序列（**已切割的历史资产**，同形口径现由 `cide_cli serve` 复现）/ StepStreamBatch 的真实调用序列）与**对端（SharpTutor）三组场景**（防抖编译流 / fixtures 判分流 / 单步+seek+内存查询交错流，见 `CAPI评审回复与实现状态.md` §2 与 §8）。
+> 校验输入分两类：**我方（Vitro）现有消费序列**（原生前端 frameCache 消费序列（**已切割的历史资产**，同形口径现由 `vitro_cli serve` 复现）/ StepStreamBatch 的真实调用序列）与**对端（SharpTutor）三组场景**（防抖编译流 / fixtures 判分流 / 单步+seek+内存查询交错流，见 `CAPI评审回复与实现状态.md` §2 与 §8）。
 
 | # | 场景 | 输入序列 | 期望（schema 断言） | 状态 |
 |---|---|---|---|---|
-| C1 | 原生前端 frameCache 消费序列（**已切割的历史资产**；现由 `cide_cli serve` 同形口径复现，见 C4） | `compile` → `step_begin` → `step_next` ×N → `get_step_payloads_json(窗口)` → 断点暂停 → 继续 | 顶层 14 字段齐全；`call_stack` 自底向上；`cache_start_step` 单调不减；窗口裁剪后 `payloads` 非空且步号连续 | ✅ 已实测（§7.2，由 `step_payload_schema_v0_1_test` 冻结） |
+| C1 | 原生前端 frameCache 消费序列（**已切割的历史资产**；现由 `vitro_cli serve` 同形口径复现，见 C4） | `compile` → `step_begin` → `step_next` ×N → `get_step_payloads_json(窗口)` → 断点暂停 → 继续 | 顶层 14 字段齐全；`call_stack` 自底向上；`cache_start_step` 单调不减；窗口裁剪后 `payloads` 非空且步号连续 | ✅ 已实测（§7.2，由 `step_payload_schema_v0_1_test` 冻结） |
 | C2 | 差分往返 | 同一步序列的 `StepPayload[]` → `encode_payloads` → `decode` | 解码结果与原始 payload 逐字段等价；`null` 与 `[]` 语义区分正确 | ✅ 已有回归测试（`stream.rs::test_accessed_vars_and_vis_events_delta` 等） |
 | C3 | 窗口滑动与越窗 seek | 连续执行 >2000 步 → 查询窗口 → seek 回退到窗口外 → 再查询 | 窗口 2000 帧、丢最早 20%；越窗 seek 触发检查点恢复 + 正向重放；seek 后窗口为 `[target-1999, target]` | ✅ 已实测（`step_payload_schema_v0_1_test` + `unified_engine_window_test`） |
-| C4 | serve 出口形状一致性（新增） | `cide_cli serve`：`compile` → `run` → `output.delta` → `step.begin` → `step.next` → `payload.get` → `seek` → `session.reset` | 与 capi 同形：`payloads` 字段、`cache_start_step`、`status` 枚举、iso 帧（`id`/`ok`） | ✅ 已实测（`scripts/serve_smoke.py`，40 项断言；2026-09-12 扩至三段式内存地图 / schema 轨道 / 词汇表） |
-| S1 | 防抖编译流（对端） | 高频 `compile_unit` + `compile_json`，期间夹杂 `step_next` | 诊断 JSON 稳定；`payloads` 不因重编译而串步 | ⏳ 待对端执行（Cide 侧接口已就绪） |
-| S2 | fixtures 判分流（对端） | 固定输入程序批量判分：`compile` → `run_json` → `get_output_delta` | `status`/`return_value`/`steps_executed` 稳定可复现（配 `cide_set_deterministic`） | ⏳ 待对端执行 |
+| C4 | serve 出口形状一致性（新增） | `vitro_cli serve`：`compile` → `run` → `output.delta` → `step.begin` → `step.next` → `payload.get` → `seek` → `session.reset` | 与 capi 同形：`payloads` 字段、`cache_start_step`、`status` 枚举、iso 帧（`id`/`ok`） | ✅ 已实测（`scripts/serve_smoke.py`，40 项断言；2026-09-12 扩至三段式内存地图 / schema 轨道 / 词汇表） |
+| S1 | 防抖编译流（对端） | 高频 `compile_unit` + `compile_json`，期间夹杂 `step_next` | 诊断 JSON 稳定；`payloads` 不因重编译而串步 | ⏳ 待对端执行（Vitro 侧接口已就绪） |
+| S2 | fixtures 判分流（对端） | 固定输入程序批量判分：`compile` → `run_json` → `get_output_delta` | `status`/`return_value`/`steps_executed` 稳定可复现（配 `vitro_set_deterministic`） | ⏳ 待对端执行 |
 | S3 | 单步 + seek + 内存查询交错流（对端） | `step_next` / `seek` / `memory.regions` 交错 | 三视图一致：指针四状态与内存区域状态不矛盾；`accessed_vars` 枚举值合法 | ⏳ 待对端执行（`memory.regions` 属 capi 第二批；serve 已有过渡形态可先回放） |
 
 ### 7.1 校验方法
 
-- Cide 侧回放以 **capi 入口**（而非内部 Rust API）执行——协议契约必须在出口处成立；
+- Vitro 侧回放以 **capi 入口**（而非内部 Rust API）执行——协议契约必须在出口处成立；
 - 断言对象是 **JSON 的字段与取值**，不是 Rust 结构体；
 - 每次 schema 变更（v0.1 → v0.2）必须重跑 C1–C3，并在本表追加一行历史记录。
 
@@ -366,7 +366,7 @@ NDJSON；请求带 `id`，响应回填同一 `id`；错误帧与成功帧**同�
 
 ### 7.3 对端接入前的预备结论
 
-- 协议层字段已全部 `serde::Serialize` 落链（`cide_step_next_json` 直接输出），不存在"文档有、出口无"的字段；
+- 协议层字段已全部 `serde::Serialize` 落链（`vitro_step_next_json` 直接输出），不存在"文档有、出口无"的字段；
 - 三组对端场景所需的入口中，**`memory.regions` 属 capi 第二批**（尚未落地）——S3 场景需在第二批完成后才能完整回放，这是**已知的前置依赖**，不是 schema 缺口；
   - 2026-09-12 更新（下游需求清单 C2）：serve 出口的 `memory.regions` 已先行落地**三段式
     `kind`（`global` / `stack` / `heap`）**并为栈/全局区域补上 `name` / `alloc_line`
@@ -394,7 +394,7 @@ NDJSON；请求带 `id`，响应回填同一 `id`；错误帧与成功帧**同�
 
 ## 7.x2 S1–S5 回放执行记录（2026-09-12，驱动 `scripts/replay/replay_s1_s5.py`）
 
-对端签字材料（SharpTutor `docs/cide-replay/`）已采纳回放，**61/61 断言 PASS**：
+对端签字材料（SharpTutor `docs/vitro-replay/`）已采纳回放，**61/61 断言 PASS**：
 
 | 组 | 结果 | 备注 |
 |----|------|------|
@@ -482,7 +482,7 @@ v0.1 **字段集合未变**（本次为值语义增强与出口扩容），按 �
 | 4 | `root_cause_hint` 仅陷阱路径填充 | 常规步恒为 `null` | 按认知推理层需要扩展 |
 | 5 | 精确 `end_line`/`end_column` | 属诊断 schema（`compile_json`），不在本 schema 内；当前为"起点 + 1"退化值 | 按诊断类别分批补（高价值跨度优先） |
 | 6 | 窗口外的历史 payload 不可查询 | 消费方须自行落地持久化（或依赖 seek 重放）；`payload.get` 对越窗区间静默返回子集 | 设计如此（内存有界）；消费方契约已在 §4.1 写明 |
-| 7 | ~~`ty_name` 为 Rust `Debug` 表示~~ | 拼写随内部重构变化，且把内部枚举结构（`Int { is_unsigned: false, … }`）泄漏到教学输出 | **✅ 已修复（2026-09-11）**：改为 C 风格稳定可读名（单一来源 `cide_runtime::type_display_name`），消费方可直接显示。指针识别规则不变（含 `*`） |
+| 7 | ~~`ty_name` 为 Rust `Debug` 表示~~ | 拼写随内部重构变化，且把内部枚举结构（`Int { is_unsigned: false, … }`）泄漏到教学输出 | **✅ 已修复（2026-09-11）**：改为 C 风格稳定可读名（单一来源 `vitro_runtime::type_display_name`），消费方可直接显示。指针识别规则不变（含 `*`） |
 | 8 | `local_vars` 曾含**跨函数**变量与同名重复 | 消费方看到 `helper` 的局部变量出现在 `main` 的 payload（且用错 `locals_base` 读出垃圾值），两个 `for` 各声明一个 `i` 时无法区分 | **✅ 已修复（2026-09-11）**：按函数归属 + 声明行（新增 `Symbol::decl_line`）过滤，同名取"已进入作用域且最晚声明"者；无有效执行位置（`code_line == 0`）时不输出局部变量 |
 | 9 | `code_line` 是**合并源码的全局行号**，payload 未携带文件名 | 多文件会话中消费方无法自行把 `code_line` 映射回"哪个文件的第几行"（引擎内部已按 `file_ranges` 正确映射，语义标注不再串文件）。**消费方可见后果（前端期现场实测）**：若按"主文件行数"做比例计算，覆盖率会显示 **>100%**；`heatmap_line` 恒等于 `code_line`（§1）且 `heatmap_count` 按 `code_line` 索引（`unified/collector.rs`），故热力图在多文件 / 含头文件时按全局行号着色而错位。**这不是前端独有问题**：前端只是第一个把该协议缺口显示出来的消费方 | **已排入 v0.2（§9 台账：`code_file`）**：只增不改——`code_line` 保持全局行号语义，避免破坏既有断点/heatmap 口径。现场留痕：`docs/current/工程债务维护方案.md`（2026-09-11 条目"`code_line` 是跨文件全局偏移行号"） |
 | 10 | 函数定义行判定为递归调用 | 仅当左花括号与函数签名**同行**时被排除；`int f(...)` 换行写 `{` 时仍可能把定义行标成"递归调用 f" | 需要多行签名识别（教学子集内少见）；已知限制 |

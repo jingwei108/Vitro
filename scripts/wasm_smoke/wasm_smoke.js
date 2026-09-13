@@ -7,7 +7,7 @@ const fs = require("fs");
 const path = require("path");
 
 const wasmPath = process.argv[2]
-  || path.join(__dirname, "../../native/target/wasm32-unknown-unknown/release/cide_native.wasm");
+  || path.join(__dirname, "../../native/target/wasm32-unknown-unknown/release/vitro_native.wasm");
 if (!fs.existsSync(wasmPath)) {
   console.error(`[wasm-smoke] 找不到 wasm 模块: ${wasmPath}`);
   process.exit(2);
@@ -41,8 +41,8 @@ if (!fs.existsSync(wasmPath)) {
     console.log(`  PASS  ${label}`);
   };
 
-  ok(typeof ex.cide_abi_version === "function", "cide_abi_version 导出存在");
-  ok(ex.cide_abi_version() >= 1, `ABI 版本 ${ex.cide_abi_version()} >= 1`);
+  ok(typeof ex.vitro_abi_version === "function", "vitro_abi_version 导出存在");
+  ok(ex.vitro_abi_version() >= 1, `ABI 版本 ${ex.vitro_abi_version()} >= 1`);
 
   // 暂存区：memory.grow 追加一页（零初始化、位于程序堆之上——dlmalloc 自
   // __heap_base 向高地址生长，不会回 claim 已存在的页）。不依赖 __heap_base
@@ -58,26 +58,26 @@ if (!fs.existsSync(wasmPath)) {
     return ptr;
   };
 
-  const session = ex.cide_session_create();
-  ok(Number(session) !== 0, "cide_session_create 成功");
+  const session = ex.vitro_session_create();
+  ok(Number(session) !== 0, "vitro_session_create 成功");
 
   const fnamePtr = writeCStr(base, "main.c");
   const srcPtr = writeCStr(base + 64, '#include <stdio.h>\nint main(){ printf("wasm-ok"); return 0; }\n');
 
-  ok(ex.cide_compile_unit(session, fnamePtr, srcPtr) === 0, "cide_compile_unit 成功");
-  ok(ex.cide_compile_all(session) === 0, "cide_compile_all 成功");
-  const runRet = ex.cide_run(session);
-  ok(runRet >= 0, `cide_run 执行（返回 ${runRet}）`);
+  ok(ex.vitro_compile_unit(session, fnamePtr, srcPtr) === 0, "vitro_compile_unit 成功");
+  ok(ex.vitro_compile_all(session) === 0, "vitro_compile_all 成功");
+  const runRet = ex.vitro_run(session);
+  ok(runRet >= 0, `vitro_run 执行（返回 ${runRet}）`);
 
-  // E-P1-5 口径：读纯程序 stdout 通道（cide_get_program_output*），不含引擎附注
+  // E-P1-5 口径：读纯程序 stdout 通道（vitro_get_program_output*），不含引擎附注
   ok(
-    typeof ex.cide_get_program_output_length === "function"
-      && typeof ex.cide_get_program_output === "function",
-    "纯 stdout 通道导出存在（cide_get_program_output*）"
+    typeof ex.vitro_get_program_output_length === "function"
+      && typeof ex.vitro_get_program_output === "function",
+    "纯 stdout 通道导出存在（vitro_get_program_output*）"
   );
-  const outLen = ex.cide_get_program_output_length(session);
+  const outLen = ex.vitro_get_program_output_length(session);
   ok(outLen === 7, `输出长度 ${outLen} == 7（"wasm-ok"）`);
-  ex.cide_get_program_output(session, base + 4096, outLen + 1);
+  ex.vitro_get_program_output(session, base + 4096, outLen + 1);
   const out = Buffer.from(mem().subarray(base + 4096, base + 4096 + outLen)).toString("utf-8");
   ok(out === "wasm-ok", `输出内容 ${JSON.stringify(out)} === "wasm-ok"`);
 

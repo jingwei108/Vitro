@@ -41,7 +41,7 @@ pub fn compute_type_size(
     class_size_map: &HashMap<String, i32>,
 ) -> i32 {
     // T-P0-8：自含/循环包含 struct 曾在此无限递归栈溢出；环出现时返回 0 防崩，
-    // 诊断由 TypeChecker Pass 1（E3072）给出。与 cide_ast::compute_type_size 保持一致。
+    // 诊断由 TypeChecker Pass 1（E3072）给出。与 vitro_ast::compute_type_size 保持一致。
     let mut visiting = std::collections::HashSet::new();
     compute_type_size_impl(ty, struct_defs, union_defs, class_size_map, &mut visiting)
 }

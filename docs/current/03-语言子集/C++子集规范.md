@@ -1,6 +1,6 @@
-# Cide C++14 教学子集规范
+# Vitro C++14 教学子集规范
 
-> 目标：让学生用接近标准 C++14 的语法学习编程，同时明确知道 Cide 支持哪些特性、边界在哪里。
+> 目标：让学生用接近标准 C++14 的语法学习编程，同时明确知道 Vitro 支持哪些特性、边界在哪里。
 >
 > 本文档面向学生与教师；实现细节见 `docs/current/03-语言子集/C++拓展实施计划.md`。
 
@@ -10,15 +10,15 @@
 
 ### 1.1 Honest Subset（诚实子集）
 
-Cide C++ 子集**不是**假装成完整的标准 C++，而是诚实标注：
+Vitro C++ 子集**不是**假装成完整的标准 C++，而是诚实标注：
 
 - 支持哪些核心教学特性
 - 明确不支持哪些工业级特性
-- 标准 C++ 写法在 Cide 中的等价行为
+- 标准 C++ 写法在 Vitro 中的等价行为
 
 ### 1.2 零改动 VM
 
-所有 C++ 特性最终都被编译成 CideVM 字节码。VM 本身不做任何修改，保证 C 与 C++ 共享同一运行时。
+所有 C++ 特性最终都被编译成 VitroVM 字节码。VM 本身不做任何修改，保证 C 与 C++ 共享同一运行时。
 
 ### 1.3 教学优先
 
@@ -31,7 +31,7 @@ Cide C++ 子集**不是**假装成完整的标准 C++，而是诚实标注：
 | 泛型入门 | 模板类 / 模板函数 | ✅ |
 | 现代 C++ | auto / 范围 for / Lambda | ✅ |
 | 智能指针 | unique_ptr（简化版） | ✅ |
-| 标准容器 | vector<int> / list<int> / string（Cide 内置实现） | ✅ |
+| 标准容器 | vector<int> / list<int> / string（Vitro 内置实现） | ✅ |
 | 运算符重载 | `operator+` 等 | ❌ 明确排除 |
 | 异常处理 | try / catch / throw | ❌ 明确排除 |
 
@@ -223,18 +223,18 @@ int main() {
 **支持细节**：
 - 默认构造、从指针构造、析构时自动 `delete`
 - `get()` 获取底层指针，`release()` 释放所有权并将内部指针置空
-- 隐式移动构造：类含指针/资源字段时，Cide 自动生成 `__ctor__{Class}__move`；`std::move` 初始化会调用移动构造，源对象指针字段置空，防止双重释放
+- 隐式移动构造：类含指针/资源字段时，Vitro 自动生成 `__ctor__{Class}__move`；`std::move` 初始化会调用移动构造，源对象指针字段置空，防止双重释放
 
 **说明**：这是教学简化版，未实现工业级 `reset()` / `swap()` / 自定义删除器，但已覆盖 RAII 与所有权转移核心思想。
 
 ### 2.10 内置容器
 
-Cide 内置了 `vector<int/float/char>`、`list<int>`、`string`，用法接近 STL：
+Vitro 内置了 `vector<int/float/char>`、`list<int>`、`string`，用法接近 STL：
 
 ```cpp
 #include <stdio.h>
 
-// Cide 内部将 vector<int> 映射到内置实现
+// Vitro 内部将 vector<int> 映射到内置实现
 int main() {
     vector<int> v;
     v.push_back(3);
@@ -247,7 +247,7 @@ int main() {
 }
 ```
 
-**注意**：Cide 子集不支持运算符重载，因此 `v[i]` 写作 `v.get(i)`、`v.size()` 是显式方法调用。
+**注意**：Vitro 子集不支持运算符重载，因此 `v[i]` 写作 `v.get(i)`、`v.size()` 是显式方法调用。
 
 ### 2.11 指针算术与复合赋值
 
@@ -295,19 +295,19 @@ int main() {
 ### 4.1 标准头文件映射
 
 ```cpp
-#include <vector>    // 映射到 Cide 内置 vector
-#include <list>      // 映射到 Cide 内置 list
-#include <string>    // 映射到 Cide 内置 string
+#include <vector>    // 映射到 Vitro 内置 vector
+#include <list>      // 映射到 Vitro 内置 list
+#include <string>    // 映射到 Vitro 内置 string
 #include <algorithm> // sort 等算法
 ```
 
-Cide 会擦除 `std::` 前缀，因此 `std::vector<int>` 等价于 `vector<int>`。
+Vitro 会擦除 `std::` 前缀，因此 `std::vector<int>` 等价于 `vector<int>`。
 
 ### 4.2 容器接口差异
 
 由于不支持运算符重载，部分接口与 STL 不同：
 
-| STL 写法 | Cide 子集写法 |
+| STL 写法 | Vitro 子集写法 |
 |:---|:---|
 | `v[i]` | `v.get(i)` |
 | `v.push_back(x)` | `v.push_back(x)` ✅ |
@@ -334,21 +334,21 @@ Cide 会擦除 `std::` 前缀，因此 `std::vector<int>` 等价于 `vector<int>
 
 ### 4.5 指针赋值的方向语义（2026-09-11 修订，含诚实记录）
 
-| 场景 | Clang++（`-std=c++14 -Wall -Wextra`，实测） | Cide | 判定 |
+| 场景 | Clang++（`-std=c++14 -Wall -Wextra`，实测） | Vitro | 判定 |
 |---|---|---|---|
 | **向上转型**<br>`Base* b = new Derived();` | 零警告（多态的基础写法） | 零警告 —— 修复前误报 `W3053`："不兼容的指针类型赋值：Base* ← Derived*" + 建议"隐式类型转换可能导致数据截断" | ✅ **已对齐（2026-09-11）** |
-| **向下转型**<br>`Base* b; Derived* d = b;` | **error**：`cannot initialize a variable of type 'Derived *' with an lvalue of type 'Base *'`（拒绝编译） | **警告 `W3067`**："指针类型不兼容：Derived* ← Base*，需要显式转换（向上转型 Derived* → Base* 除外）"，**仍继续编译** | ⚠️ **剩余差异**：Cide 不阻断编译，严格度低于 Clang；教学时需口头强调必须写 `static_cast`/`dynamic_cast` |
+| **向下转型**<br>`Base* b; Derived* d = b;` | **error**：`cannot initialize a variable of type 'Derived *' with an lvalue of type 'Base *'`（拒绝编译） | **警告 `W3067`**："指针类型不兼容：Derived* ← Base*，需要显式转换（向上转型 Derived* → Base* 除外）"，**仍继续编译** | ⚠️ **剩余差异**：Vitro 不阻断编译，严格度低于 Clang；教学时需口头强调必须写 `static_cast`/`dynamic_cast` |
 | **无关类型**<br>`double* p; int* q = p;` | 警告 `incompatible pointer types …` | 警告 `W3067`（同上文案） | ✅ 级别一致（措辞不同） |
 
 **修复记录**：此前两种情况共用**标量**转换码 `W3053_ImplicitScalarConversion`（语义是"隐式标量转换 /
 可能导致数据截断"），把多态基础讲成了危险操作；且该差异当时未记录在本规范中（违反项目
 "以 Clang 为标准、任何不一致必须记录"的纪律）。2026-09-11 新增专用码 `W3067_PointerTypeMismatch`
-（`cide_shared::ErrorCode`，附错误目录条目与建议文案），并在 `TypeChecker::is_upcast` 中实现
+（`vitro_shared::ErrorCode`，附错误目录条目与建议文案），并在 `TypeChecker::is_upcast` 中实现
 **单继承链可达性判定**（带步数上限防环）以区分上/下转型。回归：`native/tests/pointer_upcast_test.rs`（3 用例）。
 
 > **交叉引用**：本项的发现、根因定位与修复批次记录见
 > [`ARCHIVE_代码审查复核20260911.md`](../../archive/ARCHIVE_代码审查复核20260911.md —— §1 逐条复核结论（P1-6 行）、
-> §2.2「P1-6：Cide 输出的是警告 `W3053`，不是 `E3053`」与 §4 修复批次
+> §2.2「P1-6：Vitro 输出的是警告 `W3053`，不是 `E3053`」与 §4 修复批次
 > 「批次 E（2026-09-11）：P1-6（向上转型误报）」。
 
 **已知显示瑕疵（未修，如实记录）**：诊断 JSON 的 `code` 字段与 CLI 输出对**警告**也加 `E` 前缀

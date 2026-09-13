@@ -19,9 +19,9 @@ from pathlib import Path
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
-CLI = ROOT / "native/target/release/cide_cli.exe"
+CLI = ROOT / "native/target/release/vitro_cli.exe"
 if not CLI.exists():
-    CLI = ROOT / "native/target/debug/cide_cli.exe"
+    CLI = ROOT / "native/target/debug/vitro_cli.exe"
 
 TINY = '#include <stdio.h>\nint main() { printf("hi"); return 0; }\n'
 

@@ -1,6 +1,6 @@
 //! 崩溃止血回归测试（2026-09-06 代码审查报告第一批修复）。
 //!
-//! 覆盖审查报告 P0 修复项，全部用例来自实测复现（release 版 cide_cli 验证）：
+//! 覆盖审查报告 P0 修复项，全部用例来自实测复现（release 版 vitro_cli 验证）：
 //! - F-P0-1：深嵌套/长注释/多星号曾导致编译器栈溢出（SIGSEGV，无法被 catch_unwind 捕获）
 //! - T-P0-8：自含 struct 曾导致 TypeChecker/compute_type_size 无限递归栈溢出
 //! - V-P0-1/2：INT_MIN % -1、LLONG_MIN / -1 等曾直接 panic
@@ -13,7 +13,7 @@
 
 use std::ffi::{c_char, CString};
 
-/// 与 cide_e2e.rs 相同的 C API 驱动方式（独立复制以避免跨测试文件依赖）。
+/// 与 vitro_e2e.rs 相同的 C API 驱动方式（独立复制以避免跨测试文件依赖）。
 fn compile_and_run(source: &str) -> Result<(i32, Vec<String>), String> {
     compile_and_run_with_filename(source, None, "main.c")
 }
@@ -29,7 +29,7 @@ fn compile_and_run_with_filename(
     filename: &str,
 ) -> Result<(i32, Vec<String>), String> {
     unsafe {
-        let session = cide_native::capi::cide_session_create();
+        let session = vitro_native::capi::vitro_session_create();
         if session.is_null() {
             return Err("Failed to create session".to_string());
         }
@@ -40,33 +40,33 @@ fn compile_and_run_with_filename(
             let normalized = input_str.replace("\r\n", "\n");
             (*session).runtime.input_lines = normalized.split_inclusive('\n').map(|l| l.to_string()).collect();
         }
-        cide_native::capi::cide_compile_unit(session, fname.as_ptr() as *const c_char, src.as_ptr() as *const c_char);
-        let compile_ret = cide_native::capi::cide_compile_all(session);
+        vitro_native::capi::vitro_compile_unit(session, fname.as_ptr() as *const c_char, src.as_ptr() as *const c_char);
+        let compile_ret = vitro_native::capi::vitro_compile_all(session);
         if compile_ret != 0 {
-            let err_ptr = cide_native::capi::cide_get_compile_errors(session);
+            let err_ptr = vitro_native::capi::vitro_get_compile_errors(session);
             let err_msg = if err_ptr.is_null() {
                 "Unknown compile error".to_string()
             } else {
                 std::ffi::CStr::from_ptr(err_ptr).to_string_lossy().to_string()
             };
-            cide_native::capi::cide_session_destroy(session);
+            vitro_native::capi::vitro_session_destroy(session);
             return Err(err_msg);
         }
 
-        let run_ret = cide_native::capi::cide_run(session);
+        let run_ret = vitro_native::capi::vitro_run(session);
 
         let mut outputs = Vec::new();
-        let out_len = cide_native::capi::cide_get_output_length(session);
+        let out_len = vitro_native::capi::vitro_get_output_length(session);
         if out_len > 0 {
             let mut buf = vec![0u8; out_len as usize + 1];
-            cide_native::capi::cide_get_output(session, buf.as_mut_ptr() as *mut c_char, buf.len() as i32);
+            vitro_native::capi::vitro_get_output(session, buf.as_mut_ptr() as *mut c_char, buf.len() as i32);
             let out_str = String::from_utf8_lossy(&buf[..out_len as usize]);
             for line in out_str.lines() {
                 outputs.push(line.to_string());
             }
         }
 
-        let err_ptr = cide_native::capi::cide_get_runtime_error(session);
+        let err_ptr = vitro_native::capi::vitro_get_runtime_error(session);
         let runtime_err = if err_ptr.is_null() {
             None
         } else {
@@ -74,7 +74,7 @@ fn compile_and_run_with_filename(
         };
 
         let _ = run_ret;
-        cide_native::capi::cide_session_destroy(session);
+        vitro_native::capi::vitro_session_destroy(session);
 
         if let Some(e) = runtime_err {
             if !e.is_empty() {
@@ -461,7 +461,7 @@ fn test_qsort_huge_params_rejected_no_oom() {
 
 #[test]
 fn test_apply_fix_chinese_line_no_panic() {
-    use cide_native::session::Diagnostic;
+    use vitro_native::session::Diagnostic;
 
     let make_diag = |start_col: i32, end_col: i32, text: &str| Diagnostic {
         line: 1,
@@ -484,21 +484,21 @@ fn test_apply_fix_chinese_line_no_panic() {
     let source = "int 中文变量 = 1;".to_string();
 
     // 字节列恰好合法（列 6：'文' 之后）
-    let r = cide_native::diagnostics::auto_fix::apply_fix(source.clone(), make_diag(6, 9, "X"));
+    let r = vitro_native::diagnostics::auto_fix::apply_fix(source.clone(), make_diag(6, 9, "X"));
     assert!(r.is_some(), "合法字节边界列应正常替换");
 
     // 字节列落在多字节字符中间（列 3）：旧实现 panic，新实现按字符语义回退
-    let r = cide_native::diagnostics::auto_fix::apply_fix(source.clone(), make_diag(3, 9, "X"));
+    let r = vitro_native::diagnostics::auto_fix::apply_fix(source.clone(), make_diag(3, 9, "X"));
     assert!(r.is_some(), "非字符边界列不应 panic，应按字符语义回退");
 
     // 字符语义列（列 4 = 第 5 个字符 '文' 之后的位置）也应工作
-    let r = cide_native::diagnostics::auto_fix::apply_fix(source.clone(), make_diag(4, 10, "X"));
+    let r = vitro_native::diagnostics::auto_fix::apply_fix(source.clone(), make_diag(4, 10, "X"));
     assert!(r.is_some(), "字符语义列应正常替换");
 }
 
 // ============ 堆语义专项（2026-09-11 决议：bump 分配 + 有界隔离）============
 // 依据 堆有界隔离决议.md §6 验收清单。
-// 期望值来源：本决议定义的引擎语义（非 Clang 对照——隔离区为 Cide 教学特性；
+// 期望值来源：本决议定义的引擎语义（非 Clang 对照——隔离区为 Vitro 教学特性；
 // 与 Clang 的差异已在 C语言子集规范.md §2.9 记录）。
 
 #[test]
@@ -572,22 +572,22 @@ fn test_heap_realloc_preserves_data_across_move() {
 #[test]
 fn test_second_wall_max_steps_fuse() {
     // §6-3 三道墙之二：max_steps 保险丝（教学内容 = 可控地撞上限并拿到教学 trap，
-    // 而不是无限等待）。会话级配置经 cide_set_max_steps 注入。
+    // 而不是无限等待）。会话级配置经 vitro_set_max_steps 注入。
     unsafe {
-        let session = cide_native::capi::cide_session_create();
+        let session = vitro_native::capi::vitro_session_create();
         assert!(!session.is_null());
         let fname = CString::new("main.c").unwrap();
         let src = CString::new("int main(){ for(;;){} return 0; }\n").unwrap();
-        cide_native::capi::cide_compile_unit(session, fname.as_ptr() as *const c_char, src.as_ptr() as *const c_char);
-        assert_eq!(cide_native::capi::cide_compile_all(session), 0, "死循环程序应能编译");
+        vitro_native::capi::vitro_compile_unit(session, fname.as_ptr() as *const c_char, src.as_ptr() as *const c_char);
+        assert_eq!(vitro_native::capi::vitro_compile_all(session), 0, "死循环程序应能编译");
         assert_eq!(
-            cide_native::capi::cide_set_max_steps(session, 1000),
+            vitro_native::capi::vitro_set_max_steps(session, 1000),
             0,
             "设置步数上限应成功"
         );
 
-        let _ = cide_native::capi::cide_run(session);
-        let err_ptr = cide_native::capi::cide_get_runtime_error(session);
+        let _ = vitro_native::capi::vitro_run(session);
+        let err_ptr = vitro_native::capi::vitro_get_runtime_error(session);
         let err = if err_ptr.is_null() {
             String::new()
         } else {
@@ -606,7 +606,7 @@ fn test_second_wall_max_steps_fuse() {
             "trap 应回显配置的步数上限 1000，实际: {}",
             err
         );
-        cide_native::capi::cide_session_destroy(session);
+        vitro_native::capi::vitro_session_destroy(session);
     }
 }
 
@@ -618,7 +618,7 @@ fn test_third_wall_region_table_bounded_when_step_fuse_trips_first() {
     //
     // 决议 §5 原文把该项记为"推导验证"，本用例把它落成可执行验收（2026-09-11）。
     unsafe {
-        let session = cide_native::capi::cide_session_create();
+        let session = vitro_native::capi::vitro_session_create();
         assert!(!session.is_null());
         let fname = CString::new("main.c").unwrap();
         // 只分配、不释放：bump 单调推进，会先撞 max_steps 再撞 1MB
@@ -626,18 +626,18 @@ fn test_third_wall_region_table_bounded_when_step_fuse_trips_first() {
             "#include <stdlib.h>\nint main(){ for(;;){ char *p = (char*)malloc(64); p[0] = 0; } return 0; }\n",
         )
         .unwrap();
-        cide_native::capi::cide_compile_unit(
+        vitro_native::capi::vitro_compile_unit(
             session,
             fname.as_ptr() as *const c_char,
             src.as_ptr() as *const c_char,
         );
-        assert_eq!(cide_native::capi::cide_compile_all(session), 0, "用例应能编译");
+        assert_eq!(vitro_native::capi::vitro_compile_all(session), 0, "用例应能编译");
         const MAX_STEPS: i32 = 2000;
-        assert_eq!(cide_native::capi::cide_set_max_steps(session, MAX_STEPS), 0);
+        assert_eq!(vitro_native::capi::vitro_set_max_steps(session, MAX_STEPS), 0);
 
-        let _ = cide_native::capi::cide_run(session);
+        let _ = vitro_native::capi::vitro_run(session);
 
-        let err_ptr = cide_native::capi::cide_get_runtime_error(session);
+        let err_ptr = vitro_native::capi::vitro_get_runtime_error(session);
         let err = if err_ptr.is_null() {
             String::new()
         } else {
@@ -657,12 +657,12 @@ fn test_third_wall_region_table_bounded_when_step_fuse_trips_first() {
             "region 表应随步数封顶（有界），实际 {regions} 条 > 步数上限 {MAX_STEPS}"
         );
         assert!(
-            heap_offset < cide_native::session::MEM_SIZE,
+            heap_offset < vitro_native::session::MEM_SIZE,
             "本用例应先撞步数保险丝（heap_offset={heap_offset} 不应到达 MEM_SIZE={}）",
-            cide_native::session::MEM_SIZE
+            vitro_native::session::MEM_SIZE
         );
 
-        cide_native::capi::cide_session_destroy(session);
+        vitro_native::capi::vitro_session_destroy(session);
     }
 }
 
@@ -712,7 +712,7 @@ fn test_include_does_not_shift_diagnostic_line_numbers() {
 
 // =============================================================================
 // U1#8：递归深度防护补全（五通道）+ 后置 AST 深度预算（2026-09-13）
-// 修复前全部实测栈溢出（release cide_cli "has overflowed its stack"）：
+// 修复前全部实测栈溢出（release vitro_cli "has overflowed its stack"）：
 // init_list / 赋值右结合链 / 一元链崩在 parser 递归；数组后缀链 / 左结合
 // 加法链崩在 typeck 与 AST 递归 Drop（parser 层是循环不递归）。
 // =============================================================================

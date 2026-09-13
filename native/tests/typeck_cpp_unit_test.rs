@@ -1,11 +1,11 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
-use cide_native::compiler::ast::*;
-use cide_native::compiler::lexer::Lexer;
-use cide_native::compiler::parser::Parser;
-use cide_native::compiler::typeck::TypeChecker;
+use vitro_native::compiler::ast::*;
+use vitro_native::compiler::lexer::Lexer;
+use vitro_native::compiler::parser::Parser;
+use vitro_native::compiler::typeck::TypeChecker;
 
-fn parse_and_typecheck_cpp(src: &str) -> (ProgramNode, Vec<cide_native::compiler::typeck::TypeError>) {
+fn parse_and_typecheck_cpp(src: &str) -> (ProgramNode, Vec<vitro_native::compiler::typeck::TypeError>) {
     let (tokens, _) = Lexer::with_mode(src, true).tokenize();
     let (program, parse_errors) = Parser::with_mode(tokens, true).parse();
     if !parse_errors.is_empty() {
@@ -276,7 +276,7 @@ int main() {
 
 #[test]
 fn test_try_stmt_typecheck() {
-    use cide_native::compiler::ast::{SourceLoc, Stmt};
+    use vitro_native::compiler::ast::{SourceLoc, Stmt};
     let try_stmt = Stmt::Try {
         body: Box::new(Stmt::Block {
             stmts: vec![],

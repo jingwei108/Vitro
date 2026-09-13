@@ -15,32 +15,32 @@ fn compile_and_run(source: &str) -> Result<(i32, Vec<String>), String> {
 /// E-P1-5：泄漏报告等附注不再混入 stdout，验证附注的测试必须显式读 note 通道。
 fn compile_and_run_detailed(source: &str) -> Result<(i32, Vec<String>, Vec<String>), String> {
     unsafe {
-        let session = cide_native::capi::cide_session_create();
+        let session = vitro_native::capi::vitro_session_create();
         if session.is_null() {
             return Err("Failed to create session".to_string());
         }
 
         let src = CString::new(source).map_err(|e| e.to_string())?;
-        let compile_ret = cide_native::capi::cide_compile(session, src.as_ptr() as *const c_char);
+        let compile_ret = vitro_native::capi::vitro_compile(session, src.as_ptr() as *const c_char);
         if compile_ret != 0 {
-            let err_ptr = cide_native::capi::cide_get_compile_errors(session);
+            let err_ptr = vitro_native::capi::vitro_get_compile_errors(session);
             let err_msg = if err_ptr.is_null() {
                 "Unknown compile error".to_string()
             } else {
                 std::ffi::CStr::from_ptr(err_ptr).to_string_lossy().to_string()
             };
-            cide_native::capi::cide_session_destroy(session);
+            vitro_native::capi::vitro_session_destroy(session);
             return Err(err_msg);
         }
 
-        let run_ret = cide_native::capi::cide_run(session);
+        let run_ret = vitro_native::capi::vitro_run(session);
 
         // E-P1-5：纯程序 stdout；引擎附注单独从 note 通道读取。
         let mut outputs = Vec::new();
-        let out_len = cide_native::capi::cide_get_program_output_length(session);
+        let out_len = vitro_native::capi::vitro_get_program_output_length(session);
         if out_len > 0 {
             let mut buf = vec![0u8; out_len as usize + 1];
-            cide_native::capi::cide_get_program_output(session, buf.as_mut_ptr() as *mut c_char, buf.len() as i32);
+            vitro_native::capi::vitro_get_program_output(session, buf.as_mut_ptr() as *mut c_char, buf.len() as i32);
             let out_str = String::from_utf8_lossy(&buf[..out_len as usize]);
             for line in out_str.lines() {
                 if !line.is_empty() {
@@ -50,10 +50,10 @@ fn compile_and_run_detailed(source: &str) -> Result<(i32, Vec<String>, Vec<Strin
         }
 
         let mut notes = Vec::new();
-        let notes_len = cide_native::capi::cide_get_engine_notes_length(session);
+        let notes_len = vitro_native::capi::vitro_get_engine_notes_length(session);
         if notes_len > 0 {
             let mut buf = vec![0u8; notes_len as usize + 1];
-            cide_native::capi::cide_get_engine_notes(session, buf.as_mut_ptr() as *mut c_char, buf.len() as i32);
+            vitro_native::capi::vitro_get_engine_notes(session, buf.as_mut_ptr() as *mut c_char, buf.len() as i32);
             let notes_str = String::from_utf8_lossy(&buf[..notes_len as usize]);
             for line in notes_str.lines() {
                 if !line.is_empty() {
@@ -62,14 +62,14 @@ fn compile_and_run_detailed(source: &str) -> Result<(i32, Vec<String>, Vec<Strin
             }
         }
 
-        let err_ptr = cide_native::capi::cide_get_runtime_error(session);
+        let err_ptr = vitro_native::capi::vitro_get_runtime_error(session);
         let runtime_err = if err_ptr.is_null() {
             None
         } else {
             Some(std::ffi::CStr::from_ptr(err_ptr).to_string_lossy().to_string())
         };
 
-        cide_native::capi::cide_session_destroy(session);
+        vitro_native::capi::vitro_session_destroy(session);
 
         if let Some(e) = runtime_err {
             if !e.is_empty() {
@@ -83,34 +83,34 @@ fn compile_and_run_detailed(source: &str) -> Result<(i32, Vec<String>, Vec<Strin
 
 fn compile_and_run_with_input(source: &str, input: &str) -> Result<(i32, Vec<String>), String> {
     unsafe {
-        let session = cide_native::capi::cide_session_create();
+        let session = vitro_native::capi::vitro_session_create();
         if session.is_null() {
             return Err("Failed to create session".to_string());
         }
 
         let src = CString::new(source).map_err(|e| e.to_string())?;
-        let compile_ret = cide_native::capi::cide_compile(session, src.as_ptr() as *const c_char);
+        let compile_ret = vitro_native::capi::vitro_compile(session, src.as_ptr() as *const c_char);
         if compile_ret != 0 {
-            let err_ptr = cide_native::capi::cide_get_compile_errors(session);
+            let err_ptr = vitro_native::capi::vitro_get_compile_errors(session);
             let err_msg = if err_ptr.is_null() {
                 "Unknown compile error".to_string()
             } else {
                 std::ffi::CStr::from_ptr(err_ptr).to_string_lossy().to_string()
             };
-            cide_native::capi::cide_session_destroy(session);
+            vitro_native::capi::vitro_session_destroy(session);
             return Err(err_msg);
         }
 
         let input_cstr = CString::new(input).map_err(|e| e.to_string())?;
-        cide_native::capi::cide_set_input(session, input_cstr.as_ptr() as *const c_char);
+        vitro_native::capi::vitro_set_input(session, input_cstr.as_ptr() as *const c_char);
 
-        let run_ret = cide_native::capi::cide_run(session);
+        let run_ret = vitro_native::capi::vitro_run(session);
 
         let mut outputs = Vec::new();
-        let out_len = cide_native::capi::cide_get_program_output_length(session);
+        let out_len = vitro_native::capi::vitro_get_program_output_length(session);
         if out_len > 0 {
             let mut buf = vec![0u8; out_len as usize + 1];
-            cide_native::capi::cide_get_program_output(session, buf.as_mut_ptr() as *mut c_char, buf.len() as i32);
+            vitro_native::capi::vitro_get_program_output(session, buf.as_mut_ptr() as *mut c_char, buf.len() as i32);
             let out_str = String::from_utf8_lossy(&buf[..out_len as usize]);
             for line in out_str.lines() {
                 if !line.is_empty() {
@@ -119,14 +119,14 @@ fn compile_and_run_with_input(source: &str, input: &str) -> Result<(i32, Vec<Str
             }
         }
 
-        let err_ptr = cide_native::capi::cide_get_runtime_error(session);
+        let err_ptr = vitro_native::capi::vitro_get_runtime_error(session);
         let runtime_err = if err_ptr.is_null() {
             None
         } else {
             Some(std::ffi::CStr::from_ptr(err_ptr).to_string_lossy().to_string())
         };
 
-        cide_native::capi::cide_session_destroy(session);
+        vitro_native::capi::vitro_session_destroy(session);
 
         if let Some(e) = runtime_err {
             if !e.is_empty() {
@@ -140,35 +140,35 @@ fn compile_and_run_with_input(source: &str, input: &str) -> Result<(i32, Vec<Str
 
 fn compile_and_run_with_argv(source: &str, argv: &[&str]) -> Result<(i32, Vec<String>), String> {
     unsafe {
-        let session = cide_native::capi::cide_session_create();
+        let session = vitro_native::capi::vitro_session_create();
         if session.is_null() {
             return Err("Failed to create session".to_string());
         }
 
         let src = CString::new(source).map_err(|e| e.to_string())?;
-        let compile_ret = cide_native::capi::cide_compile(session, src.as_ptr() as *const c_char);
+        let compile_ret = vitro_native::capi::vitro_compile(session, src.as_ptr() as *const c_char);
         if compile_ret != 0 {
-            let err_ptr = cide_native::capi::cide_get_compile_errors(session);
+            let err_ptr = vitro_native::capi::vitro_get_compile_errors(session);
             let err_msg = if err_ptr.is_null() {
                 "Unknown compile error".to_string()
             } else {
                 std::ffi::CStr::from_ptr(err_ptr).to_string_lossy().to_string()
             };
-            cide_native::capi::cide_session_destroy(session);
+            vitro_native::capi::vitro_session_destroy(session);
             return Err(err_msg);
         }
 
         let c_argv: Vec<CString> = argv.iter().map(|s| CString::new(*s).unwrap()).collect();
         let ptrs: Vec<*const c_char> = c_argv.iter().map(|s| s.as_ptr()).collect();
-        cide_native::capi::cide_set_argv(session, argv.len() as c_int, ptrs.as_ptr());
+        vitro_native::capi::vitro_set_argv(session, argv.len() as c_int, ptrs.as_ptr());
 
-        let run_ret = cide_native::capi::cide_run(session);
+        let run_ret = vitro_native::capi::vitro_run(session);
 
         let mut outputs = Vec::new();
-        let out_len = cide_native::capi::cide_get_program_output_length(session);
+        let out_len = vitro_native::capi::vitro_get_program_output_length(session);
         if out_len > 0 {
             let mut buf = vec![0u8; out_len as usize + 1];
-            cide_native::capi::cide_get_program_output(session, buf.as_mut_ptr() as *mut c_char, buf.len() as i32);
+            vitro_native::capi::vitro_get_program_output(session, buf.as_mut_ptr() as *mut c_char, buf.len() as i32);
             let out_str = String::from_utf8_lossy(&buf[..out_len as usize]);
             for line in out_str.lines() {
                 if !line.is_empty() {
@@ -177,14 +177,14 @@ fn compile_and_run_with_argv(source: &str, argv: &[&str]) -> Result<(i32, Vec<St
             }
         }
 
-        let err_ptr = cide_native::capi::cide_get_runtime_error(session);
+        let err_ptr = vitro_native::capi::vitro_get_runtime_error(session);
         let runtime_err = if err_ptr.is_null() {
             None
         } else {
             Some(std::ffi::CStr::from_ptr(err_ptr).to_string_lossy().to_string())
         };
 
-        cide_native::capi::cide_session_destroy(session);
+        vitro_native::capi::vitro_session_destroy(session);
 
         if let Some(e) = runtime_err {
             if !e.is_empty() {
@@ -2877,7 +2877,7 @@ int my_strlen(char s[]) {
 int main() {
     printf("%d\n", my_strlen(""));
     printf("%d\n", my_strlen("hello"));
-    printf("%d\n", my_strlen("CideVM"));
+    printf("%d\n", my_strlen("VitroVM"));
     return 0;
 }
 "#;
@@ -2886,7 +2886,8 @@ int main() {
     let (ret, outputs) = result.unwrap();
     assert_eq!(ret, 0);
     let out = outputs;
-    assert_eq!(out, vec!["0", "5", "6"]);
+    // 输入字面量随项目更名由 "CideVM"（6 字符）变为 "VitroVM"（7 字符），期望值联动。
+    assert_eq!(out, vec!["0", "5", "7"]);
 }
 
 #[test]
@@ -2998,7 +2999,7 @@ int main() {
     my_strcpy(s1, "Hello");
     printf("%s\n", s1);
     char s2[20];
-    my_strcpy(s2, "CideVM");
+    my_strcpy(s2, "VitroVM");
     printf("%s\n", s2);
     return 0;
 }
@@ -3008,7 +3009,7 @@ int main() {
     let (ret, outputs) = result.unwrap();
     assert_eq!(ret, 0);
     let out = outputs;
-    assert_eq!(out, vec!["Hello", "CideVM"]);
+    assert_eq!(out, vec!["Hello", "VitroVM"]);
 }
 
 #[test]
@@ -5008,44 +5009,44 @@ int main() {
 
 fn compile_and_run_raw_output(source: &str) -> Result<(i32, String), String> {
     unsafe {
-        let session = cide_native::capi::cide_session_create();
+        let session = vitro_native::capi::vitro_session_create();
         if session.is_null() {
             return Err("Failed to create session".to_string());
         }
 
         let src = CString::new(source).map_err(|e| e.to_string())?;
-        let compile_ret = cide_native::capi::cide_compile(session, src.as_ptr() as *const c_char);
+        let compile_ret = vitro_native::capi::vitro_compile(session, src.as_ptr() as *const c_char);
         if compile_ret != 0 {
-            let err_ptr = cide_native::capi::cide_get_compile_errors(session);
+            let err_ptr = vitro_native::capi::vitro_get_compile_errors(session);
             let err_msg = if err_ptr.is_null() {
                 "Unknown compile error".to_string()
             } else {
                 std::ffi::CStr::from_ptr(err_ptr).to_string_lossy().to_string()
             };
-            cide_native::capi::cide_session_destroy(session);
+            vitro_native::capi::vitro_session_destroy(session);
             return Err(err_msg);
         }
 
-        let run_ret = cide_native::capi::cide_run(session);
+        let run_ret = vitro_native::capi::vitro_run(session);
 
         // E-P1-5：纯程序 stdout（引擎附注走 note 通道），无需再截断后缀提示。
-        let out_len = cide_native::capi::cide_get_program_output_length(session);
+        let out_len = vitro_native::capi::vitro_get_program_output_length(session);
         let out_str = if out_len > 0 {
             let mut buf = vec![0u8; out_len as usize + 1];
-            cide_native::capi::cide_get_program_output(session, buf.as_mut_ptr() as *mut c_char, buf.len() as i32);
+            vitro_native::capi::vitro_get_program_output(session, buf.as_mut_ptr() as *mut c_char, buf.len() as i32);
             String::from_utf8_lossy(&buf[..out_len as usize]).to_string()
         } else {
             String::new()
         };
 
-        let err_ptr = cide_native::capi::cide_get_runtime_error(session);
+        let err_ptr = vitro_native::capi::vitro_get_runtime_error(session);
         let runtime_err = if err_ptr.is_null() {
             None
         } else {
             Some(std::ffi::CStr::from_ptr(err_ptr).to_string_lossy().to_string())
         };
 
-        cide_native::capi::cide_session_destroy(session);
+        vitro_native::capi::vitro_session_destroy(session);
 
         if let Some(e) = runtime_err {
             if !e.is_empty() {

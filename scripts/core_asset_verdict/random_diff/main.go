@@ -5,12 +5,12 @@
 // 三路对照（独立于 662 用例作者的通道）：
 //
 //	随机生成器（本脚本）──→ C 源码 ──→ clang  ──→ stdout_clang
-//	        │                  └──────→ Cide   ──→ stdout_cide（纯程序 stdout 通道）
+//	        │                  └──────→ Vitro   ──→ stdout_vitro（纯程序 stdout 通道）
 //	        └──→ 语义模型（求值器）──→ expected
 //
 // 判定：model ≠ clang → model_clang_mismatch（生成器自检，不算引擎缺陷）；
 //
-//	clang ≠ cide → clang_cide_mismatch（引擎与 C 标准的差异，最小复现存 .findings/）；
+//	clang ≠ vitro → clang_vitro_mismatch（引擎与 C 标准的差异，最小复现存 .findings/）；
 //	否则 agree。默认 10 族 × 100 例 = 1000 例，种子固定可复现。
 //
 // 与 Python 版（scripts/core_asset_verdict/random_diff.py）的对账口径：
@@ -19,16 +19,16 @@
 //   - 生成器与语义模型的 RNG 调用顺序与 Python 版逐行对齐；
 //   - 双轨对账：逐用例 verdict 与 expected 必须一致（expected 是纯函数）；
 //   - 已知差异（有意）：① runner 实现不同（Python 版依赖 shadow_verify.py，Go 版自带
-//     等价 runner），clang/cide 动态输出以 verdict 对账；② 本脚本首次有成功基线
+//     等价 runner），clang/vitro 动态输出以 verdict 对账；② 本脚本首次有成功基线
 //     （Python 版 2026-09-12 实测 1000/1000 agree / 50.7s，此前从无产物）。
 //
 // 用法：go run ./scripts/core_asset_verdict/random_diff [--per-family 100] [--seed 20260912] [--jobs 6]
 package main
 
 import (
-	"cide/scripts/internal/capi"
-	"cide/scripts/internal/probeutil"
-	"cide/scripts/internal/pyrandom"
+	"vitro/scripts/internal/capi"
+	"vitro/scripts/internal/probeutil"
+	"vitro/scripts/internal/pyrandom"
 
 	"bytes"
 	"context"
@@ -50,7 +50,7 @@ var (
 	work     = filepath.Join(here, ".randomdiff")
 	findings = filepath.Join(here, ".findings")
 	report   = filepath.Join(here, "random_diff.json")
-	dllPath  = filepath.Join(capi.ProjectRoot(), "native", "target", "release", "cide_native.dll")
+	dllPath  = filepath.Join(capi.ProjectRoot(), "native", "target", "release", "vitro_native.dll")
 )
 
 // ───────────────────────── CPython random 复刻（MT19937） ─────────────────────────
@@ -604,7 +604,7 @@ var families = []family{
 	{"switch_bits", famSwitch},
 }
 
-// ───────────────────────── runner（等价 shadow_verify.py 的 run_with_clang / run_with_cide） ─────────────────────────
+// ───────────────────────── runner（等价 shadow_verify.py 的 run_with_clang / run_with_vitro） ─────────────────────────
 
 type runResult struct {
 	Compiler       string  `json:"compiler"`
@@ -714,45 +714,45 @@ func ifStr(s string, cond bool) string {
 	return ""
 }
 
-// cide DLL 绑定（进程内加载一次；session 由每例独立 create/destroy）
-type cideAPI struct {
+// vitro DLL 绑定（进程内加载一次；session 由每例独立 create/destroy）
+type vitroAPI struct {
 	d      *capi.DLL
 	handle uintptr
 }
 
 var (
-	cideOnce   sync.Once
-	cideShared *cideAPI
+	vitroOnce   sync.Once
+	vitroShared *vitroAPI
 )
 
-// cideMu：Cide 调用必须串行。**实证**（2026-09-12）：与 clang 并发同池跑 DLL 时
+// vitroMu：Vitro 调用必须串行。**实证**（2026-09-12）：与 clang 并发同池跑 DLL 时
 // 进程以 0xc0000374（STATUS_HEAP_CORRUPTION）崩死——引擎 DLL 存在非线程安全的
-// 内部状态，多线程并发调用不安全。Python 版此前未崩只是 6 线程下 cide 调用
+// 内部状态，多线程并发调用不安全。Python 版此前未崩只是 6 线程下 vitro 调用
 // 碰撞率低（clang 编译占去大部分时长），并非线程安全的证据。
-// 代价：cide 串行 ~45s 成为瓶颈，总耗时与 Python 版持平（~50s）——本探针不在
+// 代价：vitro 串行 ~45s 成为瓶颈，总耗时与 Python 版持平（~50s）——本探针不在
 // CI 热路径上，迁移价值在编码安全与可审计性，非性能。
-var cideMu sync.Mutex
+var vitroMu sync.Mutex
 
-func loadCide() *cideAPI {
-	cideOnce.Do(func() {
+func loadVitro() *vitroAPI {
+	vitroOnce.Do(func() {
 		d := capi.Load(dllPath) // 符号绑定 + 产物新鲜度门禁（fail fast）
 		h, _, _ := d.SessionCreate.Call()
 		if h == 0 {
-			capi.Fatal("cide_session_create 返回 NULL")
+			capi.Fatal("vitro_session_create 返回 NULL")
 		}
-		cideShared = &cideAPI{d: d, handle: h}
+		vitroShared = &vitroAPI{d: d, handle: h}
 	})
-	return cideShared
+	return vitroShared
 }
 
-func runWithCide(source string) runResult {
-	cideMu.Lock()
-	defer cideMu.Unlock()
+func runWithVitro(source string) runResult {
+	vitroMu.Lock()
+	defer vitroMu.Unlock()
 	start := time.Now()
-	a := loadCide()
+	a := loadVitro()
 
 	srcB := capi.CBytes(source)
-	// shadow_verify.run_with_cide 无 filename 路径：cide_compile(session, source)
+	// shadow_verify.run_with_vitro 无 filename 路径：vitro_compile(session, source)
 	ret, _, _ := a.d.Compile.Call(a.handle, uintptr(unsafe.Pointer(&srcB[0])))
 	runtime.KeepAlive(srcB)
 	if int32(ret) != 0 {
@@ -760,7 +760,7 @@ func runWithCide(source string) runResult {
 		if msg == "" {
 			msg = "Unknown compile error"
 		}
-		return runResult{Compiler: "cide", CompileSuccess: false, CompileError: msg,
+		return runResult{Compiler: "vitro", CompileSuccess: false, CompileError: msg,
 			Stderr: msg, ExitCode: int(int32(ret)), DurationMs: ms(time.Since(start))}
 	}
 
@@ -769,7 +769,7 @@ func runWithCide(source string) runResult {
 	stdout := strings.TrimSpace(capi.ReadChannel(a.handle, a.d.ProgOutLen, a.d.ProgOut))
 	runtimeErr := a.d.RuntimeErr(a.handle)
 
-	return runResult{Compiler: "cide", CompileSuccess: true,
+	return runResult{Compiler: "vitro", CompileSuccess: true,
 		RunSuccess: int32(runRet) == 0 && runtimeErr == "",
 		RunError:   runtimeErr, Stdout: stdout, Stderr: runtimeErr,
 		ExitCode: int(int32(runRet)), DurationMs: ms(time.Since(start))}
@@ -783,10 +783,10 @@ type diffRecord struct {
 	Verdict      string `json:"verdict"`
 	Expected     string `json:"expected"`
 	Clang        string `json:"clang"`
-	Cide         string `json:"cide"`
+	Vitro         string `json:"vitro"`
 	ClangCompile bool   `json:"clang_compile"`
-	CideCompile  bool   `json:"cide_compile"`
-	CideErr      string `json:"cide_err"`
+	VitroCompile  bool   `json:"vitro_compile"`
+	VitroErr      string `json:"vitro_err"`
 	Saved        string `json:"saved,omitempty"`
 }
 
@@ -804,27 +804,27 @@ func runOne(item struct {
 	src, expected string
 }) diffRecord {
 	clang := runWithClang(item.fam, item.idx, item.src)
-	cide := runWithCide(item.src)
+	vitro := runWithVitro(item.src)
 	gClang := strings.TrimSpace(clang.Stdout)
-	gCide := strings.TrimSpace(cide.Stdout)
+	gVitro := strings.TrimSpace(vitro.Stdout)
 	exp := strings.TrimSpace(item.expected)
 	verdict := "agree"
 	if gClang != exp {
 		verdict = "model_clang_mismatch"
-	} else if gClang != gCide {
-		verdict = "clang_cide_mismatch"
+	} else if gClang != gVitro {
+		verdict = "clang_vitro_mismatch"
 	}
 	rec := diffRecord{
 		Family: item.fam, Index: item.idx, Verdict: verdict,
-		Expected: truncate(exp, 200), Clang: truncate(gClang, 200), Cide: truncate(gCide, 200),
-		ClangCompile: clang.CompileSuccess, CideCompile: cide.CompileSuccess,
-		CideErr: truncate(cide.CompileError, 200),
+		Expected: truncate(exp, 200), Clang: truncate(gClang, 200), Vitro: truncate(gVitro, 200),
+		ClangCompile: clang.CompileSuccess, VitroCompile: vitro.CompileSuccess,
+		VitroErr: truncate(vitro.CompileError, 200),
 	}
 	if verdict != "agree" {
 		os.MkdirAll(findings, 0o755)
 		p := filepath.Join(findings, fmt.Sprintf("%s_%d_%s.c", item.fam, item.idx, verdict))
-		os.WriteFile(p, []byte(fmt.Sprintf("%s\n/* expected=%q\n   clang=%q\n   cide=%q */\n",
-			item.src, exp, gClang, gCide)), 0o644)
+		os.WriteFile(p, []byte(fmt.Sprintf("%s\n/* expected=%q\n   clang=%q\n   vitro=%q */\n",
+			item.src, exp, gClang, gVitro)), 0o644)
 		if rel, err := filepath.Rel(filepath.Dir(filepath.Dir(here)), p); err == nil {
 			rec.Saved = filepath.ToSlash(rel)
 		}
@@ -975,7 +975,7 @@ func main() {
 		fmt.Printf("    ! %s/%d: %s\n", r.Family, r.Index, r.Verdict)
 		fmt.Printf("      expected=%q\n", truncate(r.Expected, 80))
 		fmt.Printf("      clang   =%q\n", truncate(r.Clang, 80))
-		fmt.Printf("      cide    =%q\n", truncate(r.Cide, 80))
+		fmt.Printf("      vitro    =%q\n", truncate(r.Vitro, 80))
 	}
 
 	f, err := os.Create(report)

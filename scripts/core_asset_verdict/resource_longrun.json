@@ -53,7 +53,7 @@
    "peak_psapi_mb": -0.99,
    "killed_by_watchdog": false,
    "stdout_tail": ":1048572,\"is_local\":true,\"name\":\"i\",\"ty_name\":\"int\",\"value\":\"2375\"}],\"pointer_snapshots\":[],\"root_cause_hint\":null,\"semantic_label\":\"函数调用\",\"step_index\":49900,\"vis_events\":[]},\"success\":true}}\n",
-   "stderr_tail": "cide_cli serve：JSON-lines 会话模式（EOF 或 shutdown 退出）\n",
+   "stderr_tail": "vitro_cli serve：JSON-lines 会话模式（EOF 或 shutdown 退出）\n",
    "case": "seek_iters5000",
    "est_steps": 50000,
    "mb_per_1k_steps": 2.31
@@ -65,7 +65,7 @@
    "peak_psapi_mb": -0.99,
    "killed_by_watchdog": false,
    "stdout_tail": "1048572,\"is_local\":true,\"name\":\"i\",\"ty_name\":\"int\",\"value\":\"9518\"}],\"pointer_snapshots\":[],\"root_cause_hint\":null,\"semantic_label\":\"函数调用\",\"step_index\":199900,\"vis_events\":[]},\"success\":true}}\n",
-   "stderr_tail": "cide_cli serve：JSON-lines 会话模式（EOF 或 shutdown 退出）\n",
+   "stderr_tail": "vitro_cli serve：JSON-lines 会话模式（EOF 或 shutdown 退出）\n",
    "case": "seek_iters20000",
    "est_steps": 200000,
    "mb_per_1k_steps": 1.5
@@ -77,7 +77,7 @@
    "peak_psapi_mb": -0.99,
    "killed_by_watchdog": false,
    "stdout_tail": "048572,\"is_local\":true,\"name\":\"i\",\"ty_name\":\"int\",\"value\":\"23804\"}],\"pointer_snapshots\":[],\"root_cause_hint\":null,\"semantic_label\":\"函数调用\",\"step_index\":499900,\"vis_events\":[]},\"success\":true}}\n",
-   "stderr_tail": "cide_cli serve：JSON-lines 会话模式（EOF 或 shutdown 退出）\n",
+   "stderr_tail": "vitro_cli serve：JSON-lines 会话模式（EOF 或 shutdown 退出）\n",
    "case": "seek_iters50000",
    "est_steps": 500000,
    "mb_per_1k_steps": 1.24

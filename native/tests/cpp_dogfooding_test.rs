@@ -124,12 +124,12 @@ int main() {
 "#
 }
 
-/// C source that uses the Stage 0 handwritten cide_vec_int container.
+/// C source that uses the Stage 0 handwritten vitro_vec_int container.
 fn c_vector_int_src() -> &'static str {
     r#"
 #include <stdio.h>
 int main() {
-    cide_vec_int v;
+    vitro_vec_int v;
     v.push_back(3);
     v.push_back(1);
     v.push_back(4);
@@ -230,7 +230,7 @@ fn c_list_int_src() -> &'static str {
     r#"
 #include <stdio.h>
 int main() {
-    cide_list_int l;
+    vitro_list_int l;
     l.push_back(1);
     l.push_back(2);
     l.push_front(0);
@@ -307,7 +307,7 @@ fn c_string_baseline_src() -> &'static str {
     r#"
 #include <stdio.h>
 int main() {
-    cide_string s;
+    vitro_string s;
     s.push_back('h');
     s.push_back('e');
     s.push_back('l');
@@ -382,7 +382,7 @@ fn c_vector_float_src() -> &'static str {
     r#"
 #include <stdio.h>
 int main() {
-    cide_vec_float v;
+    vitro_vec_float v;
     v.push_back(3.0);
     v.push_back(1.0);
     v.push_back(4.0);
@@ -400,9 +400,9 @@ typedef struct {
     int n;
     int m;
     float *a;
-} cide_vec_float;
-float cide_vec_get_float(cide_vec_float *v, int i) { return v->a[i]; }
-int cide_vec_size_float(cide_vec_float *v) { return v->n; }
+} vitro_vec_float;
+float vitro_vec_get_float(vitro_vec_float *v, int i) { return v->a[i]; }
+int vitro_vec_size_float(vitro_vec_float *v) { return v->n; }
 int main() { return 0; }
 "#
 }
@@ -425,14 +425,14 @@ fn test_c_vector_float_baseline_runs() {
 fn test_cpp_vector_float_get_bytecode_equivalent() {
     let cpp = compile_cpp_bytecode(cpp_vector_float_src()).unwrap();
     let c = compile_cpp_bytecode(c_vector_float_inline_src()).unwrap();
-    assert_bytecode_equivalent_named(&cpp, "vector__float__get", &c, "cide_vec_get_float");
+    assert_bytecode_equivalent_named(&cpp, "vector__float__get", &c, "vitro_vec_get_float");
 }
 
 #[test]
 fn test_cpp_vector_float_size_bytecode_equivalent() {
     let cpp = compile_cpp_bytecode(cpp_vector_float_src()).unwrap();
     let c = compile_cpp_bytecode(c_vector_float_inline_src()).unwrap();
-    assert_bytecode_equivalent_named(&cpp, "vector__float__size", &c, "cide_vec_size_float");
+    assert_bytecode_equivalent_named(&cpp, "vector__float__size", &c, "vitro_vec_size_float");
 }
 
 // ============================================================================
@@ -483,7 +483,7 @@ fn c_vector_char_src() -> &'static str {
     r#"
 #include <stdio.h>
 int main() {
-    cide_vec_char v;
+    vitro_vec_char v;
     v.push_back('a');
     v.push_back('b');
     v.push_back('c');
@@ -501,9 +501,9 @@ typedef struct {
     int n;
     int m;
     char *a;
-} cide_vec_char;
-char cide_vec_get_char(cide_vec_char *v, int i) { return v->a[i]; }
-int cide_vec_size_char(cide_vec_char *v) { return v->n; }
+} vitro_vec_char;
+char vitro_vec_get_char(vitro_vec_char *v, int i) { return v->a[i]; }
+int vitro_vec_size_char(vitro_vec_char *v) { return v->n; }
 int main() { return 0; }
 "#
 }
@@ -526,14 +526,14 @@ fn test_c_vector_char_baseline_runs() {
 fn test_cpp_vector_char_get_bytecode_equivalent() {
     let cpp = compile_cpp_bytecode(cpp_vector_char_src()).unwrap();
     let c = compile_cpp_bytecode(c_vector_char_inline_src()).unwrap();
-    assert_bytecode_equivalent_named(&cpp, "vector__char__get", &c, "cide_vec_get_char");
+    assert_bytecode_equivalent_named(&cpp, "vector__char__get", &c, "vitro_vec_get_char");
 }
 
 #[test]
 fn test_cpp_vector_char_size_bytecode_equivalent() {
     let cpp = compile_cpp_bytecode(cpp_vector_char_src()).unwrap();
     let c = compile_cpp_bytecode(c_vector_char_inline_src()).unwrap();
-    assert_bytecode_equivalent_named(&cpp, "vector__char__size", &c, "cide_vec_size_char");
+    assert_bytecode_equivalent_named(&cpp, "vector__char__size", &c, "vitro_vec_size_char");
 }
 
 // ============================================================================
@@ -652,9 +652,9 @@ fn test_c_sort_int_baseline_runs() {
 
 fn c_vector_int_inline_src() -> &'static str {
     r#"
-typedef struct { int n; int m; int *a; } cide_vec_int;
-int cide_vec_get_int(cide_vec_int *v, int i) { return v->a[i]; }
-int cide_vec_size_int(cide_vec_int *v) { return v->n; }
+typedef struct { int n; int m; int *a; } vitro_vec_int;
+int vitro_vec_get_int(vitro_vec_int *v, int i) { return v->a[i]; }
+int vitro_vec_size_int(vitro_vec_int *v) { return v->n; }
 int main() { return 0; }
 "#
 }
@@ -663,14 +663,14 @@ int main() { return 0; }
 fn test_cpp_vector_int_get_bytecode_equivalent() {
     let cpp = compile_cpp_bytecode(cpp_vector_int_src()).unwrap();
     let c = compile_cpp_bytecode(c_vector_int_inline_src()).unwrap();
-    assert_bytecode_equivalent_named(&cpp, "vector__int__get", &c, "cide_vec_get_int");
+    assert_bytecode_equivalent_named(&cpp, "vector__int__get", &c, "vitro_vec_get_int");
 }
 
 #[test]
 fn test_cpp_vector_int_size_bytecode_equivalent() {
     let cpp = compile_cpp_bytecode(cpp_vector_int_src()).unwrap();
     let c = compile_cpp_bytecode(c_vector_int_inline_src()).unwrap();
-    assert_bytecode_equivalent_named(&cpp, "vector__int__size", &c, "cide_vec_size_int");
+    assert_bytecode_equivalent_named(&cpp, "vector__int__size", &c, "vitro_vec_size_int");
 }
 
 // ============================================================================
@@ -679,9 +679,9 @@ fn test_cpp_vector_int_size_bytecode_equivalent() {
 
 fn c_list_int_inline_src() -> &'static str {
     r#"
-typedef struct cide_list_node_int { int data; struct cide_list_node_int *next; } cide_list_node_int;
-typedef struct { cide_list_node_int *head; cide_list_node_int *tail; int n; } cide_list_int;
-int cide_list_size_int(cide_list_int *l) { return l->n; }
+typedef struct vitro_list_node_int { int data; struct vitro_list_node_int *next; } vitro_list_node_int;
+typedef struct { vitro_list_node_int *head; vitro_list_node_int *tail; int n; } vitro_list_int;
+int vitro_list_size_int(vitro_list_int *l) { return l->n; }
 int main() { return 0; }
 "#
 }
@@ -690,7 +690,7 @@ int main() { return 0; }
 fn test_cpp_list_int_size_bytecode_equivalent() {
     let cpp = compile_cpp_bytecode(cpp_list_int_src()).unwrap();
     let c = compile_cpp_bytecode(c_list_int_inline_src()).unwrap();
-    assert_bytecode_equivalent_named(&cpp, "list__int__size", &c, "cide_list_size_int");
+    assert_bytecode_equivalent_named(&cpp, "list__int__size", &c, "vitro_list_size_int");
 }
 
 // ============================================================================
@@ -699,9 +699,9 @@ fn test_cpp_list_int_size_bytecode_equivalent() {
 
 fn c_string_inline_src() -> &'static str {
     r#"
-typedef struct { int n; int m; char *s; } cide_string;
-char cide_string_get(cide_string *str, int i) { return str->s[i]; }
-int cide_string_size(cide_string *str) { return str->n; }
+typedef struct { int n; int m; char *s; } vitro_string;
+char vitro_string_get(vitro_string *str, int i) { return str->s[i]; }
+int vitro_string_size(vitro_string *str) { return str->n; }
 int main() { return 0; }
 "#
 }
@@ -710,14 +710,14 @@ int main() { return 0; }
 fn test_cpp_string_get_bytecode_equivalent() {
     let cpp = compile_cpp_bytecode(cpp_string_src()).unwrap();
     let c = compile_cpp_bytecode(c_string_inline_src()).unwrap();
-    assert_bytecode_equivalent_named(&cpp, "string__get", &c, "cide_string_get");
+    assert_bytecode_equivalent_named(&cpp, "string__get", &c, "vitro_string_get");
 }
 
 #[test]
 fn test_cpp_string_size_bytecode_equivalent() {
     let cpp = compile_cpp_bytecode(cpp_string_src()).unwrap();
     let c = compile_cpp_bytecode(c_string_inline_src()).unwrap();
-    assert_bytecode_equivalent_named(&cpp, "string__size", &c, "cide_string_size");
+    assert_bytecode_equivalent_named(&cpp, "string__size", &c, "vitro_string_size");
 }
 
 // ============================================================================
@@ -762,7 +762,7 @@ fn test_implicit_move_ctor_builtin_vector() {
     let src = r#"
 #include <stdio.h>
 int main() {
-    cide_vec_int v;
+    vitro_vec_int v;
     v.push_back(42);
     printf("%d\n", v.size());
     return 0;

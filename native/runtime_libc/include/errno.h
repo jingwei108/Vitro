@@ -1,4 +1,4 @@
-/* Cide errno.h stub */
+/* Vitro errno.h stub */
 extern int errno;
 
 #define EINVAL 1

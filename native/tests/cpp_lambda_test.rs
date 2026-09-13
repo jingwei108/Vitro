@@ -10,8 +10,8 @@
 //!
 //! 对照输出均由 Clang++（`-std=c++14`）实测确认。
 
-use cide_native::session::{CompileUnit, Session};
-use cide_native::session_api;
+use vitro_native::session::{CompileUnit, Session};
+use vitro_native::session_api;
 
 /// 编译并运行一段 C++ 源码，返回 (返回值, 程序 stdout)。
 fn run_cpp(source: &str) -> (i32, String) {

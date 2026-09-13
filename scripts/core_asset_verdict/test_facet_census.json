@@ -540,62 +540,62 @@
   "c_programs": 0
  },
  {
-  "file": "cide_e2e.rs",
-  "test": "test_cide_e2e_baseline",
+  "file": "vitro_e2e.rs",
+  "test": "test_vitro_e2e_baseline",
   "facet": "unit_other",
   "c_programs": 0
  },
  {
-  "file": "cide_e2e.rs",
-  "test": "test_cide_e2e_template_generated",
+  "file": "vitro_e2e.rs",
+  "test": "test_vitro_e2e_template_generated",
   "facet": "unit_other",
   "c_programs": 0
  },
  {
-  "file": "cide_e2e.rs",
-  "test": "test_cide_e2e_knr",
+  "file": "vitro_e2e.rs",
+  "test": "test_vitro_e2e_knr",
   "facet": "unit_other",
   "c_programs": 0
  },
  {
-  "file": "cide_e2e.rs",
-  "test": "test_cide_e2e_leetcode",
+  "file": "vitro_e2e.rs",
+  "test": "test_vitro_e2e_leetcode",
   "facet": "unit_other",
   "c_programs": 0
  },
  {
-  "file": "cide_e2e.rs",
-  "test": "test_cide_e2e_template_known_failures",
+  "file": "vitro_e2e.rs",
+  "test": "test_vitro_e2e_template_known_failures",
   "facet": "unit_other",
   "c_programs": 0
  },
  {
-  "file": "cide_e2e.rs",
-  "test": "test_cide_e2e_knr_known_failures",
+  "file": "vitro_e2e.rs",
+  "test": "test_vitro_e2e_knr_known_failures",
   "facet": "unit_other",
   "c_programs": 0
  },
  {
-  "file": "cide_e2e.rs",
-  "test": "test_cide_e2e_leetcode_known_failures",
+  "file": "vitro_e2e.rs",
+  "test": "test_vitro_e2e_leetcode_known_failures",
   "facet": "unit_other",
   "c_programs": 0
  },
  {
-  "file": "cide_e2e.rs",
-  "test": "test_cide_e2e_cpp",
+  "file": "vitro_e2e.rs",
+  "test": "test_vitro_e2e_cpp",
   "facet": "unit_other",
   "c_programs": 0
  },
  {
-  "file": "cide_e2e.rs",
-  "test": "test_cide_e2e_cpp_known_failures",
+  "file": "vitro_e2e.rs",
+  "test": "test_vitro_e2e_cpp_known_failures",
   "facet": "unit_other",
   "c_programs": 0
  },
  {
-  "file": "cide_e2e.rs",
-  "test": "test_cide_e2e_generate_report",
+  "file": "vitro_e2e.rs",
+  "test": "test_vitro_e2e_generate_report",
   "facet": "unit_other",
   "c_programs": 0
  },
