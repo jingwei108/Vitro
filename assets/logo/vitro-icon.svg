@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="vitro icon">
+  <title>vitro — 方形图标（favicon / 应用图标 / 徽章）</title>
+  <!-- default 版：纯 CSS @media 自动适配深浅背景，无脚本。
+       图标为主 logo（vitro-logo.svg）圆环的等比提取，无字标：
+       16px 下基准虚线抗锯齿退化为一条实线，「圆 + 一线」识别仍成立（预期退化）。
+       品牌纪律：只用 玻璃蓝 + 基准灰（+ 白高光），无投影 / 无渐变堆叠。 -->
+  <style>
+    .ring  { stroke: #155E86; }
+    .bench { stroke: #94A3AD; }
+    .glass { fill: #155E86; fill-opacity: .06; }
+    .shine { stroke: #ffffff; stroke-opacity: .55; }
+    @media (prefers-color-scheme: dark) {
+      .ring  { stroke: #4FB3E8; }
+      .bench { stroke: #5A6B75; }
+      .glass { fill: #4FB3E8; fill-opacity: .1; }
+      .shine { stroke-opacity: .6; }
+    }
+  </style>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <!-- 器壁（玻璃蓝） -->
+    <circle class="ring" cx="128" cy="128" r="76" stroke-width="14"/>
+    <circle class="glass" cx="128" cy="128" r="69" stroke="none"/>
+    <!-- 左上高光弧 -->
+    <path class="shine" d="M62.2 90A76 76 0 0 1 114.8 53.2" stroke-width="6"/>
+    <!-- 基准虚线（不触器壁，两端留白 15） -->
+    <path class="bench" d="M74 128h108" stroke-width="12" stroke-dasharray="16.5 14"/>
+  </g>
+</svg>

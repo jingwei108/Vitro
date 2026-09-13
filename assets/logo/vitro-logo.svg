@@ -37,7 +37,7 @@
   <!-- 字标：单线几何小写 vitro（Inter 的中性气质 / 路径保持可编辑），
        i 点 = 玻璃蓝（观察的瞳孔 / 指令指针），全字标唯一品牌色。 -->
   <g fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="28">
-    <path class="ink" d="M412 106L456 194L500 106"/>
+    <path class="ink" d="M400 106L444 194L488 106"/>
     <path class="ink" d="M532 106v88"/>
     <path class="ink" d="M612 66v104a24 24 0 0 0 24 24"/>
     <path class="ink" d="M590 106h44"/>

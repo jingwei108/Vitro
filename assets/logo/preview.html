@@ -121,7 +121,29 @@
   </section>
 
   <section>
-    <h3><span class="tag">3</span>Markdown 嵌入用法</h3>
+    <h3><span class="tag">3</span>方形图标 —— favicon / 应用图标 / 徽章</h3>
+    <div class="sizes" style="align-items:center">
+      <div class="s" style="width:128px"><img src="vitro-icon.svg" alt=""><div class="lab">128 · default（@media 自适应）</div></div>
+      <div class="s" style="width:128px;background:#fff;border-radius:10px;padding:8px"><img src="vitro-icon-light.svg" alt=""><div class="lab">128 · light（白底）</div></div>
+      <div class="s" style="width:128px"><img src="vitro-icon-dark.svg" alt=""><div class="lab">128 · dark（深底）</div></div>
+    </div>
+    <div class="sizes">
+      <div class="s"><img src="vitro-icon-dark.svg" style="width:64px" alt=""><div class="lab">64</div></div>
+      <div class="s"><img src="vitro-icon-dark.svg" style="width:32px" alt=""><div class="lab">32</div></div>
+      <div class="s"><img src="vitro-icon-dark.svg" style="width:16px" alt=""><div class="lab">16</div></div>
+      <div class="s" style="background:#fff;border-radius:6px"><img src="vitro-icon-light.svg" style="width:64px" alt=""><div class="lab">64 · light</div></div>
+      <div class="s" style="background:#fff;border-radius:6px"><img src="vitro-icon-light.svg" style="width:32px" alt=""><div class="lab">32 · light</div></div>
+      <div class="s" style="background:#fff;border-radius:6px"><img src="vitro-icon-light.svg" style="width:16px" alt=""><div class="lab">16 · light</div></div>
+    </div>
+    <div class="note">
+      图标为主 logo 圆环的<b>等比提取</b>（viewBox 256×256，无字标，色彩/虚线/高光弧与主 logo 完全一致）。
+      16px 下基准虚线抗锯齿退化为一条实线——「圆 + 一线」识别仍成立（设计注释的预期退化）。
+      favicon 用法：<code>&lt;link rel="icon" href="assets/logo/vitro-icon.svg" type="image/svg+xml"&gt;</code>
+    </div>
+  </section>
+
+  <section>
+    <h3><span class="tag">4</span>Markdown 嵌入用法</h3>
 <pre>&lt;p align="center"&gt;
   &lt;img src="assets/logo/vitro-logo.svg" alt="vitro" width="640"&gt;
 &lt;/p&gt;</pre>
@@ -134,6 +156,8 @@
 
   <footer>
     定稿文件：<code>vitro-logo.svg</code>（default，@media 自适应）· <code>vitro-logo-dark.svg</code>（深底）· <code>vitro-logo-light.svg</code>（浅底）<br>
+    方形图标：<code>vitro-icon.svg</code> / <code>vitro-icon-dark.svg</code> / <code>vitro-icon-light.svg</code>（256×256，主 logo 圆环等比提取）<br>
+    修订记录：2026-09-14 字距修订——v 右移修正，v–i 视觉间隙 4 → 16（与 i–t 30 / t–r 28 / r–o 18 协调），三个 logo 文件同步。<br>
     规格：viewBox <code>0 0 1024 256</code>，透明背景，纯 SVG（无脚本 / 无位图 / 无外部引用），全部单线几何路径，可编辑。<br>
     概念：<b>一个玻璃观察窗，里面有一条基准线</b>——圆环 = in vitro（玻璃 / 培养皿 / 镜片）；<br>
     基准虚线 = 诚实对照的行为基线（Clang 基线 / 可回放标尺）；左上高光弧 + 圆头端点 = 全部玻璃感。<br>

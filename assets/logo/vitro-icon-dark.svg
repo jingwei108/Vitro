@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="vitro icon">
+  <title>vitro — 方形图标（深色背景用）</title>
+  <!-- dark 版：用于深色背景（冰蓝 + 冷灰基准线），背景透明 -->
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <!-- 器壁（冰蓝） -->
+    <circle cx="128" cy="128" r="76" stroke="#4FB3E8" stroke-width="14"/>
+    <circle cx="128" cy="128" r="69" fill="#4FB3E8" fill-opacity=".1" stroke="none"/>
+    <!-- 左上高光弧 -->
+    <path d="M62.2 90A76 76 0 0 1 114.8 53.2" stroke="#ffffff" stroke-opacity=".6" stroke-width="6"/>
+    <!-- 基准虚线 -->
+    <path d="M74 128h108" stroke="#5A6B75" stroke-width="12" stroke-dasharray="16.5 14"/>
+  </g>
+</svg>
