@@ -47,8 +47,11 @@ int main() {
 "#;
     let (ret, out) = run_cpp(src);
     assert_eq!(ret, 0);
-    assert!(out.contains("d=3.00"), "double 返回的 lambda 应为 3.00，实际：{out:?}");
-    assert!(out.contains("i=110"), "int 返回的 lambda 应仍为 110，实际：{out:?}");
+    // U0#1④：精确行断言（contains("d=3.00") 对错值 "d=3.001" 同样为真——
+    // printf 已限定 %.2f，期望行就是 "d=3.00"，整行相等是可用最强断言）
+    let lines: Vec<&str> = out.lines().filter(|l| !l.is_empty()).collect();
+    assert!(lines.contains(&"d=3.00"), "double 返回的 lambda 应为 3.00，实际：{out:?}");
+    assert!(lines.contains(&"i=110"), "int 返回的 lambda 应仍为 110，实际：{out:?}");
 }
 
 #[test]

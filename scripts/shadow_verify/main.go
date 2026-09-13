@@ -163,6 +163,8 @@ func selfCheck() {
 		// 不是 C++ 版的 clang_compile_fail；若变成 compile_gap 会制造全量假红。
 		{"都编译失败 → match", c("x", "baseline"), runResult{Compiler: "clang", CompileSuccess: false}, runResult{Compiler: "cide", CompileSuccess: false}, "match"},
 		{"clang 编译失败而 cide 通过 → cide_better", c("x", "baseline"), runResult{Compiler: "clang", CompileSuccess: false}, cideOK, "cide_better"},
+		// J2：gap 目录 = "Cide 扩展"声明域，clang 拒绝属预期 → gap_extension
+		{"gap 目录 clang 拒绝 → gap_extension", shadowCase{name: "x", category: "gap", srcDir: "gap"}, runResult{Compiler: "clang", CompileSuccess: false}, cideOK, "gap_extension"},
 		{"都运行失败 → match", c("x", "baseline"), runResult{Compiler: "clang", CompileSuccess: true, RunSuccess: false, RunError: "boom"}, runResult{Compiler: "cide", CompileSuccess: true, RunSuccess: false, RunError: "boom"}, "match"},
 		{"仅 cide 运行失败 → runtime_gap", c("x", "baseline"), clangOK, runResult{Compiler: "cide", CompileSuccess: true, RunSuccess: false, RunError: "trap"}, "runtime_gap"},
 		// KNOWN_FAILURE_CASES 豁免：已记录的教学差异不统计为 runtime_gap
@@ -549,7 +551,14 @@ func analyzeDiff(cs shadowCase, clang, cide runResult) string {
 	if !clang.CompileSuccess && !cide.CompileSuccess {
 		return "match" // 都编译失败（可能是用例本身有问题）
 	}
-	return "cide_better" // Cide 通过但 Clang 失败（罕见）
+	// J2（U0#1②，2026-09-13）：gap 目录的语义就是"Cide 扩展，非 C 标准"——
+	// clang 拒绝而 Cide 通过属**预期**，归类 gap_extension（门禁通过、汇总
+	// 分列），不再冒充 cide_better。baseline/template/knr/leetcode 的
+	// cide_better 仍按 J2 逐例归零（补头转真 golden 或移 gap）。
+	if cs.srcDir == "gap" {
+		return "gap_extension"
+	}
+	return "cide_better" // Cide 通过但 Clang 失败（baseline 等目录按 J2 须归零）
 }
 
 // compileErrorPatterns 缺失特性分类关键词（有序，先到先得；与 Python 版同序同词）。
@@ -1385,7 +1394,7 @@ func main() {
 	fmt.Println("Shadow 门禁汇总")
 	fmt.Println(bar60)
 	fmt.Printf("总用例: %d\n", len(diffs))
-	for _, dt := range []string{"match", "known_issue", "cide_better", "compile_gap", "runtime_gap", "output_gap"} {
+	for _, dt := range []string{"match", "known_issue", "cide_better", "gap_extension", "compile_gap", "runtime_gap", "output_gap"} {
 		n := 0
 		for _, d := range diffs {
 			if d.diff == dt {

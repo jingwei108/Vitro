@@ -1,2 +1,4 @@
 // @category: baseline
+#include <stdlib.h>
+#include <stdio.h>
 struct Node { int data; struct Node* next; }; struct Node* createNode(int data) { struct Node* node = (struct Node*)malloc(sizeof(struct Node)); node->data = data; node->next = NULL; return node; } struct Node* deleteNode(struct Node* head, int key) { struct Node* temp = head; struct Node* prev = NULL; if (temp != NULL && temp->data == key) { head = temp->next; free(temp); return head; } while (temp != NULL && temp->data != key) { prev = temp; temp = temp->next; } if (temp == NULL) return head; prev->next = temp->next; free(temp); return head; } int main() { struct Node* head = createNode(1); head->next = createNode(2); head->next->next = createNode(3); head = deleteNode(head, 2); printf("%d %d", head->data, head->next->data); return 0; }

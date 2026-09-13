@@ -242,7 +242,9 @@ fn test_cide_e2e_baseline() {
 /// `test_cide_e2e_template_known_failures` below.
 // infixEvaluation_default 已修复 (2026-09-06 第三批 codegen 修复：自增/自减
 // 作为数组索引的代码生成缺陷，如 opStack[++opTop]；输出与 Clang golden 一致)
-const KNOWN_TEMPLATE_FAILURES: &[&str] = &["bTree_default", "spfa_default"];
+// spfa_default 已修复（2026-09-13 U0#1③：模板队列溢出，容量改 MAXV*MAXV）——
+// 双向对账咬合后从本表移除，同步 E2E_FAILURES.md 历史已修复表。
+const KNOWN_TEMPLATE_FAILURES: &[&str] = &["bTree_default"];
 
 /// Known K&R failures documented in KR_FAILURES.md.
 /// Monitored by `test_cide_e2e_knr_known_failures` below.

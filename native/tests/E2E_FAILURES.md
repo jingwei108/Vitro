@@ -38,19 +38,6 @@
 - **实际根因**: Cide 编译器 bug —— 自增/自减作为数组索引（`opStack[++opTop]` / `valStack[valTop--]`）的代码生成缺陷，2026-09-06 第三批 codegen soundness 修复（T-P0-3/T-P0-5 类型化自增路径）后输出与 Clang golden 一致（`11`）。
 - **状态**: 已从 KNOWN_TEMPLATE_FAILURES 与 shadow KNOWN_FAILURE_CASES 同步移除。
 
-### spfa_default
-
-- **来源**: 算法模板批量生成（SPFA 算法）
-- **现象**: Runtime error — 数组越界：访问了 `queue[5]`，但数组 `queue` 只有 5 个元素
-- **根因**: SPFA 模板中队列大小固定为 `MAXV(5)`，在特定输入下图的松弛操作导致入队元素超过 5 个，写入 `queue[5]` 越界。Cide VM 启用数组边界检查，因此触发陷阱；Clang 不检查数组边界，可能因未定义行为继续执行并输出 `0 -1 2 -2 1`。
-- **分类**: 模板代码缺陷（队列溢出）
-- **是否 Cide 限制**: 否
-- **涉及语法特性**: 数组、队列
-- **学生影响评级**: P2
-- **建议**: 将队列大小改为 `MAXV + 1` 或使用循环队列并检查边界
-
----
-
 ## 历史已修复条目
 
 以下条目曾因失败被记录，现已修复并从当前偏差列表移除：
@@ -58,6 +45,7 @@
 | 用例 | 修复时间 | 修复说明 |
 |---|---|---|
 | `bfs_default` | 2026-06-06 | 修复全局二维数组嵌套初始化子元素大小计算错误 |
+| `spfa_default` | 2026-09-13 | SPFA 模板队列溢出修复（普通队列容量上界 = 每点最多入队 n 次 → `MAXV*MAXV`；U0#1③，shadow 转 match，双向对账同步移除 KNOWN_TEMPLATE_FAILURES） |
 | `dfs_default` | 2026-06-06 | 同上 |
 | `binarySearchTreeValidation_default` | 2026-06-07 | 新增 `<limits.h>` 支持，`INT_MIN`/`INT_MAX` 已预定义 |
 | `bellmanFord_default` | 2026-06-15 | Parser 对 `int u, v, w;` 结构体后多字段声明已支持 |

@@ -9,7 +9,10 @@ struct Edge {
 void SPFA(struct Edge edges[], int e, int n, int v0) {
     int dist[MAXV];
     int inqueue[MAXV] = {0};
-    int queue[MAXV];
+    // 队列容量上界：SPFA 普通队列（非循环）最坏每个节点入队 n 次
+    //（负环检测在 count[v] > n 时终止，故上界 n*n）——固定 MAXV 会在
+    // 特定输入下越界写 queue[MAXV]（E2E_FAILURES spfa_default 根因）
+    int queue[MAXV * MAXV];
     int front = 0, rear = 0;
     int count[MAXV] = {0};
     for (int i = 0; i < n; i++) dist[i] = INF;

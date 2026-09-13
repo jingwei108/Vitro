@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (tests/tools)：U0 #1 + #6 收官——cide_better 16 → 0（J2 闭环）+ 红→绿规约成文
+
+- **cide_better 16 例逐例审计（J2 二择一：补头转真 golden / 移 gap 写明扩展）**：
+  统一真实根因为 `NULL` / `bool` / `FILE` 标识符缺失（undeclared identifier
+  是 `-Wno-implicit-function-declaration` 压不住的硬错误；只缺 printf/malloc
+  头的用例被该 flag 救为 match——已实证核对口径）。处置：12 例补
+  `stdlib/stdio/stddef` 头转真 golden；`keyword_compat` 移 gap（`register`
+  变量取地址：C 标准禁止、Cide 宽容接受——真实扩展差异，注释写明）；
+  `file_*` 3 例（VFS 沙盒 I/O）由驱动新增 **`gap_extension` 分类**承载
+  （gap 目录语义即"Cide 扩展，非 C 标准"，不再冒充 cide_better；启动自检
+  表同步加行）。**终态 667 = 660 match + 3 known_issue + 4 gap_extension +
+  0 cide_better，门禁通过**。
+- **known_issue 处置**：`spfa_default` 模板队列溢出修复（普通队列容量上界
+  = 每点最多入队 n 次 → `MAXV*MAXV` + 根因注释；按 E2E_FAILURES 登记建议）
+  → 转 match；`function_pointer_sizeof` / `sizeof_array_param` 用例注释补
+  spec 指向（指针 4 字节模型已在 C语言子集规范 记载——bug 通道语义即
+  "已记录差异"，非待修缺陷）；`bTree_default` 保持登记（模板程序 UB）。
+- **SKIP 清点**：全 workspace 零 `#[ignore]`（天然达标）。**弱断言扫描**：
+  contains 断言 215 处，高危"stdout 数值 contains"子类 ~150 处（该区域由
+  shadow 全量字节比对兜底）——抽样升级 `cpp_lambda_test` 一处示范
+  （`contains("d=3.00")` 对错值 "3.001" 漏放 → 改整行断言），全量升级登记
+  为 U7 结构债。
+- **红→绿规约成文（U0#6）**：AGENTS.md 新增"红→绿纪律"小节——先红留痕、
+  修复提交引用用例名、护栏先证会红（J9）；以本日 6 批实践为范例。
+  **至此 U0 全部八项收官（CS0 前置门禁达成）。**
+
 ### Added (tools/ci)：U0 #2/#3/#4 观测设施收尾——RSS 护栏 + 磁盘卫生门禁 + 事故留痕核查
 
 - **RSS 护栏（U0#2）**：`serve_smoke.py` 新增第三批——远距 seek 压力形状

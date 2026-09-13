@@ -139,7 +139,7 @@ Cide 采用**五条分层协作的测试防线**，核心哲学：*测试不是�
 将同一 C 源码同时交给 **Clang** 与 **Cide** 编译执行，对比 stdout 输出是否完全一致。Golden 只能来自 Clang，不能来自 Cide 自己。
 
 - **门禁**：自 2026-09-06 起为 CI 硬门禁——Clang 预检缺失时 fail fast（exit 2）；存在非预期差异（compile_gap / runtime_gap / output_gap）时 exit 1；match / known_issue / cide_better 视为通过。`KNOWN_FAILURE_CASES` 与 E2E 防线的 `KNOWN_TEMPLATE_FAILURES` 常量对齐（双向监控：任一防线转绿需同步移除）。
-- **覆盖**：321 个 Baseline 用例 + 82 个模板生成用例 + 81 个 K&R 用例 + 138 个 LeetCode 题 + 14 个 gap 用例 + 3 个 JIT 专项用例（`jit_nested_counting_loop` / `_longlong` / `jit_single_hot_loop`，2026-09-13）（C Shadow Verification 合计 666 个用例：match 646、cide_better 16、known_issue 4（`function_pointer_sizeof` / `sizeof_array_param` 存量 "bug" 分类 + `spfa_default` 模板已知偏差 + `bTree_default`——模板程序自身 UB，CLI/DLL 两入口间 match/FAIL 漂移，FAIL 态即 E2E_FAILURES 登记的 NULL 指针症状）；统计口径含 match + cide_better + known_issue；2026-09-13 复测）；100 个 C++ 用例（C++ Shadow Verification，98 个一致 + 2 个已记录的 `clang_compile_fail`：`cpp_cide_vec_class` / `cpp_cide_list_class` 使用 Cide 内置容器无法被 Clang++ 直接编译；2026-06-28 实测，2026-09-11 复测仍一致）
+- **覆盖**：321 个 Baseline 用例 + 82 个模板生成用例 + 81 个 K&R 用例 + 138 个 LeetCode 题 + 15 个 gap 用例 + 3 个 JIT 专项用例（`jit_nested_counting_loop` / `_longlong` / `jit_single_hot_loop`，2026-09-13）（C Shadow Verification 合计 667 个用例：match 660、known_issue 3（`function_pointer_sizeof` / `sizeof_array_param`——指针 4 字节模型，已在 C语言子集规范 记载的架构差异 + `bTree_default` 模板 UB）、gap_extension 4（`file_*` ×3 VFS 扩展 + `keyword_compat`——gap 目录语义即"Cide 扩展"，驱动专用分类，U0#1② 2026-09-13）；**cide_better = 0**（J2 闭环：16 例逐例审计，12 补头转真 golden、4 归 gap）；`spfa_default` 模板队列溢出已修转 match；统计口径含 match + known_issue + gap_extension；2026-09-13 复测）；100 个 C++ 用例（C++ Shadow Verification，98 个一致 + 2 个已记录的 `clang_compile_fail`：`cpp_cide_vec_class` / `cpp_cide_list_class` 使用 Cide 内置容器无法被 Clang++ 直接编译；2026-06-28 实测，2026-09-11 复测仍一致）
 - **标准输入（2026-09-11 新增能力）**：用例可自带同名 `.in` 文件，Clang 与 Cide 喂**同一份字节**（缓存 key 纳入真实 stdin）。此前防线一律批量运行且不喂 stdin —— K&R 目录里 29 个 `.in` 从未被使用，两侧"都无输入"造成的**虚假 match**；启用后立即暴露"输入注入丢换行"缺陷（`getchar()` 读不到 `'\n'`，19 例 `output_gap`），已随 `RuntimeState::split_stdin` 统一修复
 - **输出口径（E-P1-5，2026-09-11）**：比对读的是引擎的**纯程序 stdout 通道**（capi `cide_get_program_output*`，ABI 1.1.0）——引擎附注（"程序运行完成，返回值：N"、内存泄漏报告、教学警告）与 stderr 各有独立通道。**驱动侧不得再对输出做正则清洗**：此前十余处清洗规则语义互不一致，且在教学程序自己打印同类文本时会误删真实输出（假阳性 `output_gap`），现全部废除。读取入口统一在驱动内置的结构化通道封装（共享包 `scripts/internal/capi` 的 `ReadChannel`/`PtrToGoString`；原 Python 伴生模块 `cide_output.py` 已随主驱动退役）；DLL 缺新符号时 fail fast，不退回旧清洗。回归用例 `baseline/engine_note_lookalike.c` 固化该口径
 - **驱动**：`go run ./scripts/shadow_verify`（C 侧主驱动，2026-09-13 起 D5 语言迁移**最后一站**：与 Python 版双轨对账全维度一致后接管 CI，`shadow_verify.py` 退役删除。形态：两段流水线——Clang 侧并发（`--jobs N`，0=自动 min(CPU,16)），Cide 侧互斥串行（DLL 非线程安全实证）；实测冷启动全量重算 663 用例 ~26s、缓存热跑 ~5s。`--refresh-clang` 强制全量重算（CI 夜间防漂移）；`--rebuild` 在 release DLL 比引擎源码旧时自动重建；Clang 结果缓存为 Go 自有 schema（`go1`），与历史 Python 缓存同目录共存、key 空间不相交；瞬态环境异常（超时/启动失败/0xC0000005 映像崩溃）自动重试且**不落缓存**）、`go run ./scripts/shadow_verify_cpp`（C++ 侧驱动，2026-09-12 起 D5 第一站：Clang 并发 16 路，**24.75s → 5.2s**；工作目录自管 `.shadow_cpp_tmp/`，已 gitignore）
@@ -205,6 +205,21 @@ Cide 采用**五条分层协作的测试防线**，核心哲学：*测试不是�
 - Borrow checker 冲突解决模式：先 clone 数据再调用需要 `&mut self` 的方法
 
 > 前端切割后本仓库无 Dart/Flutter 代码；历史前端约定见标签 `before-frontend-split`。
+
+### 红→绿纪律（U0#6 规约，2026-09-13 成文）
+
+**每个缺陷修复必须先有会失败的用例，再有修复**——杜绝"修完才写必然通过的测试"：
+
+1. **先红**：修复提交之前，先提交（或在同一提交中先落）能暴露该缺陷的用例；本地跑出
+   FAIL 输出留痕（测试名 + 失败信息），CI 上表现为该用例的 FAIL 记录。禁止把新用例
+   直接标 `known_issue`/跳过来"预防"红。
+2. **后绿**：修复提交的 message 引用用例名（如"红→绿锚 `jit_nested_counting_loop.c`"），
+   使红→绿链可审计。**禁止修改测试预期值粉饰数据**（防线哲学第 0 条）。
+3. **护栏类同理**（保险丝可触发性义务 / J9 脚本可触发性）：新增护栏、上限、判定型
+   脚本必须先证明它会红（注入必然违反的输入），再上线。
+4. 已实践范例（2026-09-13）：JIT fast path 修复（shadow 红 2 → 绿）、负 argc
+   （panic 计数红 → 绿）、serve 边界批（撤钳位 3 FAIL → 复绿）、RSS 护栏
+   （BUDGET=5 证红）、三脚本 J9 埋雷（台账：`docs/current/07-质量与裁定/脚本埋雷验证记录.md`）。
 
 ### 脚本（`scripts/`、`native/tests/`）
 
