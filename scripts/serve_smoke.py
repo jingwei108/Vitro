@@ -273,6 +273,9 @@ def main():
     edge_failures = run_edge_batch(exe)
     failures.extend(edge_failures)
 
+    pending_failures = run_pending_leak_batch(exe)
+    failures.extend(pending_failures)
+
     rss_failures = run_rss_guard_batch(exe)
     failures.extend(rss_failures)
 
@@ -494,6 +497,86 @@ def run_edge_batch(exe: Path):
     )
     # 存活探针：110/111 pong
     ok(by_id.get(111, {}).get("result", {}).get("pong") is True, "畸形行之后 ping 仍 pong（进程存活）")
+    return fails
+
+
+
+# ─── U1#1 二审 P0-A 批（2026-09-13）：同会话二次运行不串帧 ─────────────────
+# unified_pending（step.next 一帧发布缓冲）挂在 session 上跨 step_begin 存活，
+# 曾致同会话二次运行（不调 session.reset）时新程序首个 step.next 下发上一
+# 程序的滞留帧（对照实验实锤：B 首帧 = A 的 step=4，携带 A 的 local_vars）。
+# 修复：step_begin 主清 + run 兜底清。本批锚定协议契约：B 程序首帧
+# step_index 必须为 0（串帧时是 A 的递增步号）。
+
+P0A_PROGRAM_A = (
+    "#include <stdio.h>\n"
+    "int f(int x){ return x * 2; }\n"
+    'int main(){ int a = 3; printf("%d", f(a)); return 0; }\n'
+)
+P0A_PROGRAM_B = (
+    "#include <stdio.h>\n"
+    'int main(){ int b = 7; printf("%d", b); return 0; }\n'
+)
+
+
+def run_pending_leak_batch(exe: Path):
+    print("\n== 二次运行不串帧批（P0-A：pending 泄漏即红）==")
+    fails = []
+    reqs = [
+        {"id": 1, "method": "compile", "params": {"source": P0A_PROGRAM_A}},
+        {"id": 2, "method": "step.begin"},
+    ] + [{"id": 3, "method": "step.next"} for _ in range(5)] + [
+        # 不调 session.reset——直接换程序（泄漏触发条件）
+        {"id": 4, "method": "compile", "params": {"source": P0A_PROGRAM_B}},
+        {"id": 5, "method": "step.begin"},
+        {"id": 6, "method": "step.next"},
+        {"id": 7, "method": "step.next"},
+    ]
+    try:
+        proc = subprocess.run(
+            [str(exe), "serve"],
+            input="\n".join(json.dumps(r) for r in reqs) + "\n",
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=60,
+        )
+    except subprocess.TimeoutExpired:
+        print("  FAIL  二次运行批超时")
+        return ["pending-batch-timeout"]
+
+    b_frames = []
+    for line in proc.stdout.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            d = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if d.get("id") in (6, 7) and d.get("ok"):
+            for p in (d.get("result") or {}).get("payloads", []):
+                b_frames.append(p)
+
+    def ok(c, label, detail=""):
+        tally(c)
+        print(f"  {'PASS' if c else 'FAIL'}  {label}" + ("" if c else f"  {detail}"))
+        if not c:
+            fails.append(label)
+
+    ok(bool(b_frames), "二次运行有帧返回", f"responses={len(b_frames)}")
+    if b_frames:
+        first = b_frames[0]
+        ok(
+            first.get("step_index") == 0,
+            "B 程序首帧 step_index=0（无 A 程序滞留帧）",
+            f"step_index={first.get('step_index')}（串帧时为 A 的递增步号）",
+        )
+        ok(
+            not any(v.get("name") == "a" for v in first.get("local_vars", [])),
+            "B 程序首帧不携带 A 的局部变量",
+            f"local_vars={[v.get('name') for v in first.get('local_vars', [])]}",
+        )
     return fails
 
 

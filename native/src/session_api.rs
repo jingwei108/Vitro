@@ -73,6 +73,10 @@ pub fn compile(session: &mut Session) -> Value {
 ///
 /// `{"ok":bool,"status":"finished|trap|waiting_input|not_compiled","return_value":n,"trap":"...","waiting_input":bool,"steps_executed":n}`
 pub fn run(session: &mut Session) -> Value {
+    // U1#1 二审 P0-A（防御性）：run 重置执行状态，旧程序的发布缓冲帧
+    // 一并作废（主清理在 step_begin，此处兜底 compile→run→step.begin
+    // 之外的路径组合）。
+    session.unified_pending = None;
     if !session.compile.compiled {
         session.runtime.error = "程序尚未编译。请先编译代码。".to_string();
         return json!({
@@ -213,6 +217,11 @@ pub fn step_begin(session: &mut Session) -> i32 {
     if !session.compile.compiled {
         return -2;
     }
+    // U1#1 二审 P0-A：清掉上一程序的发布缓冲帧。unified_pending 挂在
+    // session 上跨 step_begin 存活——同会话二次运行（不调 session.reset）
+    // 时，新程序首个 step.next 会先下发旧程序的滞留帧（对照实验实锤：
+    // B 程序首帧 = A 的 step=4，携带 A 的 local_vars）。
+    session.unified_pending = None;
     let mut engine = UnifiedEngine::new();
     engine.reset();
     let mut vm = session.vm.take().unwrap_or_default();
