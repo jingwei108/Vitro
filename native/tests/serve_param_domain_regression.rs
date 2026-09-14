@@ -115,3 +115,55 @@ fn get_payloads_negative_end_returns_empty() {
     let out = engine.get_payloads(52, 55);
     assert_eq!(out.len(), 3);
 }
+
+/// §6-9（v4 清单，2026-09-14）：程序结束后 `step.next` 不得重复投递末帧——
+/// spec 附录 A 冻结不变量"每真实步恰投递一次"的终态延伸。
+/// 修复前实测：结束后每次调用都重放末帧（binary 模板 90 步，call#92+ 持续
+/// 返回 [s=89]），且重复帧同步污染 frame_cache（payload.get 窗口混入重放帧）。
+/// 修复 = `UnifiedEngine::is_finished` 短路：终结后再调用返回空 payloads +
+/// finished=true（末帧已在结束轮发布过）。
+#[test]
+fn test_step_next_after_finish_no_tail_replay() {
+    let src = "int main() { int s = 0; for (int i = 0; i < 3; i++) { s += i; } return s; }";
+    let mut session = Session::default();
+    session.compile.compile_units = vec![CompileUnit {
+        filename: "main.c".to_string(),
+        source: src.to_string(),
+    }];
+    let r = session_api::compile(&mut session);
+    assert_eq!(r.get("ok"), Some(&serde_json::json!(true)), "编译失败: {:?}", r.get("diagnostics"));
+    let _ = session_api::run(&mut session);
+    assert_eq!(session_api::step_begin(&mut session), 0);
+
+    // 推进到终结：收集全部已发布帧的 step_index（含结束冲刷帧）
+    let mut published: Vec<i64> = Vec::new();
+    let mut finished = false;
+    for _ in 0..200 {
+        let v = session_api::step_next(&mut session).expect("step_next 不应失败");
+        for p in v.get("payloads").and_then(|p| p.as_array()).unwrap_or(&vec![]) {
+            if let Some(si) = p.get("step_index").and_then(|x| x.as_i64()) {
+                published.push(si);
+            }
+        }
+        if v.get("finished") == Some(&serde_json::json!(true)) {
+            finished = true;
+            break;
+        }
+    }
+    assert!(finished, "200 步内应到达终结");
+    let total = published.len();
+
+    // 终结后再调用 5 次：payloads 必须为空、finished 保持 true——
+    // 任何重放的末帧都违反"每真实步恰投递一次"
+    for i in 0..5 {
+        let v = session_api::step_next(&mut session).expect("终结后调用不应失败");
+        let n = v.get("payloads").and_then(|p| p.as_array()).map(|a| a.len()).unwrap_or(0);
+        assert_eq!(n, 0, "终结后第 {} 次调用不得重放帧（发布序列 {:?}）", i + 1, published);
+        assert_eq!(v.get("finished"), Some(&serde_json::json!(true)), "finished 应保持");
+    }
+    // 序列本身严格递增（无重复投递）
+    for w in published.windows(2) {
+        assert_eq!(w[1], w[0] + 1, "发布序列必须严格递增: {:?}", published);
+    }
+    assert!(total >= 3, "程序应至少发布若干帧，实际 {}", total);
+}

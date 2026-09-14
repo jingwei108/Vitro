@@ -43,7 +43,13 @@ pub(crate) fn infer_dp(source_line: &str, vars: &VarMap, algorithm: &AlgorithmMa
         if i_head && !dp_loop_body_is_init(&body_line) {
             return Some(build_step(algorithm, "outer_loop", &format!("遍历子问题 i={}", i)));
         }
-        if line_lower.contains("int j") || line_lower.contains(" j <") || line_lower.contains("(j <") {
+        // §6-2（v4 清单，2026-09-14）：j 分支补同款初始化体排除——多行双层
+        // 初始化循环（dpKnapsack L14 / dpLCS L11 / matrixChain L6 的内层 j，
+        // 体 `dp[i][j] = 0;` 在下一行）此前漏判，inner_loop 首现挂初始化循环
+        // （人审 ✗ ×3）。红锚：inner_loop_init_multiline_body_excluded。
+        if (line_lower.contains("int j") || line_lower.contains(" j <") || line_lower.contains("(j <"))
+            && !dp_loop_body_is_init(&body_line)
+        {
             return Some(build_step(algorithm, "inner_loop", &format!("遍历子问题维度 j={}", w)));
         }
     }
@@ -75,4 +81,73 @@ fn dp_loop_body_is_init(line_lower: &str) -> bool {
         return !rhs.is_empty() && rhs.chars().all(|c| c.is_ascii_digit());
     }
     false
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used)]
+
+    use super::*;
+
+    fn algo() -> AlgorithmMatch {
+        AlgorithmMatch {
+            name: "dp".to_string(),
+            display_name: "动态规划".to_string(),
+            func_name: "main".to_string(),
+            confidence: 90,
+            suggestion: String::new(),
+            line: 1,
+        }
+    }
+
+    fn env(lookahead: &str) -> crate::InferEnv<'_> {
+        crate::InferEnv {
+            prev_vars: &[],
+            at_callee_entry: false,
+            caller_is_main: false,
+            lookahead,
+        }
+    }
+
+    /// §6-2（v4 清单，2026-09-14）：初始化双层循环的**内层 j 行**不得产出
+    /// inner_loop——多行 for 体不在 for 行内（dpLCS L11 for j / L12 体
+    /// `dp[i][j] = 0;`），outer_loop 已有排除而 j 分支漏掉，致
+    /// dpKnapsack/dpLCS/matrixChain 三键 inner_loop 首现挂初始化循环（人审 ✗）。
+    /// 修复前：返回 Some(inner_loop) → 本测试红。
+    #[test]
+    fn inner_loop_init_multiline_body_excluded() {
+        let vars = VarMap::new(&[]);
+        // dpLCS 形态：L10 for i / L11 for j / L12 体
+        let r = infer_dp(
+            "for (j = 0; j <= n; j++) {",
+            &vars,
+            &algo(),
+            &env("        dp[i][j] = 0;\n    }\n"),
+        );
+        assert!(r.is_none(), "初始化内层 j 循环不得产出 inner_loop，实际 {:?}", r);
+
+        // matrixChain 形态：体为 dp[j][j] = 0;
+        let r = infer_dp(
+            "for (j = 0; j < n; j++)",
+            &vars,
+            &algo(),
+            &env("            dp[j][j] = 0;\n        }\n"),
+        );
+        assert!(r.is_none(), "dp[j][j] = 0 初始化体同上，实际 {:?}", r);
+    }
+
+    /// 反向锚：算法体的内层 j 循环（体引用 dp 依赖/变量）仍产出 inner_loop。
+    #[test]
+    fn inner_loop_real_body_still_annotated() {
+        let vars = VarMap::new(&[]);
+        // dpCoinChange 形态：j 从 coins[i] 起、体是转移语句
+        let r = infer_dp(
+            "for (j = coins[i]; j <= amount; j++) {",
+            &vars,
+            &algo(),
+            &env("            dp[j] = min(dp[j], dp[j - coins[i]] + 1);\n        }\n"),
+        );
+        assert!(r.is_some(), "真实子问题维度循环应产出 inner_loop");
+        assert_eq!(r.unwrap().phase, "inner_loop");
+    }
 }

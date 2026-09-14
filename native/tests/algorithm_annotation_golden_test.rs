@@ -27,6 +27,14 @@ const STEP_BUDGET: usize = 4000;
 
 #[derive(serde::Deserialize, serde::Serialize, Debug, Clone, PartialEq)]
 struct FirstOccurrence {
+    /// 该条标注归属的算法（如 `bst_insert` / `bst_search`）——三审 P0-2 裁定 (b)：
+    /// golden 收录算法归属，跨函数混流（bstSearch 建树段讲插入）与算法标签漂移
+    /// 由此可检。JSON 帧本就携带（`AlgorithmStepSnapshot`），v3 固化时丢失，v4 补上。
+    #[serde(default)]
+    algorithm: String,
+    /// 算法教学名（如"冒泡排序"）。
+    #[serde(default)]
+    display_name: String,
     phase: String,
     desc: String,
     code_line: i64,
@@ -75,8 +83,12 @@ fn extract_first_occurrences(source: &str) -> Vec<FirstOccurrence> {
         let Some(payloads) = value.get("payloads").and_then(|p| p.as_array()) else { continue };
         for pl in payloads {
             let Some(step) = pl.get("algorithm_step").filter(|a| !a.is_null()) else { continue };
+            let algorithm = step.get("algorithm_name").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let display_name = step.get("display_name").and_then(|v| v.as_str()).unwrap_or("").to_string();
             let phase = step.get("phase").and_then(|v| v.as_str()).unwrap_or("").to_string();
             let desc = step.get("description").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            // 去重口径钉死为 (phase, desc)（v4 清单 §0 口径 1：条数 = 317）；
+            // algorithm/display_name 是首现帧的属性——同文案后到的其他算法不再单列。
             if phase.is_empty() || !seen.insert((phase.clone(), desc.clone())) {
                 continue;
             }
@@ -86,7 +98,7 @@ fn extract_first_occurrences(source: &str) -> Vec<FirstOccurrence> {
             } else {
                 String::new()
             };
-            first.push(FirstOccurrence { phase, desc, code_line, src });
+            first.push(FirstOccurrence { algorithm, display_name, phase, desc, code_line, src });
         }
     }
     first

@@ -16,6 +16,11 @@ pub struct UnifiedEngine {
     pub max_steps: i32,
     pub is_paused: bool,
     pub is_cancelled: bool,
+    /// §6-9（v4 清单，2026-09-14）：VM 终结后 run_batch 不得再重放末帧——
+    /// `StepResult::Finished` 每次调用都会 collect+push 同一帧，违反 spec
+    /// 附录 A"每真实步恰投递一次"（实测 binary 90 步程序 call#92+ 持续重发
+    /// s=89，且重复帧污染 frame_cache）。终结后再调用直接返回空 payloads。
+    pub is_finished: bool,
     /// 复用的 pre-step 快照容器，避免 `run_batch` 每步分配 1MB Vec。
     pre_step_snap: Option<VMSnapshot>,
     /// FrameCache 滑动窗口大小。超过此值时丢弃最早的帧。
@@ -48,6 +53,7 @@ impl UnifiedEngine {
             max_steps,
             is_paused: false,
             is_cancelled: false,
+            is_finished: false,
             pre_step_snap: None,
             frame_cache_window_size: 2_000,
             frame_cache_trim_ratio: 0.2,
@@ -62,6 +68,7 @@ impl UnifiedEngine {
         self.frame_cache.clear();
         self.is_paused = false;
         self.is_cancelled = false;
+        self.is_finished = false;
         self.pre_step_snap = None;
         self.frame_cache_start_step = 0;
     }
@@ -104,6 +111,20 @@ impl UnifiedEngine {
         session: &mut Session,
         batch_size: i32,
     ) -> Result<AutoStepResult, String> {
+        // §6-9：已终结 → 不再 step/collect（Finished 分支每次都会重放末帧）。
+        // 返回空 payloads + finished=true——末帧已在结束轮发布过。
+        if self.is_finished {
+            return Ok(AutoStepResult {
+                payloads: Vec::new(),
+                finished: true,
+                trapped: false,
+                waiting_input: false,
+                paused: self.is_paused,
+                current_line: vm.get_current_line(),
+                trap_message: None,
+                cache_start_step: self.frame_cache_start_step,
+            });
+        }
         let mut payloads = Vec::new();
         let mut finished = false;
         let mut trapped = false;
@@ -173,6 +194,7 @@ impl UnifiedEngine {
                     let payload = StepCollector::collect(vm, session, step);
                     payloads.push(payload);
                     finished = true;
+                    self.is_finished = true;
                     break;
                 }
                 StepResult::Trap => {
@@ -240,6 +262,9 @@ impl UnifiedEngine {
     /// 如果目标步已在当前 `frame_cache` 窗口中，直接返回；
     /// 否则从最近检查点恢复 VM 并正向重放，然后只保留目标步附近窗口内的帧。
     pub fn seek_to(&mut self, target: i32, vm: &mut VitroVM, session: &mut Session) -> SeekResult {
+        // §6-9：seek = 回到过去——终结标志必须复位（重放路径若真到终结态会再次置位），
+        // 否则 seek 回中段后 step.next 会静默返回 finished 空帧。
+        self.is_finished = false;
         // 目标已在当前窗口中
         if let Some(idx) = self.frame_cache_index(target) {
             return SeekResult {

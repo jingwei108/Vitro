@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (防线 6)：v4 清单 §6 代码侧首批——golden 增算法归属 + 终态末帧重放根治 + dp 初始化内层排除（全部红→绿）
+
+依据用户完成的三审处置与人审判定（`算法标注golden审阅意见三审20260914.md` +
+人审清单 v4：113 键逐行判定 ✅94/✗11/⛔8），推进 §6 待落地清单：
+
+- **§6-1 golden 增 `algorithm` / `display_name` 字段**（三审 P0-2 裁定 (b)）：
+  JSON 帧本就携带（`AlgorithmStepSnapshot`），v3 固化时丢失。bst 家族跨算法
+  混流（bstSearch/bstDelete 建树段讲插入）与**算法标签漂移**由此可检。红锚 =
+  317 处全量字段差异 → 以 v4 提取数据重固化 → 绿；去重口径钉死 (phase, desc)
+  （不因算法扩键）；
+- **§6-9 终态末帧重放根治**：`UnifiedEngine.is_finished`——`StepResult::Finished`
+  每次调用都 collect+push 同一帧（实测 binary 90 步程序 call#92+ 持续重发
+  s=89，且重复帧污染 frame_cache / payload.get 窗口）。终结后再调用返回空
+  payloads + finished=true（末帧已在结束轮发布）；`seek_to`（回到过去）复位
+  标志。红锚 `test_step_next_after_finish_no_tail_replay`（修复前 FAIL）+
+  发布序列严格递增断言；
+- **§6-2 dp 初始化内层循环排除**（人审 ✗ ×3）：`infer_dp` 的 j 分支补
+  `dp_loop_body_is_init` 排除（多行双层初始化的体 `dp[i][j] = 0;` 不在 for
+  行内，outer 分支已有排除而 j 分支漏判）——dpKnapsack L14 / dpLCS L11 /
+  matrixChain L6 的初始化挂载消失：dpLCS inner_loop 首现移到真算法循环
+  L14；dpKnapsack/matrixChain 的 inner_loop 无首现（算法体内层是 w/k 变量、
+  判据只认 j——属覆盖缺口非回归，golden 如实反映）。红锚
+  `inner_loop_init_multiline_body_excluded`（修复前 FAIL）+ 反向锚
+  `inner_loop_real_body_still_annotated`。golden 基线随批更新：
+  **37 模板 / 300 条 / 111 键**（317→300：dpKnapsack -15、dpLCS -1、
+  matrixChain -1，全部为人审 ✗ 的初始化变体）；
+- 其间顺带实证一个提取器口径陷阱：判据修复后必须**重建 release** 再跑提取
+  器（tmp 脚本读 release DLL，旧产物会回灌旧行为数据）。
+
+验收：cargo 70 套件全绿；shadow C 675 零非预期差异；serve 冒烟 57/57；
+replay 61/61；clippy `-D warnings` 零警告。
+
 ### Added (防线 6①)：算法标注 golden 固化 + CI 接线（U1#1 收官批，2026-09-14）
 
 二审（`算法标注golden审阅意见二审20260913.md`）全部 P0/P1 修复落地后的收尾：
