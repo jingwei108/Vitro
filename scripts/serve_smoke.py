@@ -357,7 +357,11 @@ def _peak_commit_mb_windows(pid: int) -> int:
 
 def run_rss_guard_batch(exe: Path):
     print("\n== RSS 护栏批（远距 seek 压力形状，超预算即红）==")
-    budget_mb = int(os.environ.get("VITRO_RSS_BUDGET_MB", "512"))
+    # J5 收紧（U2#1 后，2026-09-14）：512 → 64——seek 重放循环内滚动截断落地后
+    # 压力形状实测峰值 23MB（修复前 75MB 基线，-69%；斜率 ≈57B/步 ≤ 验收线
+    # 64B/步）。2.8× 余量覆盖 U2 剩余项（#3 output_chunks / #4 trace 等）
+    # 完成后的进一步收紧空间；证红通道不变：VITRO_RSS_BUDGET_MB=5。
+    budget_mb = int(os.environ.get("VITRO_RSS_BUDGET_MB", "64"))
     if sys.platform != "win32":
         print("  SKIP  非 Windows 平台（CI runner 为 windows-latest；采样走 psapi）")
         return []
@@ -410,7 +414,7 @@ def run_rss_guard_batch(exe: Path):
             fails.append(label)
     if peak >= 0:
         ok(peak <= budget_mb, "RSS 护栏：提交峰值在预算内",
-           f"peak={peak}MB budget={budget_mb}MB（U2 完成后按 J5 收紧；证红：VITRO_RSS_BUDGET_MB=5）")
+           f"peak={peak}MB budget={budget_mb}MB（J5 已收紧至 64MB：U2#1 后实测 23MB；证红：VITRO_RSS_BUDGET_MB=5）")
     else:
         ok(False, "RSS 护栏：采样可用", "psapi 采样失败")
     return fails

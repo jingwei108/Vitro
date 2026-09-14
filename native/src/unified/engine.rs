@@ -78,6 +78,11 @@ impl UnifiedEngine {
         self.frame_cache_start_step
     }
 
+    /// U2#1 测试断言用：帧窗口大小上限（字段私有，避免外部直改）。
+    pub fn frame_cache_window(&self) -> usize {
+        self.frame_cache_window_size
+    }
+
     /// 对 frame_cache 执行滑动窗口截断。
     /// 超过窗口上限时丢弃最早的 `trim_ratio` 比例帧，并更新窗口起点。
     pub(crate) fn trim_frame_cache(&mut self) {
@@ -321,14 +326,31 @@ impl UnifiedEngine {
                 self.checkpoints.save(step, vm, &mut session.as_vm_context());
             }
 
+            // U2#11 前半：重放步数同样受引擎步数预算约束（对比 run_batch——
+            // 此前循环内只有 is_cancelled，无步数判断）。
+            if vm.get_executed_steps() >= self.max_steps {
+                return SeekResult {
+                    success: false,
+                    payload: None,
+                    error: Some(format!("重放步数超过限制（{} 步），可能存在无限循环。", self.max_steps)),
+                };
+            }
+
             match vm.step(&mut session.as_vm_context()) {
                 StepResult::Ok | StepResult::Paused => {
                     let payload = StepCollector::collect(vm, session, step);
                     self.push_or_replace_in_replay(step, payload);
+                    // U2#1：重放循环内滚动截断——修复前只在 finish_replay_window
+                    //（重放结束后）裁窗，**过程峰值**无界（重放距离全长帧同时
+                    // 常驻 = 裁定实测 seek 峰值 1.2~2.3KB/步、63.6GB 事故形态）。
+                    // push 后立即 trim：顺序追加保证 idx==len，不走占位分支；
+                    // finish_replay_window 语义不变（截尾到 target 窗口）。
+                    self.trim_frame_cache();
                 }
                 StepResult::WaitingInput => {
                     let payload = StepCollector::collect(vm, session, step);
                     self.push_or_replace_in_replay(step, payload.clone());
+                    self.trim_frame_cache();
                     self.finish_replay_window(target);
                     return SeekResult {
                         success: true,
@@ -339,6 +361,7 @@ impl UnifiedEngine {
                 StepResult::Finished => {
                     let payload = StepCollector::collect(vm, session, step);
                     self.push_or_replace_in_replay(step, payload.clone());
+                    self.trim_frame_cache();
                     self.finish_replay_window(target);
                     return SeekResult {
                         success: true,

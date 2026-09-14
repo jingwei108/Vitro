@@ -592,3 +592,81 @@ int main() {
         assert_eq!((e.1, e.2), (r.1, r.2), "步 {} 的 (x, sum) 淘汰侧 ({}, {}) != 参考侧 ({}, {})", e.0, e.1, e.2, r.1, r.2);
     }
 }
+
+/// U2#1（2026-09-14）：远距 seek 的重放循环内帧缓存必须滚动截断——
+/// 修复前重放从不 trim（run_batch 每批后有、seek 循环没有），重放期间
+/// 帧缓存无界累积 = 裁定实测的 seek 峰值 1.2~2.3KB/步（63.6GB 事故的
+/// 瞬时形态）。结构断言：远距 seek 后窗口 ≤ frame_cache_window_size + 1。
+#[test]
+fn test_u21_seek_replay_window_bounded() {
+    use vitro_native::unified::engine::UnifiedEngine;
+
+    let source = r#"
+#include <stdio.h>
+int main() {
+    int x = 0;
+    for (int i = 0; i < 3000; i++) {
+        x = x + 1;
+    }
+    printf("%d\n", x);
+    return 0;
+}
+"#;
+    let mut session = make_session(source);
+    let mut engine = UnifiedEngine::with_max_steps(1_000_000);
+    engine.reset();
+    let mut vm = setup_vm_for_session(&mut session);
+    session.runtime.running = true;
+    engine.checkpoints.save(0, &mut vm, &mut session.as_vm_context());
+
+    // 无界形态 = 检查点稀疏的长重放：step_begin 后只 save(0)，正向跑少量步
+    //（窗口小、无中间检查点）→ 越窗远距 seek → 从 checkpoint 0 重放全长。
+    for _ in 0..10 {
+        let r = engine.run_batch(&mut vm, &mut session, 1).expect("run_batch");
+        if r.finished {
+            break;
+        }
+    }
+    let r = engine.seek_to(2990, &mut vm, &mut session);
+    assert!(r.success, "seek 应成功：{:?}", r.error);
+    let window = engine.frame_cache.len();
+    assert!(
+        window <= engine.frame_cache_window() + 1,
+        "远距 seek 重放期间帧窗口必须滚动有界：len={} > window={}（修复前无界累积 = 重放距离全长，即裁定实测的 seek 峰值 1.2~2.3KB/步）",
+        window,
+        engine.frame_cache_window()
+    );
+    // 语义：重放完成后窗口尾 = 目标步（trim 只截头部）
+    let tail = engine.frame_cache_start_step + engine.frame_cache.len() as i32 - 1;
+    assert_eq!(tail, 2990, "窗口尾帧应为目标步（起点 {}，len {}）", engine.frame_cache_start_step, engine.frame_cache.len());
+    // 语义：目标帧可取回（get_payloads 公开口径）
+    let visible = engine.get_payloads(2989, 2990);
+    assert_eq!(visible.len(), 1, "目标步必须可索引（半开区间；窗口起点 {}，len {}）", engine.frame_cache_start_step, engine.frame_cache.len());
+}
+
+/// U2#11 前半：seek 重放步数受引擎 max_steps 预算约束——修复前循环内
+/// 只有 is_cancelled（对比 run_batch 有步数判断），本断言红。
+#[test]
+fn test_u21_seek_replay_respects_max_steps() {
+    use vitro_native::unified::engine::UnifiedEngine;
+
+    let source = r#"
+#include <stdio.h>
+int main() {
+    int x = 0;
+    for (int i = 0; i < 3000; i++) { x = x + 1; }
+    printf("%d\n", x);
+    return 0;
+}
+"#;
+    let mut session = make_session(source);
+    let mut engine = UnifiedEngine::with_max_steps(100); // 预算远小于程序长度
+    engine.reset();
+    let mut vm = setup_vm_for_session(&mut session);
+    session.runtime.running = true;
+    engine.checkpoints.save(0, &mut vm, &mut session.as_vm_context());
+
+    let r = engine.seek_to(2990, &mut vm, &mut session);
+    assert!(!r.success, "超预算的远距重放必须失败");
+    assert!(r.error.unwrap().contains("重放步数超过限制"), "错误应说明预算");
+}
