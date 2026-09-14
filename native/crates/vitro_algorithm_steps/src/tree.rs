@@ -43,11 +43,18 @@ pub(crate) fn infer_bst_validate(
     _vars: &VarMap,
     algorithm: &AlgorithmMatch,
     func_name: &str,
+    env: &crate::InferEnv<'_>,
 ) -> Option<AlgorithmStepSnapshot> {
     let line_lower = source_line.to_lowercase();
 
     // 递归校验行（判据置顶：该行同时含 min/max，会被区间判据误吃）。
     if source_line.contains(&format!("{}(", func_name)) {
+        // v5 ✗2：顶层调用帧（main 调用行，at_callee_entry + caller_is_main——
+        // 与 quick/merge 同款区分）给入口语义——原"递归校验子树：…区间收窄"
+        // 描述的是函数体内两分支，与所挂的 main 调用行不符（人审 ✗）。
+        if env.at_callee_entry && env.caller_is_main {
+            return Some(build_step(algorithm, "recursive", "启动校验：从根节点开始，检查整棵树是否满足 BST 性质"));
+        }
         return Some(build_step(algorithm, "recursive", "递归校验子树：左子树区间收窄为 (min, val)，右子树为 (val, max)"));
     }
 
@@ -290,11 +297,13 @@ mod tests {
     #[test]
     fn bst_validate_phases_match_template_lines() {
         let a = validate_match();
+        let env = crate::InferEnv { prev_vars: &[], at_callee_entry: false, caller_is_main: false, lookahead: "" };
         let empty = infer_bst_validate(
             "if (root == NULL) return 1;",
             &no_vars(),
             &a,
             "isValidBST",
+            &env,
         )
         .expect("空树判定行应标注");
         assert_eq!(empty.phase, "empty_valid");
@@ -304,6 +313,7 @@ mod tests {
             &no_vars(),
             &a,
             "isValidBST",
+            &env,
         )
         .expect("区间校验行应标注");
         assert_eq!(range.phase, "range_check");
@@ -313,6 +323,7 @@ mod tests {
             &no_vars(),
             &a,
             "isValidBST",
+            &env,
         )
         .expect("递归校验行应标注");
         assert_eq!(rec.phase, "recursive");
@@ -324,7 +335,7 @@ mod tests {
     fn bst_validate_rejects_plain_compare() {
         let a = validate_match();
         assert!(
-            infer_bst_validate("if (val < root->val)", &no_vars(), &a, "isValidBST").is_none(),
+            infer_bst_validate("if (val < root->val)", &no_vars(), &a, "isValidBST", &crate::InferEnv { prev_vars: &[], at_callee_entry: false, caller_is_main: false, lookahead: "" }).is_none(),
             "无 min/max 界的普通比较不应判区间校验"
         );
     }

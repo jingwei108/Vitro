@@ -104,7 +104,7 @@ pub fn infer_algorithm_step(
         "bst_insert" => tree::infer_bst_insert(&source_line, &vars, &algorithm, func_name),
         "bst_search" => tree::infer_bst_search(&source_line, &vars, &algorithm, func_name),
         "bst_delete" => tree::infer_bst_delete(&source_line, &vars, &algorithm, func_name),
-        "bst_validate" => tree::infer_bst_validate(&source_line, &vars, &algorithm, func_name),
+        "bst_validate" => tree::infer_bst_validate(&source_line, &vars, &algorithm, func_name, env),
         "string_reverse" => search::infer_string_reverse(&source_line, &vars, &algorithm),
         "gcd" => math::infer_gcd(&source_line, &vars, &algorithm, env),
         "is_prime" => math::infer_is_prime(&source_line, &vars, &algorithm),

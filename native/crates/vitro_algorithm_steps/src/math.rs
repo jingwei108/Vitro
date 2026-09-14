@@ -119,7 +119,15 @@ pub(crate) fn infer_hanoi(
             }
             return None;
         }
-        return Some(build_step(algorithm, "recursive", &format!("移动 {} 个盘子的汉诺塔问题", n)));
+        // v5 ✗3：顶层调用帧的"问题陈述"（"移动 N 个盘子的汉诺塔问题"）改
+        // 入口语义——从 from 柱移动到 to 柱（char 形参按 i32 存，还原为字符；
+        // 取不到时降级不带柱名）。
+        let from_c = vars.get_int_any(&["from"]).and_then(|v| char::from_u32(v as u32));
+        let to_c = vars.get_int_any(&["to"]).and_then(|v| char::from_u32(v as u32));
+        return Some(match (from_c, to_c) {
+            (Some(f), Some(t)) => build_step(algorithm, "recursive", &format!("从 {} 柱移动 {} 个盘子到 {} 柱", f, n, t)),
+            _ => build_step(algorithm, "recursive", &format!("启动汉诺塔：移动 {} 个盘子", n)),
+        });
     }
 
     if line_lower.contains("move") && line_lower.contains("disk") {

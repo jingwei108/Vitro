@@ -159,11 +159,17 @@ pub(crate) fn infer_string_match_kmp(
     // 模板 22 条挂错，人审 ✗）。词汇只增：新增 build_nextval。必须放在
     // next 分支之前（`nextval[next[j]]` 这类行同时含 "next["）。
     if line_lower.contains("nextval[") && line_lower.contains('=') {
-        return Some(build_step(
-            algorithm,
-            "build_nextval",
-            &format!("构建 nextval 数组，nextval[{}]", j),
-        ));
+        // v5 ✗1（复判新发现）：下标/值从**行文本**解析——此前用变量 j 填下标位，
+        // 对 `nextval[0] = -1;`（下标是字面量）产出 "nextval[-1]"（j 取到的是
+        // 右侧的**值**，下标位被填成值）。下标：字面量直取，标识符用变量值；
+        // 值：右侧为纯整数字面量时附带（复杂右式省略），与 build_next 的
+        // `next[N]=V` 格式对齐。
+        let desc = match parse_array_assign(source_line, "nextval", vars) {
+            Some((idx, Some(val))) => format!("构建 nextval 数组，nextval[{}]={}", idx, val),
+            Some((idx, None)) => format!("构建 nextval 数组，nextval[{}]", idx),
+            None => "构建 nextval 数组".to_string(),
+        };
+        return Some(build_step(algorithm, "build_nextval", &desc));
     }
     if line_lower.contains("getnextval") {
         return Some(build_step(algorithm, "build_nextval", "调用构建 nextval 数组"));
@@ -191,6 +197,31 @@ pub(crate) fn infer_string_match_kmp(
     }
 
     None
+}
+
+/// v5 ✗1：解析 `<name>[<idx>] = <rhs>;` 形态——返回 (下标显示, 右侧纯字面量值)。
+/// 下标为字面量时直取；为标识符时取该变量的当前值；右侧仅当是纯整数字面量
+///（可负）时返回值，复杂右式返回 None。
+fn parse_array_assign(line: &str, name: &str, vars: &VarMap) -> Option<(String, Option<String>)> {
+    let lower = line.to_lowercase();
+    let open = format!("{}[", name);
+    let start = lower.find(&open)? + open.len();
+    let end = lower[start..].find(']')? + start;
+    let idx_text = line[start..end].trim();
+    let idx = if idx_text.chars().all(|c| c.is_ascii_digit()) && !idx_text.is_empty() {
+        idx_text.to_string()
+    } else {
+        vars.get_int_any(&[idx_text]).map(|v| v.to_string()).unwrap_or_else(|| idx_text.to_string())
+    };
+    let rhs = line[end + 1..].split('=').next_back()?.trim().trim_end_matches(';').trim();
+    let value = if !rhs.is_empty()
+        && rhs.chars().enumerate().all(|(i, c)| c.is_ascii_digit() || (i == 0 && (c == '-' || c == '+')))
+    {
+        Some(rhs.to_string())
+    } else {
+        None
+    };
+    Some((idx, value))
 }
 
 #[cfg(test)]

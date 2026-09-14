@@ -186,7 +186,7 @@
    "algorithm": "bst_validate",
    "display_name": "BST 合法性校验",
    "phase": "recursive",
-   "desc": "递归校验子树：左子树区间收窄为 (min, val)，右子树为 (val, max)",
+   "desc": "启动校验：从根节点开始，检查整棵树是否满足 BST 性质",
    "code_line": 32,
    "src": "if (isValidBST(root, (long long)INT_MIN - 1, (long long)INT_MAX + 1))"
   },
@@ -205,6 +205,14 @@
    "desc": "校验当前节点值：必须严格落在开区间 (min, max) 内，越界即非法",
    "code_line": 21,
    "src": "if (root->val <= min || root->val >= max) return 0;"
+  },
+  {
+   "algorithm": "bst_validate",
+   "display_name": "BST 合法性校验",
+   "phase": "recursive",
+   "desc": "递归校验子树：左子树区间收窄为 (min, val)，右子树为 (val, max)",
+   "code_line": 22,
+   "src": "return isValidBST(root->left, min, root->val) &&"
   }
  ],
  "bstDelete": [
@@ -644,7 +652,7 @@
    "algorithm": "string_match_kmp",
    "display_name": "KMP 模式匹配",
    "phase": "build_nextval",
-   "desc": "构建 nextval 数组，nextval[-1]",
+   "desc": "构建 nextval 数组，nextval[0]=-1",
    "code_line": 23,
    "src": "nextval[0] = -1;"
   },
@@ -1522,7 +1530,7 @@
    "algorithm": "hanoi",
    "display_name": "汉诺塔",
    "phase": "recursive",
-   "desc": "移动 3 个盘子的汉诺塔问题",
+   "desc": "从 A 柱移动 3 个盘子到 C 柱",
    "code_line": 15,
    "src": "hanoi(n, 'A', 'C', 'B');"
   },
