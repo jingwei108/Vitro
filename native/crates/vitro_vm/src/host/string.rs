@@ -43,36 +43,31 @@ pub fn host_strdup(vm: &mut VitroVM, session: &mut VmContext<'_>) {
             vm.store_i8(end as u32, 0, &SourceLoc::default());
         }
     }
-    // reuse or add region
-    let mut reused = false;
-    for r in &mut session.memory.regions {
-        if r.addr == addr && r.is_freed {
+    // U2#2：复用/新增经 addr 索引 O(1)（复位 + 元数据一次完成，同 host_malloc）
+    match session.memory.find_region_mut(addr) {
+        Some(r) if r.is_freed => {
             r.is_freed = false;
             r.size = size;
-            reused = true;
-            break;
+            r.alloc_line = vm.get_current_line();
+            r.alloc_by = "strdup".to_string();
         }
-    }
-    if !reused {
-        session.memory.alloc_counter += 1;
-        session.memory.regions.push(MemoryRegionData {
-            addr,
-            size,
-            name: format!("heap_{}", session.memory.alloc_counter),
-            ty: "int".to_string(),
-            is_heap: true,
-            is_freed: false,
-            alloc_line: vm.get_current_line(),
-            alloc_by: "strdup".to_string(),
-            kind: "heap".to_string(),
-        });
-    } else {
-        for r in &mut session.memory.regions {
-            if r.addr == addr && !r.is_freed {
-                r.alloc_line = vm.get_current_line();
-                r.alloc_by = "strdup".to_string();
-                break;
-            }
+        Some(r) => {
+            r.alloc_line = vm.get_current_line();
+            r.alloc_by = "strdup".to_string();
+        }
+        None => {
+            session.memory.alloc_counter += 1;
+            session.memory.push_region(MemoryRegionData {
+                addr,
+                size,
+                name: format!("heap_{}", session.memory.alloc_counter),
+                ty: "int".to_string(),
+                is_heap: true,
+                is_freed: false,
+                alloc_line: vm.get_current_line(),
+                alloc_by: "strdup".to_string(),
+                kind: "heap".to_string(),
+            });
         }
     }
     vm.push(addr as u64);

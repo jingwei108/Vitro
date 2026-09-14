@@ -130,6 +130,14 @@ pub struct FreeBlock {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct MemoryState {
     pub regions: Vec<MemoryRegionData>,
+    /// **addr → `regions` 下标索引**（U2#2，2026-09-14）：`regions` 只增不删
+    /// （条目复用改字段、`clear` 整体重置），下标稳定——free / malloc 复用 /
+    /// realloc 的按 addr 线性扫描（G6 实测稳态 ~16387 条 × 每次操作）经此索引
+    /// 变 O(1)。**不变量：`region_index` 键集与 `regions` 的 addr 集一致、addr
+    /// 唯一**；写入必须走 [`Self::push_region`]，快照恢复/整体重装后必须调
+    /// [`Self::rebuild_region_index`]。不参与序列化（可从 `regions` 重建）。
+    #[serde(skip)]
+    pub region_index: std::collections::HashMap<u32, usize>,
     /// 可复用空闲块（来源：隔离区驱逐归还）。malloc 在此做 first-fit。
     pub free_list: Vec<FreeBlock>,
     /// 隔离区：已 free 但地址暂不复用的块，FIFO（队首最老）。
@@ -161,6 +169,7 @@ impl Default for MemoryState {
     fn default() -> Self {
         Self {
             regions: Vec::new(),
+            region_index: std::collections::HashMap::new(),
             free_list: Vec::new(),
             quarantine: VecDeque::new(),
             quarantine_bytes: 0,
@@ -178,6 +187,63 @@ impl MemoryState {
     pub fn set_heap_base(&mut self, base: u32) {
         self.heap_base = base;
         self.heap_offset = base;
+    }
+
+    // ── U2#2 索引操作（addr → regions 下标，2026-09-14）────────────────────
+    // 所有 regions 的写入路径必须经由这两个方法（或整体重装后 rebuild），
+    // 保证 `region_index` 与 `regions` 的不变量。
+
+    /// 追加一条 region 并登记索引。**调用方必须保证该 addr 尚无条目**
+    /// （分配路径的新地址满足；复用路径应走 [`Self::find_region_mut`] 改字段）。
+    #[inline]
+    pub fn push_region(&mut self, data: MemoryRegionData) {
+        self.region_index.insert(data.addr, self.regions.len());
+        self.regions.push(data);
+    }
+
+    /// 按 addr 精确取条目（O(1)）。**只找 addr，不看 `is_freed`**——
+    /// 调用方的语义判定（复用要求 is_freed、free 要求 !is_freed）在自己侧做。
+    #[inline]
+    pub fn find_region_mut(&mut self, addr: u32) -> Option<&mut MemoryRegionData> {
+        let idx = *self.region_index.get(&addr)?;
+        self.regions.get_mut(idx)
+    }
+
+    /// 从 `regions` 全量重建索引（快照恢复 / 反序列化 / 整体 `clear` 后调用）。
+    /// O(N)，N 为稳态条目数（~16k），远小于 seek 的 O(距离) 重放成本。
+    pub fn rebuild_region_index(&mut self) {
+        self.region_index.clear();
+        self.region_index.reserve(self.regions.len());
+        for (i, r) in self.regions.iter().enumerate() {
+            self.region_index.insert(r.addr, i);
+        }
+    }
+
+    /// 索引一致性校验（测试/调试用）：键集与 addr 集、下标指向、addr 唯一。
+    pub fn verify_region_index(&self) -> Result<(), String> {
+        let mut seen = std::collections::HashSet::with_capacity(self.regions.len());
+        for (i, r) in self.regions.iter().enumerate() {
+            if !seen.insert(r.addr) {
+                return Err(format!("regions 内 addr 0x{:X} 重复（下标 {}）", r.addr, i));
+            }
+            match self.region_index.get(&r.addr) {
+                Some(&j) if j == i => {}
+                other => {
+                    return Err(format!(
+                        "索引失配：regions[{}] addr 0x{:X} 的索引指向 {:?}",
+                        i, r.addr, other
+                    ))
+                }
+            }
+        }
+        if self.region_index.len() != self.regions.len() {
+            return Err(format!(
+                "索引大小 {} != regions 大小 {}（存在悬空键）",
+                self.region_index.len(),
+                self.regions.len()
+            ));
+        }
+        Ok(())
     }
 
     /// 分配 `aligned_size` 字节（决议 §1/§3 的 bump + 有界隔离）。
@@ -271,18 +337,14 @@ impl MemoryState {
     /// 这是 UAF / Double-Free 检测窗口的物理基础（决议 §1/§3）。
     /// 成功释放返回 `true`，找不到对应区域或已释放返回 `false`。
     pub fn free_region(&mut self, addr: u32) -> bool {
-        let mut block = None;
-        for r in &mut self.regions {
-            if r.addr == addr && !r.is_freed {
-                r.is_freed = true;
-                let aligned_size = ((r.size as u32) + 3) & !3;
-                block = Some(FreeBlock {
-                    addr: r.addr,
-                    size: aligned_size as i32,
-                });
-                break;
+        // U2#2：addr 索引 O(1) 定位（旧线性扫描——vfs 释放路径同享索引收益）
+        let block = self.find_region_mut(addr).filter(|r| !r.is_freed).map(|r| {
+            r.is_freed = true;
+            FreeBlock {
+                addr,
+                size: (((r.size as u32) + 3) & !3) as i32,
             }
-        }
+        });
         match block {
             Some(b) => {
                 self.release_to_quarantine(b);

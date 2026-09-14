@@ -22,29 +22,34 @@ pub fn host_fopen(vm: &mut VitroVM, session: &mut VmContext<'_>) {
                 let log_end = log.addr.saturating_add(log.size);
                 log_end <= addr || log.addr >= new_end
             });
-            let mut reused = false;
-            for r in &mut session.memory.regions {
-                if r.addr == addr && r.is_freed {
+            // U2#2：复用/新增经 addr 索引 O(1)（同 host_malloc）
+            match session.memory.find_region_mut(addr) {
+                Some(r) if r.is_freed => {
                     r.is_freed = false;
                     r.size = 4;
                     r.name = format!("FILE:{}", path);
-                    reused = true;
-                    break;
+                    r.alloc_line = vm.get_current_line();
+                    r.alloc_by = "fopen".to_string();
                 }
-            }
-            if !reused {
-                session.memory.alloc_counter += 1;
-                session.memory.regions.push(MemoryRegionData {
-                    addr,
-                    size: 4,
-                    name: format!("FILE:{}", path),
-                    ty: "int".to_string(),
-                    is_heap: true,
-                    is_freed: false,
-                    alloc_line: vm.get_current_line(),
-                    alloc_by: "fopen".to_string(),
-                    kind: "heap".to_string(),
-                });
+                Some(r) => {
+                    r.name = format!("FILE:{}", path);
+                    r.alloc_line = vm.get_current_line();
+                    r.alloc_by = "fopen".to_string();
+                }
+                None => {
+                    session.memory.alloc_counter += 1;
+                    session.memory.push_region(MemoryRegionData {
+                        addr,
+                        size: 4,
+                        name: format!("FILE:{}", path),
+                        ty: "int".to_string(),
+                        is_heap: true,
+                        is_freed: false,
+                        alloc_line: vm.get_current_line(),
+                        alloc_by: "fopen".to_string(),
+                        kind: "heap".to_string(),
+                    });
+                }
             }
             // 写入 fd 到 FILE* 结构体
             let mem = vm.memory_ref_mut();

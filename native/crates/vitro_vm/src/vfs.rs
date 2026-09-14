@@ -692,29 +692,27 @@ fn align4(size: usize) -> usize {
 /// 从 MemoryState 分配原始内存（类似 host_malloc 但不操作 VM 栈）
 fn malloc_raw(memory: &mut MemoryState, aligned_size: usize, mem_size: u32) -> Option<u32> {
     let addr = memory.allocate_raw(aligned_size as u32, mem_size)?;
-    // reuse or add region
-    let mut reused = false;
-    for r in &mut memory.regions {
-        if r.addr == addr && r.is_freed {
+    // U2#2：复用/新增经 addr 索引 O(1)（同 host_malloc）
+    match memory.find_region_mut(addr) {
+        Some(r) if r.is_freed => {
             r.is_freed = false;
             r.size = aligned_size as i32;
-            reused = true;
-            break;
         }
-    }
-    if !reused {
-        memory.alloc_counter += 1;
-        memory.regions.push(MemoryRegionData {
-            addr,
-            size: aligned_size as i32,
-            name: format!("heap_{}", memory.alloc_counter),
-            ty: "int".to_string(),
-            is_heap: true,
-            is_freed: false,
-            alloc_line: 0,
-            alloc_by: "vfs".to_string(),
-            kind: "heap".to_string(),
-        });
+        Some(_) => {}
+        None => {
+            memory.alloc_counter += 1;
+            memory.push_region(MemoryRegionData {
+                addr,
+                size: aligned_size as i32,
+                name: format!("heap_{}", memory.alloc_counter),
+                ty: "int".to_string(),
+                is_heap: true,
+                is_freed: false,
+                alloc_line: 0,
+                alloc_by: "vfs".to_string(),
+                kind: "heap".to_string(),
+            });
+        }
     }
     Some(addr)
 }

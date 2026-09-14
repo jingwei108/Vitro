@@ -608,8 +608,9 @@ impl VitroVM {
             return;
         }
         let mut freed_size = 0i32;
-        for r in &mut session.memory.regions {
-            if r.addr == addr && !r.is_freed {
+        // U2#2：addr 索引 O(1) 定位（旧线性扫描）
+        if let Some(r) = session.memory.find_region_mut(addr) {
+            if !r.is_freed {
                 r.is_freed = true;
                 let aligned_size = ((r.size as u32) + 3) & !3;
                 self.freed_logs.push(FreedRegionInfo {
@@ -621,7 +622,6 @@ impl VitroVM {
                     freed_step: self.get_executed_steps(),
                 });
                 freed_size = aligned_size as i32;
-                break;
             }
         }
         if freed_size > 0 {

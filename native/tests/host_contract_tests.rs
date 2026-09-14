@@ -1471,3 +1471,173 @@ fn test_heap_offset_never_rewinds() {
         "free 后 heap_offset 不得回退（原地收缩特例已被决议移除）"
     );
 }
+
+// ─── U2#2 索引化差分保护用例（2026-09-14，G6 定论后先行落库）────────────────
+// 背景（裁定 §5a）：regions 稳态 ~16387 条（隔离预算 256KB 饱和），U2#2 将
+// free/malloc 复用/realloc 的 `iter().find` 线性扫描改 addr 索引。本节用例在
+// **重构前**锁定隔离/复用语义——重构后复跑全绿 = 不破坏（性能对照由
+// `scripts/core_asset_verdict/regions_growth` 驱动承担，不用时间断言防 CI 慢机误报）。
+
+#[test]
+fn test_u22_churn_steady_state_quarantine_window_alive() {
+    // churn 进入稳态（持续驱逐复用）后，最后释放的块仍必须在 freed_logs 与
+    // is_freed 条目里——UAF 检测窗口不得被复用路径的 retain 清理误删。
+    let (mut vm, mut session) = fresh_session();
+    session.memory.quarantine_budget = 64; // 恰容一块 64B → 每次新分配驱逐上一块
+    let mut last = 0;
+    for _ in 0..50 {
+        vm.push(64);
+        host_malloc(&mut vm, &mut session.as_vm_context());
+        let a = vm.pop() as u32;
+        vm.push(a as u64);
+        host_free(&mut vm, &mut session.as_vm_context());
+        last = a;
+    }
+    // 稳态已进入复用（堆顶推进量远小于分配次数）
+    let distinct = session
+        .memory
+        .regions
+        .iter()
+        .filter(|r| r.is_heap)
+        .count();
+    assert!(distinct < 50, "预算 64B 下 50 次 churn 应进入地址复用稳态，实际不同地址 {} 个", distinct);
+    assert!(
+        vm.get_freed_logs().iter().any(|l| l.addr == last),
+        "churn 稳态下最后释放的块必须仍在 freed_logs（UAF 检测窗口存活）"
+    );
+    assert!(
+        session.memory.regions.iter().any(|r| r.addr == last && r.is_freed),
+        "对应 region 条目必须为 is_freed"
+    );
+}
+
+#[test]
+fn test_u22_reuse_resets_metadata_and_clears_freed_log() {
+    // 复用同地址：freed_logs 清理（新块使用不得误报 UAF）+ region 元数据复位。
+    let (mut vm, mut session) = fresh_session();
+    session.memory.quarantine_budget = 0;
+
+    vm.push(64);
+    host_malloc(&mut vm, &mut session.as_vm_context());
+    let a = vm.pop() as u32;
+    vm.push(a as u64);
+    host_free(&mut vm, &mut session.as_vm_context());
+
+    vm.push(64);
+    host_malloc(&mut vm, &mut session.as_vm_context());
+    let b = vm.pop() as u32;
+
+    assert_eq!(b, a, "预算 0 → 驱逐后必须复用同地址");
+    assert!(
+        !vm.get_freed_logs().iter().any(|l| l.addr == b),
+        "复用后 freed_logs 必须已清理，否则使用新分配块会误报 UAF"
+    );
+    let r = session.memory.regions.iter().find(|r| r.addr == b).expect("复用条目存在");
+    assert!(!r.is_freed, "复用条目 is_freed 必须复位");
+    assert_eq!(r.size, 64, "复用条目 size 更新为新分配大小");
+}
+
+#[test]
+fn test_u22_churn_leak_count_and_no_duplicate_entries() {
+    // 泄漏计数与条目唯一性：churn 100 次（默认预算下不复用，各占新地址）后
+    // 恰 1 块泄漏、条目恰 101——索引化若丢条目/重复 push，两计数必漂移。
+    let (mut vm, mut session) = fresh_session();
+    for _ in 0..100 {
+        vm.push(32);
+        host_malloc(&mut vm, &mut session.as_vm_context());
+        let a = vm.pop() as u32;
+        vm.push(a as u64);
+        host_free(&mut vm, &mut session.as_vm_context());
+    }
+    vm.push(48);
+    host_malloc(&mut vm, &mut session.as_vm_context());
+    let live = vm.pop() as u32;
+    assert!(live != 0);
+
+    let heap_regions: Vec<_> = session.memory.regions.iter().filter(|r| r.is_heap).collect();
+    assert_eq!(heap_regions.len(), 101, "churn 100 次 + 1 活块 = 101 个堆条目（无重复 push / 无丢失）");
+    let leaked = heap_regions.iter().filter(|r| !r.is_freed).count();
+    assert_eq!(leaked, 1, "恰 1 块泄漏（churn 全 free + 1 活块）");
+    let addrs: std::collections::HashSet<u32> = heap_regions.iter().map(|r| r.addr).collect();
+    assert_eq!(addrs.len(), 101, "堆条目地址必须唯一（索引不变量：addr → 唯一条目）");
+}
+
+#[test]
+fn test_u22_realloc_reuse_no_duplicate_entries() {
+    // U2#2 同类清查实锤的存量缺陷：realloc 的新块登记走无条件 push——
+    // 当 allocate_raw 从 free_list 复用隔离驱逐块时，该 addr 在 regions 已有
+    // 条目 → 同 addr 双条目（泄漏报告把已释放块虚报为泄漏，且破坏索引不变量
+    // addr 唯一）。红→绿：旧代码红，索引化批改为与 malloc 相同的"复位 or push"
+    // 后绿。
+    let (mut vm, mut session) = fresh_session();
+    session.memory.quarantine_budget = 0;
+
+    // A（大于 realloc 需求的驱逐块候选）与 B（realloc 搬移源）都在 free(a)
+    // 之前分配——free 后 realloc 必须是第一个分配，其 allocate_raw 才会驱逐
+    // A 并 first-fit 命中（中间任何 malloc 都会把驱逐块吃掉）。
+    vm.push(256);
+    host_malloc(&mut vm, &mut session.as_vm_context());
+    let a = vm.pop() as u32;
+
+    vm.push(64);
+    host_malloc(&mut vm, &mut session.as_vm_context());
+    let b = vm.pop() as u32;
+    assert_ne!(b, a);
+
+    vm.push(a as u64);
+    host_free(&mut vm, &mut session.as_vm_context());
+
+    // realloc(B, 128)：allocate_raw 驱逐 A(256) → first-fit 命中 → 新地址 = a。
+    // a 在 regions 已有条目（is_freed）——新块登记必须走复位而非 push。
+    vm.push(128);
+    vm.push(b as u64);
+    host_realloc(&mut vm, &mut session.as_vm_context());
+    let new_addr = vm.pop() as u32;
+    assert_eq!(new_addr, a, "free_list 复用：realloc 新地址应为驱逐块 a");
+
+    let dup = session.memory.regions.iter().filter(|r| r.addr == a).count();
+    assert_eq!(
+        dup, 1,
+        "addr 0x{:X} 必须恰一条目（旧实现双条目 = 泄漏虚报 + 索引失配）",
+        a
+    );
+    assert!(
+        session.memory.verify_region_index().is_ok(),
+        "索引一致性：{:?}",
+        session.memory.verify_region_index()
+    );
+}
+
+#[test]
+fn test_u22_snapshot_restore_keeps_free_semantics() {
+    // 快照恢复（seek 回退）后 regions 被整体重装——恢复后再 free 同一地址
+    // 必须语义正确（回到过去：is_freed 复位 → free 成功而非 Double-Free）。
+    // 索引化后恢复点需同步重建索引，本用例锁其语义面。
+    let (mut vm, mut session) = fresh_session();
+    vm.push(64);
+    host_malloc(&mut vm, &mut session.as_vm_context());
+    let a = vm.pop() as u32;
+
+    let snap = vm.snapshot(&session.as_vm_context());
+
+    vm.push(a as u64);
+    host_free(&mut vm, &mut session.as_vm_context());
+    assert!(
+        session.memory.regions.iter().any(|r| r.addr == a && r.is_freed),
+        "恢复前：free 已生效"
+    );
+
+    vm.restore(&snap, &mut session.as_vm_context());
+    assert!(
+        session.memory.regions.iter().any(|r| r.addr == a && !r.is_freed),
+        "恢复后：is_freed 应回到快照时的 false"
+    );
+
+    // 回到过去后再 free：应成功置 freed（而非 Double-Free trap）
+    vm.push(a as u64);
+    host_free(&mut vm, &mut session.as_vm_context());
+    assert!(
+        session.memory.regions.iter().any(|r| r.addr == a && r.is_freed),
+        "恢复后再 free 必须正常生效（时间旅行语义，不得误报 Double-Free）"
+    );
+}

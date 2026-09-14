@@ -61,6 +61,8 @@ pub fn reset_runtime(session: &mut Session) {
     session.runtime.error.clear();
     session.runtime.trace.clear();
     session.memory.regions.clear();
+    // U2#2：索引随 regions 一起清空（不变量：键集与 addr 集一致）
+    session.memory.region_index.clear();
     session.memory.free_list.clear();
     // 隔离区随运行一起清空（quarantine_budget 是会话级配置，保留）
     session.memory.quarantine.clear();

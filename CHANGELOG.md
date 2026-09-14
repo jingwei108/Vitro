@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (性能/正确性)：U2#2-a regions addr 索引化 + Q7-G6 复核关闭（分段饱和定论，行为零漂移）
+
+**Q7-G6 复核收尾**（裁定 §5.4 表内"待复核"矛盾的证据仲裁，2026-09-14 关闭）：
+新增采样驱动 `scripts/core_asset_verdict/regions_growth`（serve 会话 `config.set
+max_steps` 提预算 → churn ×N → `memory.regions` 的 `region_counts.heap` **直接读
+条目数**，通道失效 fail loud）。四点定论：1k=1002 / 10k=10002 / 100k=16387 /
+1M=16387（后两点逐位相同），墙钟 94ms/227ms/4.77s/60.4s——**分段饱和模型**
+（裁定 §5a）：推进期条目随 N 线性（"14B/次"成立）+ O(N²) 时间分量；饱和期
+（隔离预算 `MEM_SIZE/4`=256KB 填满后 FIFO 驱逐 + free_list 复用）条目恒 16387
+（=256KB÷16B）+ O(N) 线性（固定 ~16k 条扫描/次）。裁定"峰值平坦+≈线性"与评估
+报告"14B/次+O(N²)"**两侧均为真**（观测区间不同）；饱和机制是隔离区决议的设计内
+行为，UAF 检测窗口完好。原方案"归并 freelist 摘要"撤销（条目天然有界），
+U2#2 重构收缩为 **addr 索引化**。
+
+**U2#2-a 索引化实现**（差分保护先行 → 热点改写 → 性能对照）：
+
+- **差分保护用例 ×5 先行**（`host_contract_tests`，重构前全绿锁语义）：churn
+  稳态隔离窗口存活（freed_logs 不被复用路径误删）、复用元数据复位 +
+  freed_logs 清理（不误报 UAF）、churn 泄漏计数 + 条目唯一性、快照恢复后
+  free 语义（时间旅行）、realloc 复用无双条目；
+- **索引结构**：`MemoryState.region_index: HashMap<addr, idx>`（`#[serde(skip)]`，
+  可从 Vec 重建）+ `push_region` / `find_region_mut` / `rebuild_region_index` /
+  `verify_region_index`（一致性校验）。不变量：`regions` 只增不删 → 下标稳定；
+  addr 唯一；
+- **热点改写**（~16k 条线性扫描 → O(1)）：`host_malloc`（复用复位 + 元数据
+  更新合并为一次 lookup，消除旧实现的两遍扫描）、`host_free`、`host_realloc`
+  ×3 处、`host_calloc`、`host_strdup`、`host_fopen`、VM 内部 `free_memory`、
+  `MemoryState::free_region`（vfs 路径）、`vfs::malloc_raw`；
+- **存量缺陷修复（同类清查实锤，红→绿）**：`host_realloc`/`host_calloc` 的
+  新块登记走无条件 `push`——`allocate_raw` 复用隔离驱逐块时同 addr 双条目
+  （泄漏报告把已释放块虚报为泄漏 + 破坏索引不变量）。红锚
+  `test_u22_realloc_reuse_no_duplicate_entries`（修复前 FAIL 留痕），改"复位
+  or push"后绿；
+- **维护点**：快照恢复（`snapshot.rs` regions 重装后 `rebuild_region_index`）+
+  `reset_runtime`（索引随 regions 同步 clear）；
+- **性能对照（行为零漂移验证）**：四点条目数逐位一致（1002/10002/16387/
+  16387 ✓）；墙钟 100k 4.77s→3.40s（1.4×）、1M 60.4s→**34.8s（1.74×）**。
+  提升受限的归因（实测吻合）：剩余大头是 `freed_logs` 的两个 O(稳态 16k)
+  路径（每次 malloc 的 `retain` 区间清理 + 每次 free 的 Double-Free
+  `find`——17μs/次 × 2M 次 ≈ 34s）——需 BTreeMap 区间结构且涉 `check_uaf`
+  辐射面，**登记为 U2#2-b 跟进批**（不滚雪球）；
+- **本批边界（登记保留线性）**：范围查询类（`trap_invalid_free` 的内部地址
+  判定、strcpy/strcat 的 E3070 容量检查——均为低频错误/检查路径，需区间结构）；
+  vfs 四处按 addr 改名循环（低频只读，不动 addr 不破坏索引）。
+
+验收：cargo 69 套件全绿（host 契约 100/100）；shadow C 675 零非预期差异；
+serve 冒烟 57/57；replay 61/61；clippy `-D warnings` 零警告。
+
 ### Fixed (出口 3)：R2——step.next 一帧发布缓冲重复投递（0,0,1，违反 spec 附录 A 冻结不变量）+ replay A4a 版本下限误拒 + 防线缺口闭合（来源：下游 PR 引擎回归审阅）
 
 **回归来源**：U1#1 修"首帧显示赋值前旧值"引入的一帧发布缓冲，声明代价"滞后一帧"，

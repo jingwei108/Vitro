@@ -161,6 +161,9 @@ impl VitroVM {
         // Session 内存管理状态：逐字段恢复（MemorySnapshot 与 MemoryState 是不同类型）。
         // 隔离区三件套必须一起恢复（2026-09-11 堆决议），否则回退后 UAF 检测出现假阴性。
         session.memory.regions = snap.memory_state.regions.clone();
+        // U2#2：regions 整体重装后必须重建 addr 索引（索引不入快照——可从 Vec
+        // 重建；漏掉此步则恢复后所有按 addr 的 O(1) 定位失配）
+        session.memory.rebuild_region_index();
         session.memory.free_list = snap.memory_state.free_list.clone();
         session.memory.quarantine = snap.memory_state.quarantine.clone();
         session.memory.quarantine_bytes = snap.memory_state.quarantine_bytes;

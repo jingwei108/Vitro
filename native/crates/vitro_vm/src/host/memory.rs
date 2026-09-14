@@ -28,37 +28,33 @@ pub fn host_malloc(vm: &mut VitroVM, session: &mut VmContext<'_>) {
         let log_end = log.addr.saturating_add(log.size);
         log_end <= addr || log.addr >= new_end
     });
-    // reuse or add region
-    let mut reused = false;
-    for r in &mut session.memory.regions {
-        if r.addr == addr && r.is_freed {
+    // U2#2：复用/新增经 addr 索引 O(1) 判定（旧实现两段 `iter().find` 线性扫描，
+    // G6 实测稳态 ~16387 条）。复用 = 该 addr 已有条目；复位 is_freed + 更新
+    // 分配元数据一次完成（旧实现复位与元数据更新分两个循环扫两遍）。
+    match session.memory.find_region_mut(addr) {
+        Some(r) if r.is_freed => {
             r.is_freed = false;
             r.size = size;
-            reused = true;
-            break;
+            r.alloc_line = vm.get_current_line();
+            r.alloc_by = "malloc".to_string();
         }
-    }
-    if !reused {
-        session.memory.alloc_counter += 1;
-        session.memory.regions.push(MemoryRegionData {
-            addr,
-            size,
-            name: format!("heap_{}", session.memory.alloc_counter),
-            ty: "int".to_string(),
-            is_heap: true,
-            is_freed: false,
-            alloc_line: vm.get_current_line(),
-            alloc_by: "malloc".to_string(),
-            kind: "heap".to_string(),
-        });
-    } else {
-        // 复用已释放的 region 时更新分配信息
-        for r in &mut session.memory.regions {
-            if r.addr == addr && !r.is_freed {
-                r.alloc_line = vm.get_current_line();
-                r.alloc_by = "malloc".to_string();
-                break;
-            }
+        Some(r) => {
+            r.alloc_line = vm.get_current_line();
+            r.alloc_by = "malloc".to_string();
+        }
+        None => {
+            session.memory.alloc_counter += 1;
+            session.memory.push_region(MemoryRegionData {
+                addr,
+                size,
+                name: format!("heap_{}", session.memory.alloc_counter),
+                ty: "int".to_string(),
+                is_heap: true,
+                is_freed: false,
+                alloc_line: vm.get_current_line(),
+                alloc_by: "malloc".to_string(),
+                kind: "heap".to_string(),
+            });
         }
     }
     vm.push(addr as u64);
@@ -77,8 +73,9 @@ pub fn host_free(vm: &mut VitroVM, session: &mut VmContext<'_>) {
     }
     let mut freed_ok = false;
     let mut freed_size = 0i32;
-    for r in &mut session.memory.regions {
-        if r.addr == addr && !r.is_freed {
+    // U2#2：按 addr 索引 O(1) 定位（旧实现线性扫描，见 G6 定论）
+    if let Some(r) = session.memory.find_region_mut(addr) {
+        if !r.is_freed {
             r.is_freed = true;
             let aligned_size = ((r.size as u32) + 3) & !3;
             vm.freed_logs.push(FreedRegionInfo {
@@ -91,7 +88,6 @@ pub fn host_free(vm: &mut VitroVM, session: &mut VmContext<'_>) {
             });
             freed_size = aligned_size as i32;
             freed_ok = true;
-            break;
         }
     }
     if freed_ok {
@@ -169,14 +165,15 @@ pub fn host_realloc(vm: &mut VitroVM, session: &mut VmContext<'_>) {
     if new_size <= 0 {
         if ptr != 0 {
             // Equivalent to free：块进 FIFO 隔离区（决议 §3）
+            // U2#2：addr 索引 O(1) 定位
             let mut freed_ok = false;
             let mut freed_size = 0i32;
-            for r in &mut session.memory.regions {
-                if r.addr == ptr && !r.is_freed {
+            if let Some(r) = session.memory.find_region_mut(ptr) {
+                if !r.is_freed {
                     r.is_freed = true;
                     let aligned_size = ((r.size as u32) + 3) & !3;
                     vm.freed_logs.push(FreedRegionInfo {
-                        addr: r.addr,
+                        addr: ptr,
                         size: aligned_size,
                         alloc_line: r.alloc_line,
                         freed_line: vm.get_current_line(),
@@ -185,7 +182,6 @@ pub fn host_realloc(vm: &mut VitroVM, session: &mut VmContext<'_>) {
                     });
                     freed_size = aligned_size as i32;
                     freed_ok = true;
-                    break;
                 }
             }
             if freed_ok {
@@ -209,14 +205,12 @@ pub fn host_realloc(vm: &mut VitroVM, session: &mut VmContext<'_>) {
         return;
     }
 
-    // Find existing region
-    let mut old_region = None;
-    for r in &session.memory.regions {
-        if r.addr == ptr && !r.is_freed {
-            old_region = Some((r.addr, r.size));
-            break;
-        }
-    }
+    // Find existing region（U2#2：addr 索引 O(1)）
+    let old_region = session
+        .memory
+        .find_region_mut(ptr)
+        .filter(|r| !r.is_freed)
+        .map(|r| (r.addr, r.size));
 
     let Some((old_addr, old_size)) = old_region else {
         vm.push(0);
@@ -259,20 +253,21 @@ pub fn host_realloc(vm: &mut VitroVM, session: &mut VmContext<'_>) {
     }
 
     // Free old region：进入 FIFO 隔离区（决议 §3），不直接归还 free_list
+    // U2#2：addr 索引 O(1) 定位（旧线性扫描）+ alloc_line 需先读出再置 freed
     let mut old_freed = false;
-    for r in &mut session.memory.regions {
-        if r.addr == old_addr && !r.is_freed {
+    if let Some(r) = session.memory.find_region_mut(old_addr) {
+        if !r.is_freed {
             r.is_freed = true;
+            let alloc_line = r.alloc_line;
             vm.freed_logs.push(FreedRegionInfo {
-                addr: r.addr,
+                addr: old_addr,
                 size: aligned_old_size,
-                alloc_line: r.alloc_line,
+                alloc_line,
                 freed_line: vm.get_current_line(),
                 alloc_step: 0,
                 freed_step: vm.get_executed_steps(),
             });
             old_freed = true;
-            break;
         }
     }
     if old_freed {
@@ -289,18 +284,34 @@ pub fn host_realloc(vm: &mut VitroVM, session: &mut VmContext<'_>) {
         log_end <= new_addr || log.addr >= new_end
     });
 
-    // Track new region
-    session.memory.regions.push(MemoryRegionData {
-        addr: new_addr,
-        size: new_size,
-        name: String::new(),
-        ty: String::new(),
-        is_heap: true,
-        is_freed: false,
-        alloc_line: vm.get_current_line(),
-        alloc_by: "realloc".to_string(),
-        kind: "heap".to_string(),
-    });
+    // Track new region（U2#2：与 malloc 相同的"复位 or push"——新地址可能来自
+    // free_list 复用隔离驱逐块，该 addr 已有条目，无条件 push 会造成同 addr
+    // 双条目：泄漏虚报 + 索引失配，红锚 test_u22_realloc_reuse_no_duplicate_entries）
+    match session.memory.find_region_mut(new_addr) {
+        Some(r) if r.is_freed => {
+            r.is_freed = false;
+            r.size = new_size;
+            r.alloc_line = vm.get_current_line();
+            r.alloc_by = "realloc".to_string();
+        }
+        Some(r) => {
+            r.alloc_line = vm.get_current_line();
+            r.alloc_by = "realloc".to_string();
+        }
+        None => {
+            session.memory.push_region(MemoryRegionData {
+                addr: new_addr,
+                size: new_size,
+                name: String::new(),
+                ty: String::new(),
+                is_heap: true,
+                is_freed: false,
+                alloc_line: vm.get_current_line(),
+                alloc_by: "realloc".to_string(),
+                kind: "heap".to_string(),
+            });
+        }
+    }
 
     vm.push(new_addr as u64);
 }
@@ -332,17 +343,33 @@ pub fn host_calloc(vm: &mut VitroVM, session: &mut VmContext<'_>) {
         let log_end = log.addr.saturating_add(log.size);
         log_end <= addr || log.addr >= new_end
     });
-    session.memory.alloc_counter += 1;
-    session.memory.regions.push(MemoryRegionData {
-        addr,
-        size: total as i32,
-        name: format!("heap_{}", session.memory.alloc_counter),
-        ty: "int".to_string(),
-        is_heap: true,
-        is_freed: false,
-        alloc_line: vm.get_current_line(),
-        alloc_by: "calloc".to_string(),
-        kind: "heap".to_string(),
-    });
+    // U2#2：新地址可能来自 free_list 复用驱逐块——"复位 or push"（同 malloc，
+    // 防同 addr 双条目）
+    match session.memory.find_region_mut(addr) {
+        Some(r) if r.is_freed => {
+            r.is_freed = false;
+            r.size = total as i32;
+            r.alloc_line = vm.get_current_line();
+            r.alloc_by = "calloc".to_string();
+        }
+        Some(r) => {
+            r.alloc_line = vm.get_current_line();
+            r.alloc_by = "calloc".to_string();
+        }
+        None => {
+            session.memory.alloc_counter += 1;
+            session.memory.push_region(MemoryRegionData {
+                addr,
+                size: total as i32,
+                name: format!("heap_{}", session.memory.alloc_counter),
+                ty: "int".to_string(),
+                is_heap: true,
+                is_freed: false,
+                alloc_line: vm.get_current_line(),
+                alloc_by: "calloc".to_string(),
+                kind: "heap".to_string(),
+            });
+        }
+    }
     vm.push(addr as u64);
 }
