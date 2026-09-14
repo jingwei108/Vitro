@@ -104,7 +104,16 @@ pub struct VitroVM {
     pub(crate) last_accessed_vars: Vec<VariableAccess>,
     pub(crate) local_sym_map: HashMap<i32, String>,
     pub(crate) global_sym_map: HashMap<i32, String>,
-    pub(crate) freed_logs: Vec<FreedRegionInfo>,
+    /// 已释放块登记（UAF / Double-Free 检测窗口）。
+    /// U2#2-b（2026-09-14）：Vec → **BTreeMap<addr, info>**——churn 稳态
+    /// ~16k 条（隔离区容量内每块一条），原 Vec 的每次 malloc `retain`
+    /// 区间清理 / free 的 Double-Free `find` / 访存的 `check_uaf` 全是
+    /// O(16k) 线性扫（U2#2-a 后 1M churn 剩余 34.8s 的归因大头）。
+    /// **互不重叠不变量**（分配器保证）⟹ addr 序即 end 序：区间查询/删除
+    /// 按 addr 降序扫、遇 end ≤ 查询起点即停，O(log n + 命中数)。
+    /// addr 唯一（Double-Free 拦截在先）；迭代序 = addr 升序（原 Vec 为
+    /// free 时间序——经查无顺序依赖消费者）。
+    pub(crate) freed_logs: std::collections::BTreeMap<u32, FreedRegionInfo>,
     /// 当前未完成的 `new T[n]` 构造守卫。若构造过程中 trap，用于回滚释放内存。
     pub pending_array_construction: Option<ArrayConstructionGuard>,
     /// `main(int argc, char *argv[])` 的 argc 值。
@@ -164,7 +173,7 @@ impl VitroVM {
             last_accessed_vars: Vec::new(),
             local_sym_map: HashMap::new(),
             global_sym_map: HashMap::new(),
-            freed_logs: Vec::new(),
+            freed_logs: std::collections::BTreeMap::new(),
             pending_array_construction: None,
             argc: 0,
             argv_addr: 0,
@@ -604,7 +613,7 @@ impl VitroVM {
             return;
         }
         // 避免 double-free 记录重复（已释放则静默跳过）。
-        if self.freed_logs.iter().any(|log| log.addr == addr) {
+        if self.freed_logs.contains_key(&addr) {
             return;
         }
         let mut freed_size = 0i32;
@@ -613,14 +622,17 @@ impl VitroVM {
             if !r.is_freed {
                 r.is_freed = true;
                 let aligned_size = ((r.size as u32) + 3) & !3;
-                self.freed_logs.push(FreedRegionInfo {
-                    addr: r.addr,
-                    size: aligned_size,
-                    alloc_line: r.alloc_line,
-                    freed_line: self.get_current_line(),
-                    alloc_step: 0,
-                    freed_step: self.get_executed_steps(),
-                });
+                self.freed_logs.insert(
+                    addr,
+                    FreedRegionInfo {
+                        addr: r.addr,
+                        size: aligned_size,
+                        alloc_line: r.alloc_line,
+                        freed_line: self.get_current_line(),
+                        alloc_step: 0,
+                        freed_step: self.get_executed_steps(),
+                    },
+                );
                 freed_size = aligned_size as i32;
             }
         }
@@ -646,8 +658,36 @@ impl VitroVM {
     }
 
     /// 获取当前已释放的内存区域日志（用于 UAF/Double-Free 检测诊断）。
-    pub fn get_freed_logs(&self) -> &[FreedRegionInfo] {
+    pub fn get_freed_logs(&self) -> &std::collections::BTreeMap<u32, FreedRegionInfo> {
         &self.freed_logs
+    }
+
+    /// U2#2-b：删除与 [start, end) 重叠的释放记录（原 `retain` 全量线性扫，
+    /// churn 稳态 ~16k 条 × 每次分配）。互不重叠 ⟹ addr 序即 end 序：
+    /// 降序扫，遇 end ≤ start 即停（更小 addr 的块 end 只会更小）。
+    pub(crate) fn freed_logs_remove_overlapping(&mut self, start: u32, end: u32) {
+        let mut to_remove: Vec<u32> = Vec::new();
+        for (&laddr, log) in self.freed_logs.range(..end).rev() {
+            if laddr.saturating_add(log.size) <= start {
+                break;
+            }
+            to_remove.push(laddr);
+        }
+        for laddr in to_remove {
+            self.freed_logs.remove(&laddr);
+        }
+    }
+
+    /// U2#2-b：区间重叠查询（check_uaf / trap_invalid_free 共用）——
+    /// 与 [addr, addr+size) 重叠的任一释放记录。降序扫遇 end ≤ addr 即停。
+    pub(crate) fn freed_logs_find_overlapping(&self, addr: u32, size: u32) -> Option<&FreedRegionInfo> {
+        let end = addr.saturating_add(size);
+        // 降序首块（addr 最大且 < end）即可判定：互不重叠 ⟹ 其 end 最大——
+        // end ≤ addr 则后续全部不重叠（None）；end > addr 则它就是重叠块。
+        match self.freed_logs.range(..end).next_back() {
+            Some((&laddr, log)) if laddr.saturating_add(log.size) > addr => Some(log),
+            _ => None,
+        }
     }
 
     /// 根据函数名查找其在 VM 函数表中的索引。

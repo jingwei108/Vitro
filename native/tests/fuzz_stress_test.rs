@@ -132,7 +132,7 @@ fn fuzz_round_malloc_free(rng: &mut FuzzRng, max_ops: usize) -> Vec<String> {
         // 已释放块必须以 vm.freed_logs 为准，因为 session.memory.regions
         // 保留历史记录，可能与当前实际分配状态不一致（如 realloc 后
         // region 地址重叠、malloc 清理 freed_logs 但未清理旧 region）。
-        let freed_addrs: Vec<u32> = vm.get_freed_logs().iter().map(|log| log.addr).collect();
+        let freed_addrs: Vec<u32> = vm.get_freed_logs().values().map(|log| log.addr).collect();
 
         let op = rng.range_i32(0, 12);
         match op {
@@ -763,7 +763,7 @@ fn fuzz_round_mixed(rng: &mut FuzzRng, max_ops: usize) -> Vec<String> {
                 let _ = vm.load_i8(ptr, &loc);
             }
             12 => {
-                let freed: Vec<u32> = vm.get_freed_logs().iter().map(|log| log.addr).collect();
+                let freed: Vec<u32> = vm.get_freed_logs().values().map(|log| log.addr).collect();
                 if let Some(&addr) = rng.choice(&freed) {
                     let loc = SourceLoc::default();
                     vm.store_i8(addr, 0x42, &loc);
@@ -776,7 +776,7 @@ fn fuzz_round_mixed(rng: &mut FuzzRng, max_ops: usize) -> Vec<String> {
                 }
             }
             13 => {
-                let freed: Vec<u32> = vm.get_freed_logs().iter().map(|log| log.addr).collect();
+                let freed: Vec<u32> = vm.get_freed_logs().values().map(|log| log.addr).collect();
                 if let Some(&addr) = rng.choice(&freed) {
                     vm.push(addr as u64);
                     host_free(&mut vm, &mut session.as_vm_context());

@@ -186,9 +186,9 @@ impl VitroVM {
     }
 
     pub(crate) fn check_uaf(&self, addr: u32, size: u32) -> Option<&FreedRegionInfo> {
-        self.freed_logs
-            .iter()
-            .find(|log| addr < log.addr + log.size && addr + size > log.addr)
+        // U2#2-b：原全量线性扫（churn 稳态 ~16k 条 × 每次访存）——
+        // BTreeMap 互不重叠单调性下的降序扫描，O(log n + 命中数)。
+        self.freed_logs_find_overlapping(addr, size)
     }
 
     pub(crate) fn format_uaf_message(&self, log: &FreedRegionInfo, is_write: bool) -> String {

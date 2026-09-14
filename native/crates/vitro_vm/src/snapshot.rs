@@ -73,7 +73,7 @@ pub struct VMSnapshot {
     pub vis_event_queue: Vec<VisEventData>,
     pub breakpoints: HashSet<i32>,
     pub global_count: usize,
-    pub freed_logs: Vec<FreedRegionInfo>,
+    pub freed_logs: std::collections::BTreeMap<u32, FreedRegionInfo>,
     // Session 运行时/内存状态快照
     pub runtime: RuntimeSnapshot,
     pub memory_state: MemorySnapshot,

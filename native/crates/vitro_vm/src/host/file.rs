@@ -18,10 +18,7 @@ pub fn host_fopen(vm: &mut VitroVM, session: &mut VmContext<'_>) {
         if let Some(addr) = session.memory.allocate_raw(aligned, vm.get_memory_size()) {
             // 该地址可能刚从隔离区驱逐复用，清理对应 freed_logs
             let new_end = addr + aligned;
-            vm.freed_logs.retain(|log| {
-                let log_end = log.addr.saturating_add(log.size);
-                log_end <= addr || log.addr >= new_end
-            });
+            vm.freed_logs_remove_overlapping(addr, new_end);
             // U2#2：复用/新增经 addr 索引 O(1)（同 host_malloc）
             match session.memory.find_region_mut(addr) {
                 Some(r) if r.is_freed => {

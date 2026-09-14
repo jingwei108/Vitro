@@ -417,7 +417,7 @@ fn test_smart_checkpoint_triggers() {
             vis_event_queue: Vec::new(),
             breakpoints: std::collections::HashSet::new(),
             global_count: 0,
-            freed_logs: Vec::new(),
+            freed_logs: std::collections::BTreeMap::new(),
             runtime: vitro_vm::snapshot::RuntimeSnapshot {
                 output_chunks: Vec::new(),
                 trace: Vec::new(),

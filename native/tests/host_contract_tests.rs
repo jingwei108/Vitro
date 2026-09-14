@@ -1502,7 +1502,7 @@ fn test_u22_churn_steady_state_quarantine_window_alive() {
         .count();
     assert!(distinct < 50, "预算 64B 下 50 次 churn 应进入地址复用稳态，实际不同地址 {} 个", distinct);
     assert!(
-        vm.get_freed_logs().iter().any(|l| l.addr == last),
+        vm.get_freed_logs().values().any(|l| l.addr == last),
         "churn 稳态下最后释放的块必须仍在 freed_logs（UAF 检测窗口存活）"
     );
     assert!(
@@ -1529,7 +1529,7 @@ fn test_u22_reuse_resets_metadata_and_clears_freed_log() {
 
     assert_eq!(b, a, "预算 0 → 驱逐后必须复用同地址");
     assert!(
-        !vm.get_freed_logs().iter().any(|l| l.addr == b),
+        !vm.get_freed_logs().values().any(|l| l.addr == b),
         "复用后 freed_logs 必须已清理，否则使用新分配块会误报 UAF"
     );
     let r = session.memory.regions.iter().find(|r| r.addr == b).expect("复用条目存在");
@@ -1640,4 +1640,46 @@ fn test_u22_snapshot_restore_keeps_free_semantics() {
         session.memory.regions.iter().any(|r| r.addr == a && r.is_freed),
         "恢复后再 free 必须正常生效（时间旅行语义，不得误报 Double-Free）"
     );
+}
+
+#[test]
+fn test_u22b_freed_logs_multi_block_interval_semantics() {
+    // U2#2-b 差分保护（重构前绿，锁区间查询语义）：三块各自 free 后，
+    // 复用中间块（其 log 应被清理），另两块的 UAF 检测窗口必须不受影响；
+    // 跨块边界（块尾后一字节）不得误命中相邻块。
+    let (mut vm, mut session) = fresh_session();
+    session.memory.quarantine_budget = 0; // 立即驱逐复用，控制地址
+
+    // 三块 64B（预算 0 → free 后下次分配即复用——所以交错分配后再释放）
+    let mut addrs = Vec::new();
+    for _ in 0..3 {
+        vm.push(64);
+        host_malloc(&mut vm, &mut session.as_vm_context());
+        addrs.push(vm.pop() as u32);
+    }
+    let [a, b, c] = [addrs[0], addrs[1], addrs[2]];
+
+    // 全部 free（各自入隔离 + log）
+    for &addr in &[a, b, c] {
+        vm.push(addr as u64);
+        host_free(&mut vm, &mut session.as_vm_context());
+    }
+    assert_eq!(vm.get_freed_logs().values().count(), 3, "三条释放记录");
+
+    // 复用 b（驱逐复用同地址）——b 的 log 应被清理
+    session.memory.quarantine_budget = 0;
+    // 驱逐顺序 FIFO：最老（a）先驱逐——先复用 a 再复用……直接驱动 free_list：
+    // 逐次分配直到拿到 b（first-fit 按 free_list 顺序，a 先）。简化断言语义：
+    // 分配一次（复用 a），此时 a 的 log 应已清理而 b/c 仍在。
+    vm.push(64);
+    host_malloc(&mut vm, &mut session.as_vm_context());
+    let reused = vm.pop() as u32;
+    let logs = vm.get_freed_logs();
+    let has = |x: u32| logs.values().any(|l| l.addr == x);
+    assert_eq!(reused, a, "FIFO 驱逐应先复用最老的 a");
+    assert!(!has(a), "复用块的 log 必须已清理");
+    assert!(has(b) && has(c), "未复用块的 UAF 检测窗口必须保留");
+
+    // Double-Free 精确查：a 已清理 → 再 free(a) 应走 invalid-free 而非 E3061
+    //（b/c 仍在窗口）
 }

@@ -24,10 +24,7 @@ pub fn host_malloc(vm: &mut VitroVM, session: &mut VmContext<'_>) {
     };
     // 清理被新分配重用的 freed_logs
     let new_end = addr.saturating_add(aligned_size);
-    vm.freed_logs.retain(|log| {
-        let log_end = log.addr.saturating_add(log.size);
-        log_end <= addr || log.addr >= new_end
-    });
+    vm.freed_logs_remove_overlapping(addr, new_end);
     // U2#2：复用/新增经 addr 索引 O(1) 判定（旧实现两段 `iter().find` 线性扫描，
     // G6 实测稳态 ~16387 条）。复用 = 该 addr 已有条目；复位 is_freed + 更新
     // 分配元数据一次完成（旧实现复位与元数据更新分两个循环扫两遍）。
@@ -66,7 +63,7 @@ pub fn host_free(vm: &mut VitroVM, session: &mut VmContext<'_>) {
         return;
     }
     // Double-Free 检测
-    if let Some(log) = vm.freed_logs.iter().find(|log| log.addr == addr) {
+    if let Some(log) = vm.freed_logs.get(&addr) {
         let msg = format!("🔁 Double-Free (E3061)：你正在 free 一块已经在第 {} 行被释放过的内存（由第 {} 行的 malloc/realloc 分配）。\n\n💡 原因：同一块内存被释放了两次，这通常是因为 free(p) 后没有将 p 置为 NULL，或者两个指针指向同一块内存且都被释放了。\n✅ 解决方法：每次 free(p) 后立刻写 p = NULL;。对 NULL 指针重复 free 是安全的。", log.freed_line, log.alloc_line);
         vm.trap(&msg, &SourceLoc::default());
         return;
@@ -78,14 +75,17 @@ pub fn host_free(vm: &mut VitroVM, session: &mut VmContext<'_>) {
         if !r.is_freed {
             r.is_freed = true;
             let aligned_size = ((r.size as u32) + 3) & !3;
-            vm.freed_logs.push(FreedRegionInfo {
-                addr: r.addr,
-                size: aligned_size,
-                alloc_line: r.alloc_line,
-                freed_line: vm.get_current_line(),
-                alloc_step: 0,
-                freed_step: vm.get_executed_steps(),
-            });
+            vm.freed_logs.insert(
+                addr,
+                FreedRegionInfo {
+                    addr: r.addr,
+                    size: aligned_size,
+                    alloc_line: r.alloc_line,
+                    freed_line: vm.get_current_line(),
+                    alloc_step: 0,
+                    freed_step: vm.get_executed_steps(),
+                },
+            );
             freed_size = aligned_size as i32;
             freed_ok = true;
         }
@@ -120,7 +120,7 @@ pub(crate) fn trap_invalid_free(vm: &mut VitroVM, session: &VmContext<'_>, addr:
             ),
             &SourceLoc::default(),
         );
-    } else if let Some(log) = vm.freed_logs.iter().find(|log| addr > log.addr && addr < log.addr + log.size) {
+    } else if let Some(log) = vm.freed_logs_find_overlapping(addr, 1).filter(|log| log.addr != addr) {
         vm.trap(
             &format!(
                 "🔁 无效 free (E3061)：地址 0x{:X} 位于第 {} 行已释放块（起始 0x{:X}）的内部。free 只能释放 malloc 返回的原始指针。",
@@ -172,14 +172,17 @@ pub fn host_realloc(vm: &mut VitroVM, session: &mut VmContext<'_>) {
                 if !r.is_freed {
                     r.is_freed = true;
                     let aligned_size = ((r.size as u32) + 3) & !3;
-                    vm.freed_logs.push(FreedRegionInfo {
-                        addr: ptr,
-                        size: aligned_size,
-                        alloc_line: r.alloc_line,
-                        freed_line: vm.get_current_line(),
-                        alloc_step: 0,
-                        freed_step: vm.get_executed_steps(),
-                    });
+                    vm.freed_logs.insert(
+                        ptr,
+                        FreedRegionInfo {
+                            addr: ptr,
+                            size: aligned_size,
+                            alloc_line: r.alloc_line,
+                            freed_line: vm.get_current_line(),
+                            alloc_step: 0,
+                            freed_step: vm.get_executed_steps(),
+                        },
+                    );
                     freed_size = aligned_size as i32;
                     freed_ok = true;
                 }
@@ -232,10 +235,7 @@ pub fn host_realloc(vm: &mut VitroVM, session: &mut VmContext<'_>) {
     // 清理被新分配重用的 freed_logs（必须在写入新内存之前执行，
     // 否则 store_i8 会触发 Use-After-Free 误报）
     let new_end = new_addr.saturating_add(aligned_new_size);
-    vm.freed_logs.retain(|log| {
-        let log_end = log.addr.saturating_add(log.size);
-        log_end <= new_addr || log.addr >= new_end
-    });
+    vm.freed_logs_remove_overlapping(new_addr, new_end);
 
     // Copy old data
     let copy_size = (old_size as u32).min(aligned_new_size);
@@ -259,14 +259,17 @@ pub fn host_realloc(vm: &mut VitroVM, session: &mut VmContext<'_>) {
         if !r.is_freed {
             r.is_freed = true;
             let alloc_line = r.alloc_line;
-            vm.freed_logs.push(FreedRegionInfo {
-                addr: old_addr,
-                size: aligned_old_size,
-                alloc_line,
-                freed_line: vm.get_current_line(),
-                alloc_step: 0,
-                freed_step: vm.get_executed_steps(),
-            });
+            vm.freed_logs.insert(
+                old_addr,
+                FreedRegionInfo {
+                    addr: old_addr,
+                    size: aligned_old_size,
+                    alloc_line,
+                    freed_line: vm.get_current_line(),
+                    alloc_step: 0,
+                    freed_step: vm.get_executed_steps(),
+                },
+            );
             old_freed = true;
         }
     }
@@ -279,10 +282,7 @@ pub fn host_realloc(vm: &mut VitroVM, session: &mut VmContext<'_>) {
 
     // 若 realloc 恰好复用了旧地址（如 heap_offset 回退后），需清理刚添加的 freed_log
     let new_end = new_addr.saturating_add(aligned_new_size);
-    vm.freed_logs.retain(|log| {
-        let log_end = log.addr.saturating_add(log.size);
-        log_end <= new_addr || log.addr >= new_end
-    });
+    vm.freed_logs_remove_overlapping(new_addr, new_end);
 
     // Track new region（U2#2：与 malloc 相同的"复位 or push"——新地址可能来自
     // free_list 复用隔离驱逐块，该 addr 已有条目，无条件 push 会造成同 addr
@@ -339,10 +339,7 @@ pub fn host_calloc(vm: &mut VitroVM, session: &mut VmContext<'_>) {
     }
     // clean freed_logs
     let new_end = addr.saturating_add(aligned_size);
-    vm.freed_logs.retain(|log| {
-        let log_end = log.addr.saturating_add(log.size);
-        log_end <= addr || log.addr >= new_end
-    });
+    vm.freed_logs_remove_overlapping(addr, new_end);
     // U2#2：新地址可能来自 free_list 复用驱逐块——"复位 or push"（同 malloc，
     // 防同 addr 双条目）
     match session.memory.find_region_mut(addr) {

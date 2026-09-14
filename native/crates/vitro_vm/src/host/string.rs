@@ -26,10 +26,7 @@ pub fn host_strdup(vm: &mut VitroVM, session: &mut VmContext<'_>) {
     };
     // 清理被新分配重用的 freed_logs
     let new_end = addr.saturating_add(aligned_size);
-    vm.freed_logs.retain(|log| {
-        let log_end = log.addr.saturating_add(log.size);
-        log_end <= addr || log.addr >= new_end
-    });
+    vm.freed_logs_remove_overlapping(addr, new_end);
     // 复制字符串内容（含终止符）
     let mem_size = vm.get_memory_slice().len();
     if (addr as usize) < mem_size {

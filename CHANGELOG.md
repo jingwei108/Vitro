@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (性能)：U2#2-b freed_logs 索引化——UAF 检测窗口的 O(16k) 扫描根治（1M churn 34.8s → 1.45s，累计 41.7×）
+
+U2#2-a 的登记跟进批。稳态推演修正后归因确认：churn 稳态下**隔离区容量内
+每块各留一条 freed_log**（free 时 push、地址复用时才删）→ ~16k 条，三个
+O(16k) 热点：每次 malloc 的 `retain` 区间清理、每次 free 的 Double-Free
+`find`、每次访存的 `check_uaf`（17μs/次 × 2M 次 ≈ 34s，与 U2#2-a 后剩余
+墙钟精确吻合）。
+
+- **结构**：`freed_logs: Vec` → **`BTreeMap<addr, FreedRegionInfo>`**。
+  核心不变量：分配块**互不重叠** ⟹ addr 序即 end 序——区间查询/删除按
+  addr 降序探测，end ≤ 查询起点即可判无重叠，O(log n + 命中数)。addr
+  唯一（Double-Free 拦截在先）；迭代序变 addr 升序（原为 free 时间序，
+  经查无顺序依赖消费者）；clippy 顺带抓出初版"伪循环"（降序首块单次
+  探测即可判定）改 `range(..end).next_back()`；
+- **API**：`freed_logs_remove_overlapping(start, end)`（替换 6 处
+  retain）+ `freed_logs_find_overlapping(addr, size)`（check_uaf /
+  trap_invalid_free 共用）+ Double-Free 精确查 `get(&addr)`；
+- **差分保护先行**（重构前绿锁语义）：`test_u22b_freed_logs_multi_block_
+  interval_semantics`（三块各自 free、复用中间块后未复用块的 UAF 窗口
+  保留、跨块清理精确性）+ 既有 fuzz A"已释放块以 freed_logs 为准"压测
+  全绿；
+- **性能对照（行为零漂移：条目四点逐位一致）**：10k 171→118ms、
+  100k 3.40s→**282ms（12×）**、1M 34.8s→**1.45s（24×）**——较
+  U2#2-a 前基线（1M 60.4s）累计 **41.7×**；P-1 的 44.6μs/次 →
+  ~1.4μs/次（~32×），超线性退化根治。
+
+验收：cargo 70 套件全绿；shadow C 675 零非预期差异；serve 冒烟 57/57；
+replay 61/61；clippy `-D warnings` 零警告；facts 漂移 0。
+
 ### Fixed (防线 6)：v4 清单 §6 代码侧第二批——文案/挂载点五项修复（人审 ✗ 键全数处置，golden 300→310）
 
 - **#3 dp 子族具名**：外层/内层循环主语按特征词具名——币种循环
