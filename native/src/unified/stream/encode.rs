@@ -58,6 +58,7 @@ pub fn encode_step_payload(payload: &StepPayload, sym: &mut SymbolTable) -> Step
                 name_idx: sym.insert(a.name.clone()),
                 element_ty_idx: sym.insert(a.element_ty.clone()),
                 elements: a.elements.clone(),
+                truncated: a.truncated,
             })
             .collect(),
         pointer_snapshots: payload
@@ -211,6 +212,7 @@ fn diff_array_snapshots(
             name_idx: sym.insert(a.name.clone()),
             element_ty_idx: sym.insert(a.element_ty.clone()),
             elements: a.elements.clone(),
+            truncated: a.truncated,
         })
         .collect();
 

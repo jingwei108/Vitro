@@ -126,6 +126,51 @@ pub(crate) fn parse_format_specs(fmt: &str) -> Vec<char> {
     specs
 }
 
+/// printf 族字段宽度/精度预算（U2#9）：单个转换的宽度或精度上限。
+///
+/// `apply_width` 的 `repeat(pad_len)` 此前对用户可控宽度无裁剪——
+/// `printf("%999999999d",1)` 单次 ~1GB 分配（sprintf/snprintf/fprintf 同路径）。
+pub(crate) const PRINTF_FIELD_BUDGET: usize = 1 << 20; // 1MB
+
+/// 校验格式串中所有宽度/精度是否在预算内；超限返回教学诊断消息。
+///
+/// `printf("%*d", w, 1)` 的动态宽度**不会被本函数看到**——`parse_format_spec`
+/// 遇 `*` 直接 break（`width` 留 `None`，不取宽度参数），随后 typeck 在编译期
+/// 以"格式说明符数量与参数数量不匹配"拒收（E3032）。即：动态宽度/精度当前
+/// **整族不可用**（合法 C 被拒），已按 U6#3 同类清查义务登记
+/// C语言子集规范 §已知差异表；若未来支持 `%*d`，必须为运行时 `width` 值
+/// 补一道与本预算同口径的 clamp（保险丝可触发性义务）。
+pub(crate) fn validate_format_field_budget(fmt: &str) -> Result<(), String> {
+    let mut chars = fmt.chars().peekable();
+    while let Some(ch) = chars.next() {
+        if ch == '%' {
+            if let Some(&next) = chars.peek() {
+                if next == '%' {
+                    chars.next();
+                } else if let Some((_, _, precision, width, _)) = parse_format_spec(&mut chars) {
+                    if let Some(w) = width {
+                        if w > PRINTF_FIELD_BUDGET {
+                            return Err(format!(
+                                "printf: 字段宽度 {} 超出上限 {}（教学引擎输出预算；Clang 下此写法会尝试分配同量级内存）。",
+                                w, PRINTF_FIELD_BUDGET
+                            ));
+                        }
+                    }
+                    if let Some(p) = precision {
+                        if p > PRINTF_FIELD_BUDGET {
+                            return Err(format!(
+                                "printf: 精度 {} 超出上限 {}（教学引擎输出预算）。",
+                                p, PRINTF_FIELD_BUDGET
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 pub(crate) fn apply_width(s: &str, width: Option<usize>, flags: &str) -> String {
     let w = match width {
         Some(w) => w,

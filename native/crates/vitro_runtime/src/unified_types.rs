@@ -5,11 +5,18 @@
 //! 在 `vitro_native` 层转换为 FRB 友好类型。
 
 /// 数组变量快照（用于算法可视化条形图）。
+/// 数组快照 payload 级元素上限（U2#10）：可视化条形图消费上限 + 内存有界
+///（`int a[50000]` × 2000 帧窗口的 GB 形态根治）。
+pub const MAX_ARRAY_SNAPSHOT_ELEMENTS: usize = 256;
+
 #[derive(Debug, Clone)]
 pub struct ArraySnapshotData {
     pub name: String,
     pub element_ty: String,
     pub elements: Vec<String>,
+    /// U2#10：元素数超出 [`crate::MAX_ARRAY_SNAPSHOT_ELEMENTS`] 时置位
+    ///（payload 级截断可见，消费方不得把 elements 当全量）。
+    pub truncated: bool,
 }
 
 /// 指针变量快照基础数据。

@@ -7,7 +7,10 @@
 > 归属：主计划 [`后端定位与白箱计划.md`](../current/01-定位与路线/后端定位与白箱计划.md) §3.2 协议层
 > 实现锚点：`native/src/unified/types.rs`（类型定义）、`collector.rs`（字段来源）、`engine.rs`（窗口与 seek）、`stream.rs`（差分编码）、`contracts.rs`（版本轨道与行为契约）、`vocabulary.rs`（受控词汇表）、`native/src/capi/first_batch.rs`（出口序列化）
 > 消费者：capi 第一批（`vitro_step_next_json` / `vitro_get_step_payloads_json`）、`vitro_cli serve`、wasm 绑定、任何第三方语言
-> 最后核对日期：2026-09-12
+> 最后核对日期：2026-09-14
+> 修订说明（2026-09-14，U2#10）：§2.4 `ArraySnapshot` 新增 `truncated`（bool，
+> serde default 缺省 false——旧流/旧消费方零影响，字段只增不改语义纪律内）；
+> 元素数超过引擎上限 256 时 `elements` 为截断视图。字段冻结测试白名单同步。
 > 修订说明（2026-09-12）：v0.1 冻结；新增 §9 v0.2 激活轨道与附录 B 受控词汇表；
 > §2.5 `target_name` 补跨帧解析口径（下游 D3）；§8 #1/#9 计划列指向 §9。
 > 修订说明（2026-09-11）：去前端化——§0 明示"语言中立、不依赖任何前端实现"；§7 回放输入的"Flutter frameCache"改为"原生前端 frameCache 消费序列（已切割的历史资产）"并指向 `vitro_cli serve` 复现口径。字段定义与校验记录保持原样。
@@ -124,6 +127,7 @@
 | `name` | string | 数组变量名 |
 | `element_ty` | string | 元素类型名 |
 | `elements` | string[] | 元素值（字符串化，规则同 `value`） |
+| `truncated` | bool | U2#10（2026-09-14）：元素数超出引擎上限（256）时置位——`elements` 为前 256 个元素的截断视图，消费方不得当全量。旧流缺省 `false`（serde default，向后兼容） |
 
 ### 2.5 `PointerSnapshot` — 指针快照
 

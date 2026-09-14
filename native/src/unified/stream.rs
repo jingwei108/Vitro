@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-
 use crate::session::VisEvent;
 use crate::unified::root_cause::RootCauseHint;
 use crate::unified::types::{PointerStatus, StepPayload};
@@ -41,11 +40,14 @@ pub struct PointerSnapshotRef {
 }
 
 /// 使用符号表的数组快照。
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ArraySnapshotRef {
     pub name_idx: SymIdx,
     pub element_ty_idx: SymIdx,
     pub elements: Vec<String>,
+    /// U2#10：截断标记（旧流缺省 false，serde default 向后兼容）。
+    #[serde(default)]
+    pub truncated: bool,
 }
 
 /// 使用符号表的访问变量。
@@ -399,6 +401,7 @@ mod tests {
             name: "a".to_string(),
             element_ty: "int".to_string(),
             elements: vec!["1".to_string(), "2".to_string()],
+            truncated: false,
         }];
         p0.pointer_snapshots = vec![PointerSnapshot {
             name: "p".to_string(),
@@ -420,6 +423,7 @@ mod tests {
             name: "b".to_string(),
             element_ty: "int".to_string(),
             elements: vec!["7".to_string()],
+            truncated: false,
         }];
         p2.pointer_snapshots[0].target_addr = 300;
 

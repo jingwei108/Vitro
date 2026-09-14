@@ -419,11 +419,13 @@ fn test_smart_checkpoint_triggers() {
             global_count: 0,
             freed_logs: std::collections::BTreeMap::new(),
             runtime: vitro_vm::snapshot::RuntimeSnapshot {
-                output_chunks: Vec::new(),
-                trace: Vec::new(),
+                output: std::sync::Arc::new(vitro_runtime::OutputLog::default()),
+                trace: std::sync::Arc::new(Vec::new()),
                 current_line: 0,
                 input_index: 0,
                 input_char_offset: 0,
+                stdin_eof: false,
+                heatmap: std::sync::Arc::new(vitro_runtime::ExecutionHeatmap::default()),
                 waiting_input: false,
                 rand_seed: 0,
                 vis_event_cache: Vec::new(),
@@ -513,7 +515,7 @@ int main() {
     assert_eq!(vm_a.get_stack(), vm_b.get_stack());
     assert_eq!(vm_a.get_call_stack(), vm_b.get_call_stack());
     assert_eq!(vm_a.memory_ref(), vm_b.memory_ref());
-    assert_eq!(session_a.runtime.output_chunks, session_b.runtime.output_chunks);
+    assert_eq!(session_a.runtime.output, session_b.runtime.output);
 }
 
 /// U2#5（2026-09-14）：>50 检查点触发淘汰后，回退 seek 的语义正确性——
@@ -583,13 +585,30 @@ int main() {
     // 两侧终值一致（程序语义相同）
     let (.., ex, esum) = evicted.last().unwrap();
     let (.., rx, rsum) = reference.last().unwrap();
-    assert_eq!((ex, esum), (rx, rsum), "终值必须一致（x={}, sum={} vs {}, {}）", ex, esum, rx, rsum);
+    assert_eq!(
+        (ex, esum),
+        (rx, rsum),
+        "终值必须一致（x={}, sum={} vs {}, {}）",
+        ex,
+        esum,
+        rx,
+        rsum
+    );
 
     // 中段抽点对照（淘汰窗口内外）
     for probe in [evicted.len() / 4, evicted.len() / 2, evicted.len() * 3 / 4] {
         let e = evicted[probe];
         let r = reference[probe];
-        assert_eq!((e.1, e.2), (r.1, r.2), "步 {} 的 (x, sum) 淘汰侧 ({}, {}) != 参考侧 ({}, {})", e.0, e.1, e.2, r.1, r.2);
+        assert_eq!(
+            (e.1, e.2),
+            (r.1, r.2),
+            "步 {} 的 (x, sum) 淘汰侧 ({}, {}) != 参考侧 ({}, {})",
+            e.0,
+            e.1,
+            e.2,
+            r.1,
+            r.2
+        );
     }
 }
 
@@ -638,10 +657,145 @@ int main() {
     );
     // 语义：重放完成后窗口尾 = 目标步（trim 只截头部）
     let tail = engine.frame_cache_start_step + engine.frame_cache.len() as i32 - 1;
-    assert_eq!(tail, 2990, "窗口尾帧应为目标步（起点 {}，len {}）", engine.frame_cache_start_step, engine.frame_cache.len());
+    assert_eq!(
+        tail,
+        2990,
+        "窗口尾帧应为目标步（起点 {}，len {}）",
+        engine.frame_cache_start_step,
+        engine.frame_cache.len()
+    );
     // 语义：目标帧可取回（get_payloads 公开口径）
     let visible = engine.get_payloads(2989, 2990);
-    assert_eq!(visible.len(), 1, "目标步必须可索引（半开区间；窗口起点 {}，len {}）", engine.frame_cache_start_step, engine.frame_cache.len());
+    assert_eq!(
+        visible.len(),
+        1,
+        "目标步必须可索引（半开区间；窗口起点 {}，len {}）",
+        engine.frame_cache_start_step,
+        engine.frame_cache.len()
+    );
+}
+
+/// U2#11 后半（2026-09-14）：stdin_eof 粘滞位必须随快照往返。
+/// 修复前 RuntimeSnapshot 不携带 stdin_eof：程序读尽 stdin 后（EOF 置位、
+/// 游标推到底），时间旅行回到 EOF 前的检查点时 stdin_eof 仍是"未来"的
+/// true、input_index 仍是推到底的值 → 重新执行的 scanf/getchar 直接 EOF，
+/// 回放行为与当时不一致（时间旅行确定性破坏，vm/runtime 审查 P1-11）。
+#[test]
+fn test_u211_stdin_eof_rolls_back_on_restore() {
+    let source = r#"
+#include <stdio.h>
+int main() {
+    int a = 0;
+    scanf("%d", &a);
+    getchar();
+    int c = getchar();
+    printf("a=%d c=%d\n", a, c);
+    return 0;
+}
+"#;
+    let mut session = make_session(source);
+    session.runtime.set_stdin("7\n");
+    // Batch 模式：输入耗尽走 EOF 路径（Interactive 下 getchar 会无限
+    // WaitingInput 且不推进——本测试的推进循环会因此挂死）
+    session.runtime.input_mode = vitro_runtime::InputMode::Batch;
+    let mut vm = setup_vm_for_session(&mut session);
+
+    // 逐步执行，始终保留"上一步"的快照；EOF 首次置位时用它当回退点
+    let mut snap_before_eof = None;
+    loop {
+        let r = vm.step(&mut session.as_vm_context());
+        if session.runtime.stdin_eof {
+            break;
+        }
+        if matches!(r, vitro_native::vm::core::StepResult::WaitingInput) {
+            panic!("Batch 模式下不应挂起等待输入——测试前提不成立");
+        }
+        snap_before_eof = Some(vm.snapshot(&session.as_vm_context()));
+        if matches!(r, vitro_native::vm::core::StepResult::Finished) {
+            panic!("程序已结束但 stdin_eof 未置位——测试前提不成立");
+        }
+    }
+    assert!(session.runtime.stdin_eof, "应已读到 EOF");
+    let snap = snap_before_eof.expect("EOF 置位前应有快照");
+
+    vm.restore(&snap, &mut session.as_vm_context());
+    assert!(
+        !session.runtime.stdin_eof,
+        "回到 EOF 前的检查点后 stdin_eof 必须回滚（修复前保留未来值 → 后续读取直接 EOF）"
+    );
+    assert!(
+        session.runtime.input_index < session.runtime.input_lines.len(),
+        "输入游标必须回滚到未消费位置（修复前保持推到底的值）"
+    );
+
+    // 确定性锚：回退后重新执行，scanf 必须再次读到 7（clang 同源行为 a=7）
+    let mut out = String::new();
+    loop {
+        match vm.step(&mut session.as_vm_context()) {
+            vitro_native::vm::core::StepResult::Finished => break,
+            vitro_native::vm::core::StepResult::Trap => panic!("trap: {}", vm.get_error()),
+            _ => {}
+        }
+    }
+    out.push_str(&session.runtime.stdout());
+    assert!(
+        out.contains("a=7"),
+        "回退重放后 scanf 应再次读到 7（回放确定性），实际输出：{}",
+        out
+    );
+}
+
+/// U2#11 后半（2026-09-14）：heatmap 必须随快照回滚。
+/// 修复前快照不携带 heatmap：回到过去后行计数仍是"未来"的累计值——
+/// 时间旅行的执行统计与当时的真实历史不一致。
+#[test]
+fn test_u211_heatmap_rolls_back_on_restore() {
+    let source = r#"
+int main() {
+    int sum = 0;
+    for (int i = 0; i < 50; i++) {
+        sum = sum + i;
+    }
+    return sum;
+}
+"#;
+    let mut session = make_session(source);
+    let mut vm = setup_vm_for_session(&mut session);
+
+    for _ in 0..20 {
+        let _ = vm.step(&mut session.as_vm_context());
+    }
+    let snap = vm.snapshot(&session.as_vm_context());
+    let heatmap_at_snap: Vec<(i32, u64)> = {
+        let mut v: Vec<(i32, u64)> = session.runtime.heatmap.line_counts.iter().map(|(k, c)| (*k, *c)).collect();
+        v.sort_unstable();
+        v
+    };
+    assert!(!heatmap_at_snap.is_empty(), "20 步应有 heatmap 记录——测试前提");
+
+    // 继续执行让 heatmap 增长
+    for _ in 0..30 {
+        let _ = vm.step(&mut session.as_vm_context());
+    }
+    let total_after: u64 = session.runtime.heatmap.line_counts.values().sum();
+    let total_at_snap: u64 = heatmap_at_snap.iter().map(|(_, c)| c).sum();
+    assert!(
+        total_after > total_at_snap,
+        "继续执行后 heatmap 应增长（{} > {}）——测试前提",
+        total_after,
+        total_at_snap
+    );
+
+    vm.restore(&snap, &mut session.as_vm_context());
+    let heatmap_now: Vec<(i32, u64)> = {
+        let mut v: Vec<(i32, u64)> = session.runtime.heatmap.line_counts.iter().map(|(k, c)| (*k, *c)).collect();
+        v.sort_unstable();
+        v
+    };
+    assert_eq!(
+        heatmap_now, heatmap_at_snap,
+        "回到过去后 heatmap 必须回滚到当时的值（修复前保留未来累计）"
+    );
 }
 
 /// U2#11 前半：seek 重放步数受引擎 max_steps 预算约束——修复前循环内
@@ -669,4 +823,253 @@ int main() {
     let r = engine.seek_to(2990, &mut vm, &mut session);
     assert!(!r.success, "超预算的远距重放必须失败");
     assert!(r.error.unwrap().contains("重放步数超过限制"), "错误应说明预算");
+}
+
+/// U2#4（2026-09-14）：trace 环形上限单元锚。
+/// 实测发现：codegen 已不发射 `__vitro_step` 标记（`host_step` 为死路径），
+/// runtime.trace 实际零写入——本锚直接验证 `push_trace` 的环形语义
+///（上限丢最旧 + 尾部保真），为未来重新插桩提供防线。
+#[test]
+fn test_u24_trace_bounded() {
+    let mut rt = vitro_runtime::RuntimeState::default();
+    assert!(rt.trace.is_empty());
+    for i in 0..(vitro_runtime::TRACE_LIMIT + 1000) {
+        rt.push_trace(vitro_runtime::TraceEntryData {
+            line: i as i32,
+            operation: "step".to_string(),
+        });
+    }
+    assert_eq!(rt.trace.len(), vitro_runtime::TRACE_LIMIT, "trace 必须有界（超限丢最旧）");
+    // 尾部保真：最后一条是最后写入的
+    assert_eq!(rt.trace.last().unwrap().line as usize, vitro_runtime::TRACE_LIMIT + 999);
+    // 头部已滚动：第一条不是 0
+    assert_ne!(rt.trace.first().unwrap().line, 0);
+}
+
+/// U2#4：检查点快照对 output/trace 的克隆消除（COW/Arc 共享）——
+/// 保存检查点必须与运行时共享（Arc::ptr_eq），且运行时后续写入不得
+/// 破坏已存快照（写时复制隔离）。50× 克隆放大的根治锚。
+#[test]
+fn test_u24_snapshot_output_cow() {
+    let source = r#"
+#include <stdio.h>
+int main() {
+    for (int i = 0; i < 100; i++) {
+        printf("line %d\n", i);
+    }
+    return 0;
+}
+"#;
+    let mut session = make_session(source);
+    session.runtime.input_mode = vitro_runtime::InputMode::Batch;
+    let mut vm = setup_vm_for_session(&mut session);
+
+    // 执行到有输出积累
+    for _ in 0..60 {
+        let _ = vm.step(&mut session.as_vm_context());
+    }
+    let snap1 = vm.snapshot(&session.as_vm_context());
+    let output_at_snap1 = session.runtime.output.join_all();
+    let trace_len_at_snap1 = session.runtime.trace.len();
+
+    // 保存共享锚：快照与运行时同源（浅共享，而非深拷贝）
+    assert!(
+        std::sync::Arc::ptr_eq(&snap1.runtime.output, &session.runtime.output),
+        "检查点快照的 output 必须与运行时 Arc 共享（消除克隆放大）"
+    );
+
+    // 继续执行（运行时写入触发 COW 分叉）
+    for _ in 0..40 {
+        let _ = vm.step(&mut session.as_vm_context());
+    }
+
+    // COW 隔离锚：旧快照内容不被后续写入破坏
+    assert_eq!(
+        snap1.runtime.output.join_all(),
+        output_at_snap1,
+        "运行时后续写入不得修改已存快照（写时复制隔离）"
+    );
+    assert_eq!(snap1.runtime.trace.len(), trace_len_at_snap1);
+}
+
+/// U2#7（2026-09-14）：run_batch 早退丢帧——max_steps 超限时直接 `return Err`，
+/// 跳过底部 `frame_cache.extend`：已执行步的 payload 永久丢失，且
+/// `max_collected_step` 与 VM 实际进度脱节。修复前本断言红。
+#[test]
+fn test_u27_early_exit_keeps_frames() {
+    use vitro_native::unified::engine::UnifiedEngine;
+
+    let source = r#"
+#include <stdio.h>
+int main() {
+    int x = 0;
+    for (int i = 0; i < 500; i++) {
+        x = x + 1;
+    }
+    printf("%d\n", x);
+    return 0;
+}
+"#;
+    let mut session = make_session(source);
+    session.runtime.input_mode = vitro_runtime::InputMode::Batch;
+    let mut engine = UnifiedEngine::with_max_steps(10);
+    engine.reset();
+    let mut vm = setup_vm_for_session(&mut session);
+    session.runtime.running = true;
+    engine.checkpoints.save(0, &mut vm, &mut session.as_vm_context());
+
+    // 单批大于预算 → 循环内触发 max_steps 早退
+    let err = engine.run_batch(&mut vm, &mut session, 100).unwrap_err();
+    assert!(err.contains("执行步数超过限制"), "错误信息应说明预算：{err}");
+
+    // 已执行步的帧必须保留在窗口中（丢失 = 修复前形态）
+    let vm_steps = vm.get_executed_steps();
+    let collected = engine.max_collected_step();
+    assert!(
+        collected >= vm_steps - 1,
+        "max_collected_step（{collected}）不得与 VM 进度（{vm_steps}）脱节——早退前已执行帧永久丢失"
+    );
+    // 帧确实可取回（非空窗口）
+    let frames = engine.get_payloads(0, collected + 1);
+    assert!(!frames.is_empty(), "早退后窗口内应仍有已执行帧");
+}
+
+/// U2#8（2026-09-14）：vis_event_queue 有界——非 unified 出口（vitro_run/serve/
+/// cli run）从不 drain，算法模板命中行在循环内每步 push 一条（10M 步上限 →
+/// 数百 MB~GB 常驻）。VM 内部环形上限根治（所有出口统一生效）。修复前红。
+#[test]
+fn test_u28_vis_event_queue_bounded() {
+    let source = r#"
+#include <stdio.h>
+int main() {
+    int x = 0;
+    for (int i = 0; i < 50000; i++) {
+        x = x + 1;
+    }
+    printf("%d\n", x);
+    return 0;
+}
+"#;
+    let mut session = make_session(source);
+    session.runtime.input_mode = vitro_runtime::InputMode::Batch;
+    let mut vm = setup_vm_for_session(&mut session);
+    // 注入一行命中（模拟算法检测器）：循环体行 = 第 5 行
+    vm.set_vis_event_lines(vec![(5, 1, "算法步骤".to_string())]);
+
+    // 非 unified 批量执行（全程不 drain——出口层形态）
+    loop {
+        match vm.step(&mut session.as_vm_context()) {
+            vitro_native::vm::core::StepResult::Finished => break,
+            vitro_native::vm::core::StepResult::Trap => panic!("trap: {}", vm.get_error()),
+            _ => {}
+        }
+    }
+    let queued = vm.take_vis_events();
+    assert!(!queued.is_empty(), "应有 vis_event 积压（非 unified 出口不 drain）——测试前提");
+    assert!(
+        queued.len() <= vitro_vm::VIS_EVENT_QUEUE_LIMIT,
+        "vis_event_queue 必须有界：{} > {}（修复前 5 万次循环全量累积）",
+        queued.len(),
+        vitro_vm::VIS_EVENT_QUEUE_LIMIT
+    );
+    // 尾部保真：最后一条来自程序末段
+    assert!(queued.last().unwrap().line > 0);
+}
+
+/// U2#10（2026-09-14）：数组快照容量 clamp——`get_array_snapshots` 按声明长度
+/// `Vec::with_capacity` 且逐元素 String 化：`int a[50000]` + unified 窗口 2000 帧
+/// ≈ 5~20GB。payload 级截断到 256 元素 + `truncated` 标记（MAX_SHOWN 只作用
+/// 于摘要不作用于 payload 的误导一并修正）。修复前红。
+#[test]
+fn test_u210_array_snapshot_clamped() {
+    use vitro_native::unified::engine::UnifiedEngine;
+
+    let source = r#"
+#include <stdio.h>
+int main() {
+    int a[50000];
+    a[0] = 1;
+    a[49999] = 2;
+    printf("%d %d\n", a[0], a[49999]);
+    return 0;
+}
+"#;
+    let mut session = make_session(source);
+    session.runtime.input_mode = vitro_runtime::InputMode::Batch;
+    let mut engine = UnifiedEngine::with_max_steps(100_000);
+    engine.reset();
+    let mut vm = setup_vm_for_session(&mut session);
+    session.runtime.running = true;
+    engine.checkpoints.save(0, &mut vm, &mut session.as_vm_context());
+
+    let mut max_elements = 0usize;
+    let mut any_truncated = false;
+    loop {
+        let r = engine.run_batch(&mut vm, &mut session, 50).expect("run_batch");
+        for p in &r.payloads {
+            for arr in &p.array_snapshots {
+                max_elements = max_elements.max(arr.elements.len());
+                any_truncated = any_truncated || arr.truncated;
+            }
+        }
+        let fin = r.finished;
+        drop(r);
+        if fin {
+            break;
+        }
+    }
+    assert!(
+        any_truncated,
+        "int a[50000] 的快照应带 truncated 标记——测试前提（修复前无此字段）"
+    );
+    assert!(
+        max_elements <= vitro_vm::MAX_ARRAY_SNAPSHOT_ELEMENTS,
+        "payload 级数组快照必须截断：{max_elements} > {}（50000 元素 × String × 2000 帧窗口 = GB 形态）",
+        vitro_vm::MAX_ARRAY_SNAPSHOT_ELEMENTS
+    );
+}
+
+/// U2#10 纯计数红锚：不引用 `truncated` 字段与 `MAX_ARRAY_SNAPSHOT_ELEMENTS`
+/// 常量——修复前（无截断）本测试**编译可过、断言 FAIL**（50000 > 256），
+/// 与 `test_u210_array_snapshot_clamped`（修复前编译不过）互补，满足 U0#6
+/// "先红留痕"的可观测形态。
+#[test]
+fn test_u210_array_snapshot_count_bounded() {
+    use vitro_native::unified::engine::UnifiedEngine;
+
+    let source = r#"
+#include <stdio.h>
+int main() {
+    int a[50000];
+    a[0] = 1;
+    printf("%d\n", a[0]);
+    return 0;
+}
+"#;
+    let mut session = make_session(source);
+    session.runtime.input_mode = vitro_runtime::InputMode::Batch;
+    let mut engine = UnifiedEngine::with_max_steps(100_000);
+    engine.reset();
+    let mut vm = setup_vm_for_session(&mut session);
+    session.runtime.running = true;
+    engine.checkpoints.save(0, &mut vm, &mut session.as_vm_context());
+
+    let mut max_elements = 0usize;
+    loop {
+        let r = engine.run_batch(&mut vm, &mut session, 50).expect("run_batch");
+        for p in &r.payloads {
+            for arr in &p.array_snapshots {
+                max_elements = max_elements.max(arr.elements.len());
+            }
+        }
+        let fin = r.finished;
+        drop(r);
+        if fin {
+            break;
+        }
+    }
+    assert!(
+        max_elements <= 256,
+        "payload 级数组快照元素必须截断（50000 元素 × String × 2000 帧窗口 = GB 形态）：{max_elements}"
+    );
 }

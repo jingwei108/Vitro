@@ -13,6 +13,11 @@ pub fn host_printf_n(vm: &mut VitroVM, session: &mut VmContext<'_>) {
     for _ in 0..specs.len() {
         args.push(vm.pop());
     }
+    // U2#9：宽度/精度超预算 → 教学诊断（替代 GB 级 repeat 分配）
+    if let Err(msg) = validate_format_field_budget(&fmt) {
+        vm.trap(&msg, &SourceLoc::default());
+        return;
+    }
     let out = format_printf_string(vm, &fmt, &args);
     session.runtime.push_stdout(out);
 }
@@ -23,10 +28,7 @@ pub fn host_scanf_n(vm: &mut VitroVM, session: &mut VmContext<'_>) {
     // 扫描格式字符串，记录每个 % 格式符的类型、长度修饰符及空白指令
     let spec_types = parse_scanf_specs(&fmt);
     // 仅 % 转换符消耗指针参数（空白指令不取参）
-    let arg_count = spec_types
-        .iter()
-        .filter(|s| matches!(s, ScanfItem::Spec(..)))
-        .count();
+    let arg_count = spec_types.iter().filter(|s| matches!(s, ScanfItem::Spec(..))).count();
     if vm.get_stack().len() < arg_count {
         vm.trap("scanf: 格式字符串要求的参数多于实际提供的参数。", &SourceLoc::default());
         return;
@@ -357,6 +359,10 @@ pub fn host_fprintf_n(vm: &mut VitroVM, session: &mut VmContext<'_>) {
     for _ in 0..specs.len() {
         args.push(vm.pop());
     }
+    if let Err(msg) = validate_format_field_budget(&fmt) {
+        vm.trap(&msg, &SourceLoc::default());
+        return;
+    }
     let out = format_printf_string(vm, &fmt, &args);
     // E-P1-5：stderr(2) 分流到 stderr 通道，不再混入 stdout；stdout(1) 与其它流
     // 维持既有"直接输出"行为（fprintf 到自定义 FILE* 未落盘属既有偏差，另行记录）。
@@ -383,6 +389,10 @@ pub fn host_sprintf(vm: &mut VitroVM, _session: &mut VmContext<'_>) {
     for _ in 0..specs.len() {
         args.push(vm.pop());
     }
+    if let Err(msg) = validate_format_field_budget(&fmt) {
+        vm.trap(&msg, &SourceLoc::default());
+        return;
+    }
     let out = format_printf_string(vm, &fmt, &args);
     let bytes = out.as_bytes();
     for (i, &b) in bytes.iter().enumerate() {
@@ -402,6 +412,10 @@ pub fn host_snprintf(vm: &mut VitroVM, _session: &mut VmContext<'_>) {
     for _ in 0..specs.len() {
         args.push(vm.pop());
     }
+    if let Err(msg) = validate_format_field_budget(&fmt) {
+        vm.trap(&msg, &SourceLoc::default());
+        return;
+    }
     let out = format_printf_string(vm, &fmt, &args);
     let bytes = out.as_bytes();
     if size > 0 {
@@ -420,10 +434,7 @@ pub fn host_sscanf(vm: &mut VitroVM, _session: &mut VmContext<'_>) {
     let fmt = read_cstring(vm, fmt_addr);
     let src = read_cstring(vm, str_addr);
     let spec_types = parse_scanf_specs(&fmt);
-    let arg_count = spec_types
-        .iter()
-        .filter(|s| matches!(s, ScanfItem::Spec(..)))
-        .count();
+    let arg_count = spec_types.iter().filter(|s| matches!(s, ScanfItem::Spec(..))).count();
     let mut ptrs = Vec::with_capacity(arg_count);
     for _ in 0..arg_count {
         ptrs.push(vm.pop() as u32);

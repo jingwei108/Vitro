@@ -28,13 +28,14 @@ pub use memory_state::{
     GLOBAL_REGION_LIMIT, GLOBAL_START, HEAP_START, MAX_STACK_DEPTH, MEM_SIZE, NULL_TRAP_SIZE, SNAPSHOT_INTERVAL,
     STACK_START,
 };
-pub use output::{OutputChunk, OutputKind};
+pub use output::{OutputChunk, OutputKind, OutputLog, OUTPUT_LOG_BUDGET};
 pub use runtime_state::{
     ExecutionHeatmap, InputMode, RuntimeState, TraceEntryData, VariableSnapshotData, VisEventData,
+    TRACE_LIMIT,
 };
 pub use symbol::Symbol;
 pub use type_utils::{base_kind, immediate_base_kind, type_display_name};
-pub use unified_types::{AccessedVarData, ArraySnapshotData, PointerSnapshotData, PointerStatusData};
+pub use unified_types::{AccessedVarData, ArraySnapshotData, PointerSnapshotData, PointerStatusData, MAX_ARRAY_SNAPSHOT_ELEMENTS};
 
 /// 编译单元：一次编译的单个源文件。
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

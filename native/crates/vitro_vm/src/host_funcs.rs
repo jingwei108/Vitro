@@ -149,7 +149,7 @@ pub fn execute_host_func(vm: &mut VitroVM, session: &mut VmContext<'_>, id: u32)
 fn host_step(vm: &mut VitroVM, session: &mut VmContext<'_>) {
     let line = vm.pop() as i32;
     session.runtime.current_line = line;
-    session.runtime.trace.push(vitro_runtime::TraceEntryData {
+    session.runtime.push_trace(vitro_runtime::TraceEntryData {
         line,
         operation: "step".to_string(),
     });

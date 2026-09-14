@@ -59,7 +59,7 @@ pub fn append_leak_report(session: &mut Session) {
 pub fn reset_runtime(session: &mut Session) {
     session.runtime.clear_output();
     session.runtime.error.clear();
-    session.runtime.trace.clear();
+    std::sync::Arc::make_mut(&mut session.runtime.trace).clear();
     session.memory.regions.clear();
     // U2#2：索引随 regions 一起清空（不变量：键集与 addr 集一致）
     session.memory.region_index.clear();
@@ -69,11 +69,8 @@ pub fn reset_runtime(session: &mut Session) {
     session.memory.quarantine_bytes = 0;
     // R1 ①：动态堆起点——越过全局数据末端（含 argv 顶界）。此前写死 HEAP_START，
     // "全局数据 > 20KB 且使用 malloc" 会静默压坏堆数据（AGENTS.md 已知限制销项）。
-    let heap_base = vitro_runtime::compute_heap_base(
-        session.compile.global_data_end,
-        session.runtime.argc,
-        &session.runtime.argv,
-    );
+    let heap_base =
+        vitro_runtime::compute_heap_base(session.compile.global_data_end, session.runtime.argc, &session.runtime.argv);
     session.memory.set_heap_base(heap_base);
     session.memory.alloc_counter = 0;
     session.vfs = crate::vm::vfs::VirtualFileSystem::new();

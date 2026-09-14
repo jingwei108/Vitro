@@ -1,5 +1,10 @@
 use super::*;
 
+/// vis_event_queue 环形上限（U2#8）：非 unified 出口（vitro_run/serve/cli run）
+/// 全程不 drain，算法模板命中行在循环内每步 push 一条——上限后丢最旧，
+/// 消除 10M 步数百 MB~GB 常驻（统一模式 collector 每步 take，不触上限）。
+pub const VIS_EVENT_QUEUE_LIMIT: usize = 1024;
+
 impl VitroVM {
     pub(crate) fn execute_debug(&mut self, op: OpCode, operand: i32, loc: &SourceLoc) -> Option<StepResult> {
         match op {
@@ -20,6 +25,10 @@ impl VitroVM {
                             context: ctx.clone(),
                         });
                     }
+                }
+                let overflow = self.vis_event_queue.len().saturating_sub(VIS_EVENT_QUEUE_LIMIT);
+                if overflow > 0 {
+                    self.vis_event_queue.drain(..overflow);
                 }
                 if self.paused {
                     return Some(StepResult::Paused);

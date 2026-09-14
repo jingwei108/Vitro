@@ -174,8 +174,8 @@ pub unsafe extern "C" fn vitro_get_compile_errors_length(s: *mut Session) -> c_i
 pub unsafe extern "C" fn vitro_get_capabilities_json() -> *mut c_char {
     guard(ptr::null_mut(), || {
         static CAPS: std::sync::OnceLock<String> = std::sync::OnceLock::new();
-        let cached = CAPS
-            .get_or_init(|| serde_json::to_string(&crate::session_api::capabilities()).unwrap_or_default());
+        let cached =
+            CAPS.get_or_init(|| serde_json::to_string(&crate::session_api::capabilities()).unwrap_or_default());
         CString::new(cached.as_str())
             .map(std::ffi::CString::into_raw)
             .unwrap_or(std::ptr::null_mut())
@@ -387,7 +387,8 @@ pub unsafe extern "C" fn vitro_get_output_length(s: *mut Session) -> c_int {
         if s.is_null() {
             return 0;
         }
-        (*s).runtime.display().len() as c_int
+        // U2#3：O(1)（OutputLog 增量维护总量，废除全量拼接取长度）
+        (*s).runtime.output.total_bytes() as c_int
     })
 }
 
@@ -404,7 +405,8 @@ pub unsafe extern "C" fn vitro_get_program_output_length(s: *mut Session) -> c_i
         if s.is_null() {
             return 0;
         }
-        (*s).runtime.stdout().len() as c_int
+        // U2#3：O(1)
+        (*s).runtime.output.len_of(vitro_runtime::OutputKind::Stdout) as c_int
     })
 }
 
@@ -418,7 +420,8 @@ pub unsafe extern "C" fn vitro_get_engine_notes_length(s: *mut Session) -> c_int
         if s.is_null() {
             return 0;
         }
-        (*s).runtime.notes().len() as c_int
+        // U2#3：O(1)
+        (*s).runtime.output.len_of(vitro_runtime::OutputKind::Note) as c_int
     })
 }
 

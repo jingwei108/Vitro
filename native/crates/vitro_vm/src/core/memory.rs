@@ -1,6 +1,6 @@
 //! VM 内存访问：安全读写、脏页追踪、变量快照与数组快照。
 
-use super::state::{VitroVM, FreedRegionInfo, VMSymbol, MEM_SIZE, NULL_TRAP_SIZE};
+use super::state::{FreedRegionInfo, VMSymbol, VitroVM, MEM_SIZE, NULL_TRAP_SIZE};
 use crate::instruction::SourceLoc;
 use vitro_ast::TypeKind;
 use vitro_runtime::base_kind;
@@ -397,8 +397,12 @@ impl VitroVM {
                 TypeKind::Double | TypeKind::LongLong => 8,
                 _ => 4,
             };
-            let mut elements = Vec::with_capacity(array_size as usize);
-            for i in 0..array_size {
+            // U2#10：payload 级截断——按声明长度预分配 + 逐元素 String 化在
+            // `int a[50000]` × 2000 帧窗口下是 5~20GB 形态；截断后由 truncated 标记。
+            let truncated = (array_size as usize) > vitro_runtime::MAX_ARRAY_SNAPSHOT_ELEMENTS;
+            let take_elems = (array_size as usize).min(vitro_runtime::MAX_ARRAY_SNAPSHOT_ELEMENTS);
+            let mut elements = Vec::with_capacity(take_elems);
+            for i in 0..take_elems {
                 let addr = vaddr + (i as u32) * (elem_size as u32);
                 let elem_size_u32 = elem_size as u32;
                 // NULL 区检查；上界在后续索引前已经判断。
@@ -453,6 +457,7 @@ impl VitroVM {
                 name: sym.name.clone(),
                 element_ty,
                 elements,
+                truncated,
             });
         }
         result

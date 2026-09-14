@@ -148,11 +148,14 @@ impl VitroVM {
         self.global_count = snap.global_count;
 
         // Session 运行时状态
-        session.runtime.output_chunks = snap.runtime.output_chunks.clone();
+        session.runtime.output = snap.runtime.output.clone();
         session.runtime.trace = snap.runtime.trace.clone();
         session.runtime.current_line = snap.runtime.current_line;
         session.runtime.input_index = snap.runtime.input_index;
         session.runtime.input_char_offset = snap.runtime.input_char_offset;
+        // U2#11 后半：EOF 粘滞位与 heatmap 回滚（回放确定性）
+        session.runtime.stdin_eof = snap.runtime.stdin_eof;
+        session.runtime.heatmap = snap.runtime.heatmap.clone();
         session.runtime.waiting_input = snap.runtime.waiting_input;
         session.runtime.rand_seed = snap.runtime.rand_seed;
         session.runtime.vis_event_cache = snap.runtime.vis_event_cache.clone();

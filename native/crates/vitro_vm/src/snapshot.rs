@@ -1,8 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::context::VmContext;
-use crate::core::{CallFrame, VitroVM, FreedRegionInfo};
-use vitro_runtime::{FreeBlock, MemoryRegionData, MemoryState, OutputChunk, RuntimeState, TraceEntryData, VisEventData};
+use crate::core::{CallFrame, FreedRegionInfo, VitroVM};
+use vitro_runtime::{FreeBlock, MemoryRegionData, MemoryState, OutputLog, RuntimeState, TraceEntryData, VisEventData};
 
 /// VM 内存快照：全量或页级增量（页大小 4KB）。
 #[derive(Clone)]
@@ -84,11 +84,17 @@ pub struct VMSnapshot {
 pub struct RuntimeSnapshot {
     /// E-P1-5：快照携带完整输出分段（含通道标记），时间旅行回退后仍能区分
     /// 程序 stdout 与引擎附注，不会退回"文本清洗"口径。
-    pub output_chunks: Vec<OutputChunk>,
-    pub trace: Vec<TraceEntryData>,
+    /// U2#3：结构换为有界 OutputLog（快照往返携带预算/丢弃计数，恢复后继续有界）。
+    pub output: std::sync::Arc<OutputLog>,
+    pub trace: std::sync::Arc<Vec<TraceEntryData>>,
     pub current_line: i32,
     pub input_index: usize,
     pub input_char_offset: usize,
+    /// U2#11 后半：EOF 粘滞位与 heatmap 必须随快照往返——否则回到过去后
+    /// 保留"未来"的值（EOF 已置位 → 重新执行时读取直接 EOF；行计数是
+    /// 未来累计），回放行为与当时不一致（时间旅行确定性破坏）。
+    pub stdin_eof: bool,
+    pub heatmap: std::sync::Arc<vitro_runtime::ExecutionHeatmap>,
     pub waiting_input: bool,
     pub rand_seed: u32,
     pub vis_event_cache: Vec<VisEventData>,
@@ -114,11 +120,13 @@ pub struct MemorySnapshot {
 impl From<&RuntimeState> for RuntimeSnapshot {
     fn from(rt: &RuntimeState) -> Self {
         Self {
-            output_chunks: rt.output_chunks.clone(),
+            output: rt.output.clone(),
             trace: rt.trace.clone(),
             current_line: rt.current_line,
             input_index: rt.input_index,
             input_char_offset: rt.input_char_offset,
+            stdin_eof: rt.stdin_eof,
+            heatmap: rt.heatmap.clone(),
             waiting_input: rt.waiting_input,
             rand_seed: rt.rand_seed,
             vis_event_cache: rt.vis_event_cache.clone(),
@@ -268,9 +276,7 @@ impl CheckpointManager {
             } else if remove_idx == 0 {
                 // 删链头 Delta（防御——正常链头应恒为 Full）：删到 Full，
                 // 维持原实现的链头不变量。
-                while !self.checkpoints.is_empty()
-                    && !matches!(self.checkpoints[0].1.memory, MemoryImage::Full(_))
-                {
+                while !self.checkpoints.is_empty() && !matches!(self.checkpoints[0].1.memory, MemoryImage::Full(_)) {
                     self.checkpoints.remove(0);
                 }
             }
@@ -368,7 +374,9 @@ mod tests {
                         .iter()
                         .any(|(s, b)| *s == *base_step && matches!(b.memory, MemoryImage::Full(_))),
                     "检查点[{}]（step={}）悬空：base_step={} 不在链内（seek 到此将叠错内存）",
-                    i, step, base_step
+                    i,
+                    step,
+                    base_step
                 );
             }
         }
@@ -385,9 +393,21 @@ mod tests {
         mgr.checkpoints = vec![
             (0, fake_snap(MemoryImage::Full(vec![0; 8]))),
             (10, fake_snap(MemoryImage::Full(vec![1; 8]))),
-            (20, fake_snap(MemoryImage::Delta { base_step: 10, pages: vec![(0, vec![2; 8])] })),
+            (
+                20,
+                fake_snap(MemoryImage::Delta {
+                    base_step: 10,
+                    pages: vec![(0, vec![2; 8])],
+                }),
+            ),
             (30, fake_snap(MemoryImage::Full(vec![3; 8]))),
-            (40, fake_snap(MemoryImage::Delta { base_step: 30, pages: vec![(0, vec![4; 8])] })),
+            (
+                40,
+                fake_snap(MemoryImage::Delta {
+                    base_step: 30,
+                    pages: vec![(0, vec![4; 8])],
+                }),
+            ),
         ];
         mgr.evict_over_limit();
         // 修复前：删 [1]（Full@10）→ D@20 悬空留存（链 [0]=F, [1]=D@20, [2]=F@30...）
@@ -404,9 +424,21 @@ mod tests {
         mgr.checkpoints = vec![
             (0, fake_snap(MemoryImage::Full(vec![0; 8]))),
             (10, fake_snap(MemoryImage::Full(vec![1; 8]))),
-            (20, fake_snap(MemoryImage::Delta { base_step: 10, pages: vec![(0, vec![2; 8])] })),
+            (
+                20,
+                fake_snap(MemoryImage::Delta {
+                    base_step: 10,
+                    pages: vec![(0, vec![2; 8])],
+                }),
+            ),
             (30, fake_snap(MemoryImage::Full(vec![3; 8]))),
-            (40, fake_snap(MemoryImage::Delta { base_step: 30, pages: vec![(0, vec![4; 8])] })),
+            (
+                40,
+                fake_snap(MemoryImage::Delta {
+                    base_step: 30,
+                    pages: vec![(0, vec![4; 8])],
+                }),
+            ),
         ];
         mgr.evict_over_limit();
         let (step, snap) = mgr.nearest(20).expect("nearest 应有解");
@@ -427,8 +459,20 @@ mod tests {
         mgr.max_checkpoints = 3;
         mgr.checkpoints = vec![
             (0, fake_snap(MemoryImage::Full(vec![0; 8]))),
-            (10, fake_snap(MemoryImage::Delta { base_step: 0, pages: vec![(0, vec![1; 8])] })),
-            (20, fake_snap(MemoryImage::Delta { base_step: 0, pages: vec![(0, vec![2; 8])] })),
+            (
+                10,
+                fake_snap(MemoryImage::Delta {
+                    base_step: 0,
+                    pages: vec![(0, vec![1; 8])],
+                }),
+            ),
+            (
+                20,
+                fake_snap(MemoryImage::Delta {
+                    base_step: 0,
+                    pages: vec![(0, vec![2; 8])],
+                }),
+            ),
             (30, fake_snap(MemoryImage::Full(vec![3; 8]))),
         ];
         mgr.evict_over_limit();

@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 use std::ffi::CString;
+use std::sync::Arc;
 
-use crate::output::{OutputChunk, OutputKind};
+use crate::output::{OutputKind, OutputLog};
 use vitro_ast::Type;
 
 /// 执行轨迹条目基础数据：`vitro_native` 会定义带 `#[frb]` 的同名包装。
@@ -62,6 +63,10 @@ pub enum InputMode {
     Batch,
 }
 
+/// 执行轨迹环形上限（U2#4）：`host_step` 每步写一条，无读者——上限后丢最旧，
+/// 消除 10M 步数百 MB 的只写不读累积。尾部（最近的轨迹）保真。
+pub const TRACE_LIMIT: usize = 4096;
+
 /// 运行时状态：记录 VM 执行过程中的输出、trace、输入、变量快照等。
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct RuntimeState {
@@ -69,16 +74,24 @@ pub struct RuntimeState {
     /// 最近一次 `vitro_get_runtime_error` 返回的 C 字符串缓存，避免返回 `String` 内部指针导致悬垂。
     pub last_error_cstring: Option<CString>,
     pub error_buffer: String,
-    /// 输出分段（按写入顺序）：程序 stdout / 程序 stderr / 引擎附注各自打标。
+    /// 输出日志（按写入顺序）：程序 stdout / 程序 stderr / 引擎附注各自打标，
+    /// 预算内有界（U2#3）+ 通道长度 O(1)。
     ///
     /// E-P1-5 修复：此前这里是 `Vec<String> output_lines`，三种语义混在一条字节流里，
     /// 消费方只能靠文本正则清洗（十余处、口径不一，程序打印"程序运行完成，返回值：N"
     /// 会被误删）。需要纯程序输出请用 [`RuntimeState::stdout`]，需要展示视图用
     /// [`RuntimeState::display`]。
+    ///
+    /// U2#4：`Arc` + 写时复制——检查点快照（`snapshot_into` 每步、`save` 每 20 步）
+    /// 浅共享此结构而非深拷贝，消除 50× 克隆放大；运行时首次写入时 `make_mut`
+    /// 自动分叉（旧快照不受影响）。
     #[serde(default)]
-    pub output_chunks: Vec<OutputChunk>,
+    pub output: Arc<OutputLog>,
     pub running: bool,
-    pub trace: Vec<TraceEntryData>,
+    /// 执行轨迹（U2#4：环形上限 [`TRACE_LIMIT`]，超限丢最旧）。
+    /// 同样 Arc+COW（快照浅共享）。
+    #[serde(default)]
+    pub trace: Arc<Vec<TraceEntryData>>,
     pub current_line: i32,
     pub input_lines: Vec<String>,
     pub input_index: usize,
@@ -100,7 +113,9 @@ pub struct RuntimeState {
     /// - 清位：`set_stdin` / `push_stdin_text` 重新喂入内容时（交互续跑是合法的"新内容到达"）。
     #[serde(default)]
     pub stdin_eof: bool,
-    pub heatmap: ExecutionHeatmap,
+    /// 执行热力图（U2#4 同口径 Arc+COW：快照浅共享、record 走 make_mut 分叉）。
+    #[serde(default)]
+    pub heatmap: Arc<ExecutionHeatmap>,
     pub input_mode: InputMode,
     pub ungetc_char: Option<i32>,
     /// 命令行参数个数（供 `main(int argc, char *argv[])` 使用）。
@@ -116,12 +131,12 @@ pub struct RuntimeState {
 impl RuntimeState {
     /// 追加程序 stdout 片段。
     pub fn push_stdout(&mut self, text: impl Into<String>) {
-        self.output_chunks.push(OutputChunk::stdout(text));
+        Arc::make_mut(&mut self.output).push_stdout(text);
     }
 
     /// 追加程序 stderr 片段。
     pub fn push_stderr(&mut self, text: impl Into<String>) {
-        self.output_chunks.push(OutputChunk::stderr(text));
+        Arc::make_mut(&mut self.output).push_stderr(text);
     }
 
     /// 追加引擎附注（教学诊断 / 运行完成提示 / 泄漏报告等），不进入 stdout。
@@ -131,45 +146,47 @@ impl RuntimeState {
     /// 输出为 `===== 内存泄漏检测报告 =====发现 1 处…`）。**程序 stdout / stderr
     /// 不做任何加工** —— 那必须逐字节保真。
     pub fn push_note(&mut self, text: impl Into<String>) {
-        let mut text = text.into();
-        if !text.is_empty() && !text.ends_with('\n') {
-            text.push('\n');
+        Arc::make_mut(&mut self.output).push_note(text);
+    }
+
+    /// 追加一条执行轨迹（环形上限 [`TRACE_LIMIT`]，超限丢最旧）。
+    pub fn push_trace(&mut self, entry: TraceEntryData) {
+        let trace = Arc::make_mut(&mut self.trace);
+        trace.push(entry);
+        let overflow = trace.len().saturating_sub(TRACE_LIMIT);
+        if overflow > 0 {
+            trace.drain(..overflow);
         }
-        self.output_chunks.push(OutputChunk::note(text));
     }
 
     /// 清空全部输出通道。
     pub fn clear_output(&mut self) {
-        self.output_chunks.clear();
+        Arc::make_mut(&mut self.output).clear();
     }
 
     /// 按通道筛选片段（保持写入顺序）。
     pub fn chunks_of(&self, kind: OutputKind) -> Vec<&str> {
-        self.output_chunks
-            .iter()
-            .filter(|c| c.kind == kind)
-            .map(|c| c.text.as_str())
-            .collect()
+        self.output.chunks_of(kind)
     }
 
     /// 纯程序 stdout —— Shadow Verification / 差分对比的**唯一**合法来源。
     ///
     /// 不含引擎附注、不含 stderr。
     pub fn stdout(&self) -> String {
-        self.join_kind(OutputKind::Stdout)
+        self.output.join(OutputKind::Stdout)
     }
 
     /// 程序 stderr 文本（教学场景下单独展示，不参与 stdout 比对）。
     pub fn stderr(&self) -> String {
-        self.join_kind(OutputKind::Stderr)
+        self.output.join(OutputKind::Stderr)
     }
 
     /// 引擎附注文本（运行完成提示、泄漏报告、安全提示等）。
     pub fn notes(&self) -> String {
-        self.join_kind(OutputKind::Note)
+        self.output.join(OutputKind::Note)
     }
 
-    /// 程序 stdout 片段列表（每个元素是一次 printf/puts/putchar 等调用的产物）。
+    /// 程序 stdout 片段列表（stdout/stderr 小段会合并，元素≠单次调用）。
     pub fn stdout_chunks(&self) -> Vec<&str> {
         self.chunks_of(OutputKind::Stdout)
     }
@@ -179,21 +196,9 @@ impl RuntimeState {
         self.chunks_of(OutputKind::Note)
     }
 
-    fn join_kind(&self, kind: OutputKind) -> String {
-        let mut out = String::new();
-        for chunk in self.output_chunks.iter().filter(|c| c.kind == kind) {
-            out.push_str(&chunk.text);
-        }
-        out
-    }
-
     /// 展示视图：所有通道按写入顺序拼接（原 `output()` 语义，UI / CLI 使用）。
     pub fn display(&self) -> String {
-        let mut out = String::new();
-        for chunk in &self.output_chunks {
-            out.push_str(&chunk.text);
-        }
-        out
+        self.output.join_all()
     }
 
     /// 兼容别名：等同于 [`RuntimeState::display`]。

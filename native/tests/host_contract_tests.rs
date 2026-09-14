@@ -12,13 +12,12 @@
 use vitro_native::session::Session;
 use vitro_native::vm::core::{VitroVM, MEM_SIZE, NULL_TRAP_SIZE};
 use vitro_native::vm::host_funcs::{
-    host_abort, host_acos, host_asin, host_atan, host_atan2, host_atoi, host_bsearch, host_calloc,
-    host_vitro_assert_fail, host_clock, host_cos, host_cosh, host_exp, host_free, host_getchar, host_isblank,
-    host_isgraph, host_ispunct, host_llabs, host_log, host_malloc, host_memset, host_pow, host_printf_n, host_putchar,
-    host_puts, host_qsort, host_rand, host_realloc, host_remove, host_rename, host_scanf_n, host_sin, host_sinh,
-    host_snprintf, host_sprintf, host_sqrt, host_srand, host_sscanf, host_strcat, host_strcmp, host_strcpy,
-    host_strcspn, host_strerror, host_strlen, host_strpbrk, host_strspn, host_strtod, host_strtol, host_tanh,
-    host_time,
+    host_abort, host_acos, host_asin, host_atan, host_atan2, host_atoi, host_bsearch, host_calloc, host_clock,
+    host_cos, host_cosh, host_exp, host_free, host_getchar, host_isblank, host_isgraph, host_ispunct, host_llabs,
+    host_log, host_malloc, host_memset, host_pow, host_printf_n, host_putchar, host_puts, host_qsort, host_rand,
+    host_realloc, host_remove, host_rename, host_scanf_n, host_sin, host_sinh, host_snprintf, host_sprintf, host_sqrt,
+    host_srand, host_sscanf, host_strcat, host_strcmp, host_strcpy, host_strcspn, host_strerror, host_strlen,
+    host_strpbrk, host_strspn, host_strtod, host_strtol, host_tanh, host_time, host_vitro_assert_fail,
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -1494,13 +1493,12 @@ fn test_u22_churn_steady_state_quarantine_window_alive() {
         last = a;
     }
     // 稳态已进入复用（堆顶推进量远小于分配次数）
-    let distinct = session
-        .memory
-        .regions
-        .iter()
-        .filter(|r| r.is_heap)
-        .count();
-    assert!(distinct < 50, "预算 64B 下 50 次 churn 应进入地址复用稳态，实际不同地址 {} 个", distinct);
+    let distinct = session.memory.regions.iter().filter(|r| r.is_heap).count();
+    assert!(
+        distinct < 50,
+        "预算 64B 下 50 次 churn 应进入地址复用稳态，实际不同地址 {} 个",
+        distinct
+    );
     assert!(
         vm.get_freed_logs().values().any(|l| l.addr == last),
         "churn 稳态下最后释放的块必须仍在 freed_logs（UAF 检测窗口存活）"
@@ -1555,7 +1553,11 @@ fn test_u22_churn_leak_count_and_no_duplicate_entries() {
     assert!(live != 0);
 
     let heap_regions: Vec<_> = session.memory.regions.iter().filter(|r| r.is_heap).collect();
-    assert_eq!(heap_regions.len(), 101, "churn 100 次 + 1 活块 = 101 个堆条目（无重复 push / 无丢失）");
+    assert_eq!(
+        heap_regions.len(),
+        101,
+        "churn 100 次 + 1 活块 = 101 个堆条目（无重复 push / 无丢失）"
+    );
     let leaked = heap_regions.iter().filter(|r| !r.is_freed).count();
     assert_eq!(leaked, 1, "恰 1 块泄漏（churn 全 free + 1 活块）");
     let addrs: std::collections::HashSet<u32> = heap_regions.iter().map(|r| r.addr).collect();
@@ -1596,11 +1598,7 @@ fn test_u22_realloc_reuse_no_duplicate_entries() {
     assert_eq!(new_addr, a, "free_list 复用：realloc 新地址应为驱逐块 a");
 
     let dup = session.memory.regions.iter().filter(|r| r.addr == a).count();
-    assert_eq!(
-        dup, 1,
-        "addr 0x{:X} 必须恰一条目（旧实现双条目 = 泄漏虚报 + 索引失配）",
-        a
-    );
+    assert_eq!(dup, 1, "addr 0x{:X} 必须恰一条目（旧实现双条目 = 泄漏虚报 + 索引失配）", a);
     assert!(
         session.memory.verify_region_index().is_ok(),
         "索引一致性：{:?}",
@@ -1682,4 +1680,65 @@ fn test_u22b_freed_logs_multi_block_interval_semantics() {
 
     // Double-Free 精确查：a 已清理 → 再 free(a) 应走 invalid-free 而非 E3061
     //（b/c 仍在窗口）
+}
+
+/// U2#9（2026-09-14）：printf 族宽度/精度容量上限——`apply_width` 的
+/// `repeat(pad_len)` 对用户可控宽度无裁剪，`printf("%999999999d",1)` 单次
+/// ~1GB 分配（sprintf/snprintf/fprintf 同路径）。上限 1MB，超限教学诊断。
+/// 修复前本断言红（无 trap、实际分配 20MB）。
+#[test]
+fn test_u29_printf_width_budget() {
+    use vitro_native::engine::compile_pipeline::{run_compile_pipeline, setup_vm};
+    use vitro_native::session::Session;
+
+    let run = |src: &str| -> (bool, String) {
+        let mut session = Session::default();
+        session.compile.compile_units.push(vitro_native::session::CompileUnit {
+            filename: "main.c".to_string(),
+            source: src.to_string(),
+        });
+        let mut full = src.to_string();
+        full.push('\n');
+        run_compile_pipeline(&mut session, &full).expect("compile");
+        session.runtime.input_mode = vitro_runtime::InputMode::Batch;
+        let mut vm = vitro_native::vm::core::VitroVM::new();
+        setup_vm(&mut vm, &session);
+        let mut trapped = false;
+        let mut err = String::new();
+        loop {
+            match vm.step(&mut session.as_vm_context()) {
+                vitro_native::vm::core::StepResult::Finished => break,
+                vitro_native::vm::core::StepResult::Trap => {
+                    trapped = true;
+                    err = vm.get_error().to_string();
+                    break;
+                }
+                _ => {}
+            }
+        }
+        (trapped, err)
+    };
+
+    // 宽度超限（20MB > 1MB 预算）
+    let (trapped, err) = run(r#"
+#include <stdio.h>
+int main() { printf("%20000000d\n", 1); return 0; }
+"#);
+    assert!(trapped, "超预算宽度必须 trap 而非 GB 级分配");
+    assert!(err.contains("宽度") || err.contains("宽度/精度"), "诊断应说明宽度超限：{err}");
+
+    // 精度超限
+    let (trapped, err) = run(r#"
+#include <stdio.h>
+int main() { printf("%.99999999f\n", 1.5); return 0; }
+"#);
+    assert!(trapped, "超预算精度必须 trap");
+    assert!(err.contains("精度") || err.contains("宽度/精度"), "诊断应说明精度超限：{err}");
+
+    // 合法宽度不受影响（10KB < 1MB，正常输出）
+    let (trapped, _) = run(r#"
+#include <stdio.h>
+int main() { printf("%10000d\n", 7); return 0; }
+"#);
+    assert!(!trapped, "预算内的宽度必须正常工作");
 }

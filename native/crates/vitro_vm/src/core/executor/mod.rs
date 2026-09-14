@@ -3,7 +3,7 @@ use crate::VmContext;
 
 mod arithmetic;
 mod control;
-mod debug;
+pub mod debug;
 mod float;
 mod memory;
 mod stack;
@@ -293,15 +293,14 @@ impl VitroVM {
         // 记录执行热力图：只统计用户主文件（file_id == 0）的源码行号，
         // 避免 Bytecode Libc / 标准库的外部行号混入导致覆盖率超过 100%。
         if inst.loc.line > 0 && inst.loc.file_id == 0 {
-            session.runtime.heatmap.record(inst.loc.line);
+            std::sync::Arc::make_mut(&mut session.runtime.heatmap).record(inst.loc.line);
         }
 
         // 清空上一步的变量访问记录
         self.last_accessed_vars.clear();
 
         // --- JIT: 热点检测（backward jump 目标计数） ---
-        if self.jit_enabled && matches!(inst.op, OpCode::Jump | OpCode::JumpIfZero | OpCode::JumpIfNotZero)
-        {
+        if self.jit_enabled && matches!(inst.op, OpCode::Jump | OpCode::JumpIfZero | OpCode::JumpIfNotZero) {
             let target = inst.operand as usize;
             if target < self.ip {
                 *self.ip_hits.entry(target).or_insert(0) += 1;
@@ -309,10 +308,7 @@ impl VitroVM {
         }
 
         // --- JIT: trace 录制触发 ---
-        if self.jit_enabled
-            && !self.trace_recorder.is_recording()
-            && !self.jit_traces.contains_key(&ip_before)
-        {
+        if self.jit_enabled && !self.trace_recorder.is_recording() && !self.jit_traces.contains_key(&ip_before) {
             if let Some(&hits) = self.ip_hits.get(&ip_before) {
                 if hits >= JIT_THRESHOLD {
                     self.trace_recorder.start(ip_before);

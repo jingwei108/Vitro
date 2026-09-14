@@ -179,7 +179,7 @@ fn test_substructure_fields_frozen() {
             saw_array = true;
             assert_eq!(
                 keys_of(&arr),
-                ["element_ty", "elements", "name"]
+                ["element_ty", "elements", "name", "truncated"]
                     .iter()
                     .map(|s| s.to_string())
                     .collect::<BTreeSet<_>>(),

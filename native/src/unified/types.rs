@@ -77,6 +77,8 @@ pub struct ArraySnapshot {
     pub name: String,
     pub element_ty: String,
     pub elements: Vec<String>,
+    /// U2#10：元素被截断的可见标记。
+    pub truncated: bool,
 }
 
 impl From<vitro_runtime::ArraySnapshotData> for ArraySnapshot {
@@ -85,6 +87,7 @@ impl From<vitro_runtime::ArraySnapshotData> for ArraySnapshot {
             name: value.name,
             element_ty: value.element_ty,
             elements: value.elements,
+            truncated: value.truncated,
         }
     }
 }

@@ -93,10 +93,7 @@ pub fn host_free(vm: &mut VitroVM, session: &mut VmContext<'_>) {
     if freed_ok {
         // 决议 §3：free 的块进入 FIFO 隔离区（地址在隔离期内不复用），
         // 由隔离预算（默认 256KB）与 FIFO 驱逐控制复用时机。
-        session.memory.release_to_quarantine(FreeBlock {
-            addr,
-            size: freed_size,
-        });
+        session.memory.release_to_quarantine(FreeBlock { addr, size: freed_size });
     }
     // V-P1-12：free 非分配起始地址的诊断。此前静默忽略，学生以为释放成功
     // 而泄漏报告又看不到该块，双重误导。
@@ -188,10 +185,7 @@ pub fn host_realloc(vm: &mut VitroVM, session: &mut VmContext<'_>) {
                 }
             }
             if freed_ok {
-                session.memory.release_to_quarantine(FreeBlock {
-                    addr: ptr,
-                    size: freed_size,
-                });
+                session.memory.release_to_quarantine(FreeBlock { addr: ptr, size: freed_size });
             } else {
                 // V-P1-12：realloc(p, 0) 等价 free，同样诊断无效地址
                 trap_invalid_free(vm, session, ptr);

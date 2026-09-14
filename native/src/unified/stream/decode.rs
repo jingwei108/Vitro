@@ -59,6 +59,7 @@ pub fn decode_batch(batch: &StepStreamBatch) -> Vec<StepPayload> {
             name: get_sym(&batch.symbol_table, a.name_idx),
             element_ty: get_sym(&batch.symbol_table, a.element_ty_idx),
             elements: a.elements.clone(),
+            truncated: a.truncated,
         })
         .collect();
     let mut current_pointers: Vec<PointerSnapshot> = base
@@ -149,6 +150,7 @@ pub fn decode_batch(batch: &StepStreamBatch) -> Vec<StepPayload> {
                     name: get_sym(&batch.symbol_table, a.name_idx),
                     element_ty: get_sym(&batch.symbol_table, a.element_ty_idx),
                     elements: a.elements.clone(),
+                    truncated: a.truncated,
                 };
                 if let Some(pos) = current_arrays.iter().position(|x| x.name == decoded.name) {
                     current_arrays[pos] = decoded;
@@ -256,6 +258,7 @@ fn decode_step_payload_ref(base: &StepPayloadRef, sym: &[String]) -> StepPayload
                 name: get_sym(sym, a.name_idx),
                 element_ty: get_sym(sym, a.element_ty_idx),
                 elements: a.elements.clone(),
+                truncated: a.truncated,
             })
             .collect(),
         pointer_snapshots: base
