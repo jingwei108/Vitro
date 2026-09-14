@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (CI 门禁)：Bytecode Libc 预编译产物在更名提交中被"文本替换"而非重生成——`--check` 自 `3a5e2f8` 起必红
+
+CI 在 `python scripts/precompile_bytecode_libc.py --check` 失败（产物记录
+`sha256:7077ef0c…` ≠ 当前计算 `sha256:1fdb34bf…`）。逐层取证后确认这是**真实的产物漂移**，
+不是门禁误报：
+
+- **根因（更名改变了源文件遍历顺序，产物却是文本替换的）**：更名提交把
+  `native/runtime_libc/cide/` 改名为 `vitro/`。摘要按**整路径排序**遍历源文件，而
+  `cide/` 排序在 `src/` **之前**、`vitro/` 排在 `src/` **之后** → 预编译单元的文件拼接顺序
+  整体改变（`.cpp` 侧行号 +176、`.c` 侧 −359）。但该提交对产物只做了逐行文本替换
+  `cide_`→`vitro_`（`git show --stat -M` = 132+/132−，全文件 32989 行），**没有重跑预编译
+  脚本** → `source_digest` 冻结在更名前取值，门禁从该提交起必红（本地与 CI 一致，故排除
+  mtime / 平台差异；`cide/`↔`vitro/` 的排序反转已用 `git show 18511d1:` 源文件复现出
+  记录值 `7077ef0c…` 验证到字节）。
+- **修复**：以当前 HEAD 编译器重跑 `python scripts/precompile_bytecode_libc.py`（`code_len`
+  3485 / 88 函数 / `globals_size` 4 均不变，仅布局与元数据更新）。
+- **零语义漂移取证**：新旧产物 88 个函数逐一比对——归一化（忽略跳转/调用目标与
+  `StepEvent` 行号）后 **3485 条指令的多重集完全相同**，0 个函数指令流不同；差异只有
+  三类即函数发射顺序、`SourceLoc` 行号、固定索引重分配（23 个函数），全部可由文件遍历
+  顺序变化解释。即：更名期间的产物虽"元数据陈旧"，但语义与当前编译器一致。
+- **验收（2026-09-14 实测）**：`--check` 绿；cargo 71 套件 **1000 passed / 0 failed**；
+  clippy `--all-targets --all-features -D warnings` 零警告；C Shadow 675（668 match +
+  3 known_issue + 4 gap_extension，非预期 0）；C++ Shadow 97（预期 gap 2，非预期 0）；
+  serve 冒烟 57/57；replay 61/61。
+- **流程教训**：产物是**生成物**，任何触及 `native/runtime_libc/` 的路径/内容改动
+  （含目录改名）都必须重跑脚本，禁止对产物做批量文本替换——排序敏感的摘要正是为拦住
+  这类"看起来等价"的改动而存在。
+
 ### Fixed (性能)：U2#2-b freed_logs 索引化——UAF 检测窗口的 O(16k) 扫描根治（1M churn 34.8s → 1.45s，累计 41.7×）
 
 U2#2-a 的登记跟进批。稳态推演修正后归因确认：churn 稳态下**隔离区容量内
