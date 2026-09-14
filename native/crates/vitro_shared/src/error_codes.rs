@@ -28,6 +28,8 @@ pub enum ErrorCode {
     E1020_StaticAssertFailed = 1020,
     /// include 目标不存在（U1#11 H-1：此前静默跳过、错误错位到使用点）。
     E1021_IncludeNotFound = 1021,
+    /// U3#4：函数/类模板实例化轮数超上限（对齐 clang -ftemplate-depth 语义）。
+    E1022_TemplateInstantiationLimit = 1022,
     E2001_ExpectedType = 2001,
     E2002_ExpectedArraySize = 2002,
     E2003_ExpectedExpr = 2003,

@@ -34,6 +34,23 @@ buf/指针两形态语义等价契约测试 ×2。
 - `call_user_function` 非 4 字节参数比较器：assert! panic → 教学 trap
   （检查前移至状态保存前，零污染）
 
+### Fixed (U3#4/#5/#8)：模板实例化三缺陷
+
+- **T1 实例化轮数上限**：`template<class T> int f(T t){return f(&t);}` 无限
+  实例化（f<int>→f<int*>→…，一行代码 OOM 编译器，外部审查 3 秒栈溢出实锤）
+  → Pass 3.6 循环加 1024 轮上限（对齐 clang -ftemplate-depth），超限新码
+  **E1022_TemplateInstantiationLimit** 确定性诊断（触发锚 0.59s 有限完成）
+- **T2 类实例化同收敛 drain**：pending_class 只在 Pass 3 后排空一次，Pass 3.6
+  期间新发现的类被静默丢弃（合法 C++ 误拒）→ 类与函数在循环内同 drain +
+  check_class_methods；**根因另有一层**：函数模板实例化体的 VarDecl 替换把
+  TemplateId 静态 mangle 成 Class 名，跳过 visit 阶段的类合成与布局注册
+  （`v.push_back(a)` 解析方法签名时 classes.get = None）→ 新增
+  replace_template_type_preserve_tiid（VarDecl 路径保留 TemplateId）
+- **U3#8 容器重复实例化查重前置**：第二个 `vitro_vec<Foo>` 曾在
+  register_single_class_layout 报 E3002"类重复定义"（合法代码被拒，错误
+  级联后常显形 E3023）→ 合成前查重（已注册返回占位名）+ push 点
+  instantiated_class_names 单源查重
+
 ### Fixed (U3#2 先遣)：变参 double/long long 实参的 8 字节位模式中转
 
 从 4 字节 slot0 + 占位 slot1 止血迁至 8 字节专用槽（call.rs 四处：

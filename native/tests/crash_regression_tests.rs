@@ -784,3 +784,23 @@ fn test_normal_depth_expressions_not_affected_by_budget() {
     let result = compile_and_run(&src);
     assert!(result.is_ok(), "30 层括号 + 100 项加法的合法表达式不应被拒: {:?}", result.err());
 }
+
+/// U3#4/T1（2026-09-14）：模板实例化轮数上限的可触发性锚（保险丝义务）——
+/// `template<class T> int f(T t){return f(&t);}` 每轮生成更深指针类型的实例
+/// （f<int>→f<int*>→f<int**>→…），修复前无限实例化直至内存耗尽（外部审查
+/// 3 秒栈溢出实锤；OOM 形态无法安全运行留痕，同 register_function 先例）。
+/// 修复后 1024 轮上限触发 E1022 确定性诊断（有限时间内完成——本锚本身
+/// 即"上限真实存在且可触发"的证明）。
+#[test]
+fn test_u3_template_instantiation_round_limit_triggered() {
+    let src = "template <class T> int f(T t) { return f(&t); }\nint main() { return f(1); }\n";
+    let (tokens, _) = vitro_native::compiler::lexer::Lexer::with_mode(src, true).tokenize();
+    let (program, errs) = vitro_native::compiler::parser::Parser::with_mode(tokens, true).parse();
+    assert!(errs.is_empty(), "parse: {errs:?}");
+    let mut program = program.unwrap();
+    let (type_errors, _, _) = vitro_native::compiler::typeck::TypeChecker::default().check(&mut program);
+    assert!(
+        type_errors.iter().any(|e| e.code == 1022),
+        "自递归模板必须在轮数上限处确定性报错（E1022），实际：{type_errors:?}"
+    );
+}

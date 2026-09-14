@@ -6,7 +6,14 @@ impl TypeChecker {
         match ty.clone() {
             Type::TemplateId { base, args, .. } => {
                 if let Some((mangled, new_class)) = self.try_monomorphize_class(&base, &args) {
-                    self.pending_class_instantiations.push((mangled.clone(), new_class));
+                    // U3#8：push 前查重——pending 队列或 program.classes 已有
+                    // 同名实例时不再入队（占位/重复 decl 不得覆盖真实布局）
+                    let known = self.pending_class_instantiations.iter().any(|(n, _)| n == &mangled)
+                        || self.instantiated_class_names.contains(&mangled);
+                    if !known {
+                        self.instantiated_class_names.insert(mangled.clone());
+                        self.pending_class_instantiations.push((mangled.clone(), new_class));
+                    }
                     Type::Class { name: mangled, is_const: false }
                 } else if !self.templates.contains_key(&base) {
                     self.report_error(&format!("未知模板类 '{}'", base), loc, ErrorCode::E3023_UndeclaredVar);
@@ -53,6 +60,41 @@ impl TypeChecker {
                 Type::RValueRef { base: Box::new(new_inner) }
             }
             _ => ty.clone(),
+        }
+    }
+
+    /// U3#5：函数模板实例化体的 VarDecl 类型替换用本变体——TemplateId
+    /// **保留形态**（只替换其 args 内部的模板参数），让后续 visit_func_decl
+    /// 的类型解析走 resolve_template_id 触发类合成与布局注册。
+    /// 此前共享版把 TemplateId 静态 mangle 成 Class 名，visit 不再识别为
+    /// 待实例化模板 → 布局从未注册 → 体内 `v.push_back(a)` 解析方法签名时
+    /// classes.get(mangled) = None → 合法 C++ 误拒 E3042。
+    /// （类模板成员路径仍用 mangle 版——成员不经 visit，需立即定名。）
+    fn replace_template_type_preserve_tiid(
+        &self,
+        ty: &Type,
+        type_map: &HashMap<String, Type>,
+        value_map: &HashMap<String, i32>,
+    ) -> Type {
+        match ty {
+            Type::TemplateId { base, args, is_const } => {
+                let new_args: Vec<TemplateArg> =
+                    args.iter().map(|a| self.replace_template_arg(a, type_map, value_map)).collect();
+                Type::TemplateId {
+                    base: base.clone(),
+                    args: new_args,
+                    is_const: *is_const,
+                }
+            }
+            Type::Pointer { pointee, is_const } => Type::Pointer {
+                pointee: Box::new(self.replace_template_type_preserve_tiid(pointee, type_map, value_map)),
+                is_const: *is_const,
+            },
+            Type::Reference { base, is_const } => Type::Reference {
+                base: Box::new(self.replace_template_type_preserve_tiid(base, type_map, value_map)),
+                is_const: *is_const,
+            },
+            _ => self.replace_template_type(ty, type_map, value_map),
         }
     }
 
@@ -165,9 +207,10 @@ impl TypeChecker {
     ) {
         match stmt {
             Stmt::VarDecl { var_type, init, extra_vars, .. } => {
-                *var_type = self.replace_template_type(var_type, type_map, value_map);
+                // U3#5：保留 TemplateId（见 replace_template_type_preserve_tiid）
+                *var_type = self.replace_template_type_preserve_tiid(var_type, type_map, value_map);
                 for (ety, _, einit) in extra_vars.iter_mut() {
-                    *ety = self.replace_template_type(ety, type_map, value_map);
+                    *ety = self.replace_template_type_preserve_tiid(ety, type_map, value_map);
                     if let Some(ref mut e) = einit {
                         self.replace_template_types_in_expr(e, type_map, value_map);
                     }

@@ -59,3 +59,18 @@ impl TypeChecker {
         Stmt::Expr { expr, loc }
     }
 }
+
+impl TypeChecker {
+    /// U3#8：查重命中时返回的占位 decl——名字与已注册实例一致但成员为空，
+    /// 供调用方拿到正确的 mangled 名；**不得**进入 program.classes（push 点
+    /// 查重会拦截），避免同名空类覆盖真实布局。
+    pub(crate) fn placeholder_class(name: &str, loc: SourceLoc) -> ClassDecl {
+        ClassDecl {
+            loc,
+            name: name.to_string(),
+            base: None,
+            members: Vec::new(),
+            vtable: None,
+        }
+    }
+}

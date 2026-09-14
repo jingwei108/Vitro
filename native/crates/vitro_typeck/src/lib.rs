@@ -51,6 +51,9 @@ pub struct TypeChecker {
     pub(crate) pending_instantiations: Vec<(String, FuncDecl)>,
     /// Class template instantiations discovered during type checking; appended to program.classes at the end.
     pub(crate) pending_class_instantiations: Vec<(String, ClassDecl)>,
+    /// U3#8：已见过的类模板实例化名（含已 drain 进 program.classes 的）——
+    /// push 前查重的单源，防止重复实例化（第二个 vitro_vec<Foo> 的 E3002 假错误）。
+    pub(crate) instantiated_class_names: std::collections::HashSet<String>,
     /// Lambdas discovered during type checking; lifted to ClassDecl + FuncDecl at the end.
     pub(crate) pending_lambdas: Vec<LambdaInfo>,
     /// W0-4（R-2026-09-12）：初始化器 char 窄化警告豁免开关。
@@ -87,6 +90,7 @@ impl Default for TypeChecker {
             current_method_is_const: false,
             pending_instantiations: Vec::new(),
             pending_class_instantiations: Vec::new(),
+            instantiated_class_names: std::collections::HashSet::new(),
             pending_lambdas: Vec::new(),
             char_narrow_suppress: false,
         }
@@ -266,7 +270,9 @@ impl TypeChecker {
         // (e.g. `template class vitro_vec<int>;`).
         for inst in &program.template_instantiations {
             if let Some((mangled, new_class)) = self.try_monomorphize_class(&inst.base, &inst.args) {
-                self.pending_class_instantiations.push((mangled, new_class));
+                if self.instantiated_class_names.insert(mangled.clone()) {
+                    self.pending_class_instantiations.push((mangled, new_class));
+                }
             } else if !self.templates.contains_key(&inst.base) {
                 self.report_error(
                     &format!("未知模板类 '{}'", inst.base),
@@ -371,13 +377,46 @@ impl TypeChecker {
         // Function template instantiations discovered during Pass 3/3.5 may contain
         // further template calls (e.g. sort__int calls sort_rec__int), so we loop
         // until no new instantiations are generated.
-        while !self.pending_instantiations.is_empty() {
+        //
+        // U3#5（T2）：类实例化与函数实例化**同收敛** drain——此前类只在 Pass 3
+        // 后排空一次，本循环期间新发现的类（函数模板体内的 vitro_list<T> 等）
+        // 被静默丢弃，合法 C++ 误拒（E3023/E3042 级联）。
+        // U3#4（T1）：实例化轮数上限（对齐 clang -ftemplate-depth=1024）——
+        // `template<class T> int f(T t){return f(&t);}` 每轮生成 f<T*>→f<T**>→…
+        // 无限实例化直至 OOM（外部审查 3 秒栈溢出实锤）；超限确定性报错。
+        const MAX_TEMPLATE_INSTANTIATION_ROUNDS: usize = 1024;
+        let mut rounds = 0usize;
+        while !self.pending_instantiations.is_empty() || !self.pending_class_instantiations.is_empty() {
+            rounds += 1;
+            if rounds > MAX_TEMPLATE_INSTANTIATION_ROUNDS {
+                self.report_error(
+                    &format!(
+                        "模板实例化超过 {} 轮上限——存在无界实例化（如 f(&t) 自递归，每轮生成更深指针类型）。请检查模板递归终止条件。",
+                        MAX_TEMPLATE_INSTANTIATION_ROUNDS
+                    ),
+                    &SourceLoc::default(),
+                    ErrorCode::E1022_TemplateInstantiationLimit,
+                );
+                self.pending_instantiations.clear();
+                self.pending_class_instantiations.clear();
+                break;
+            }
             let pending: Vec<_> = std::mem::take(&mut self.pending_instantiations);
             for (_, mut f) in pending {
                 if f.body.is_some() {
                     self.visit_func_decl(&mut f);
                 }
                 program.funcs.push(f);
+            }
+            let pending_classes: Vec<_> = std::mem::take(&mut self.pending_class_instantiations);
+            let got_new_class = !pending_classes.is_empty();
+            for (_name, c) in pending_classes {
+                program.classes.push(c);
+            }
+            if got_new_class {
+                // 新类的方法体/构造析构需要检查（与 Pass 3.5 同语义）
+                self.check_class_methods(program);
+                self.generate_implicit_move_ctors(program);
             }
         }
 

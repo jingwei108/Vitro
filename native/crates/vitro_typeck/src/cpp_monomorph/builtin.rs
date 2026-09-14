@@ -20,13 +20,26 @@ impl TypeChecker {
         if !matches!(elem_ty, Type::Class { .. }) {
             return None;
         }
+        // U3#8：查重前置——第二次遇到同 (base, elem) 时此前仍无条件合成并
+        // register_single_class_layout，后者对已注册名报 E3002"类重复定义"
+        //（合法代码被拒：第二个 vitro_vec<Foo>；错误级联后常显形为 E3023）。
+        // 已注册 = 返回已存在的 mangled（Some + 空哑 decl 不入 pending——
+        // 由调用方 push 点的查重兜住），不重复合成、不重复注册。
+        let mangled_probe = Self::mangle_template_name(base, std::slice::from_ref(&TemplateArg::Type(elem_ty.clone())));
+        let already = self.classes.contains_key(&mangled_probe) || self.structs.contains_key(&mangled_probe);
         match base {
             "vitro_vec" => {
+                if already {
+                    return Some((mangled_probe.clone(), Self::placeholder_class(&mangled_probe, *loc)));
+                }
                 let (mangled, new_class) = self.synthesize_vec_class(elem_ty, loc);
                 self.register_single_class_layout(&mangled, &new_class);
                 Some((mangled, new_class))
             }
             "vitro_list" => {
+                if already {
+                    return Some((mangled_probe.clone(), Self::placeholder_class(&mangled_probe, *loc)));
+                }
                 let (mangled, new_class) = self.synthesize_list_class(elem_ty, loc);
                 self.register_single_class_layout(&mangled, &new_class);
                 Some((mangled, new_class))
