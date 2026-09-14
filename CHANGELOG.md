@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (防线 6①)：算法标注 golden 固化 + CI 接线（U1#1 收官批，2026-09-14）
+
+二审（`算法标注golden审阅意见二审20260913.md`）全部 P0/P1 修复落地后的收尾：
+
+- **全量重提取**（对齐 serve 口径，R2 后 step.next 首调空帧天然适配）：82 模板
+  = **37 有标注（317 条首现 / 113 个 (模板,phase) 行）+ 45 零标注**——比二审
+  §4.2 预期 34 多出的 3 个恰为 P0-B 批复亮的 bstInsert/bstSearch/bstDelete
+  （4/7/11 条），口径吻合；零错误帧；
+- **golden 固化 + CI**：`native/tests/golden/algorithm_annotations_v3.json`
+  + `algorithm_annotation_golden_test`（Rust 直调 `session_api`——须走
+  `session_api::compile`（内含算法检测）而非裸 compile_pipeline，直调管线
+  全零标注的实证已锚进注释）；双向防漂移断言（有标注模板集与 golden 键集
+  严格相等——新复亮/新转零均红）；J9 埋雷证红（改一条 desc → 红 → 还原绿）；
+- **golden 定位（诚实边界）**：三审修复链后的**行为基线快照，非语义人审认证**
+  ——人审勾选在基线上继续，更新 golden 须附红→绿锚；
+- **§7.4 has_word 表格化单测**（`has_word_segmentation_table`，21 例穷举二审
+  手算五形的"大写段末归属"规则）；**§7.1 定性**：`finished` 信号已存在（二审
+  提取器未消费），但**结束后 step.next 重复发布末帧**（run_batch 终态重放，
+  实测 call#92+ 重发 s=89，违反"每真实步恰投递一次"）——消费方 finished 即停
+  故低危，**登记待修**；§6 判据层专属锚未单独补齐（golden 317 条全量锚已
+  实质覆盖防漂移诉求，登记豁免理由）。
+
+验收：cargo **70 套件**全绿（+1 golden 套件，15.5s）/ clippy 零警告。
+
 ### Fixed (性能/正确性)：U2#2-a regions addr 索引化 + Q7-G6 复核关闭（分段饱和定论，行为零漂移）
 
 **Q7-G6 复核收尾**（裁定 §5.4 表内"待复核"矛盾的证据仲裁，2026-09-14 关闭）：

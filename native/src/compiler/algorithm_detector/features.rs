@@ -754,6 +754,39 @@ mod tests {
         assert!(has_word("BSTInsert", "insert"), "BSTInsert 的 I 应归下词");
     }
 
+    /// 二审 §7.4：`has_word` 等价性表格化单测——按「大写段末大写归属」规则
+    /// 穷举二审手算核对五形（isValidBST / BSTInsert / getHTTPResponse /
+    /// subString / bestEffort），防止后续改切分规则时无声漂移。
+    #[test]
+    fn has_word_segmentation_table() {
+        let cases: &[(&str, &str, bool)] = &[
+            ("isValidBST", "bst", true),
+            ("isValidBST", "valid", true),
+            ("isValidBST", "is", true),
+            ("isValidBST", "validb", false),
+            ("BSTInsert", "bst", true),
+            ("BSTInsert", "insert", true),
+            ("BSTInsert", "bstinsert", false),
+            ("getHTTPResponse", "http", true),
+            ("getHTTPResponse", "response", true),
+            ("getHTTPResponse", "get", true),
+            ("getHTTPResponse", "ttp", false),
+            ("subString", "bst", false),
+            ("subString", "sub", true),
+            ("subString", "string", true),
+            ("bestEffort", "best", true),
+            ("bestEffort", "effort", true),
+            ("bestEffort", "bst", false),
+            ("bst_insert", "bst", true),
+            ("bst_insert", "insert", true),
+            ("bst2insert", "insert", true),
+            ("bst2insert", "bst", true),
+        ];
+        for (name, word, want) in cases {
+            assert_eq!(has_word(name, word), *want, "has_word({:?}, {:?})", name, word);
+        }
+    }
+
     /// 反向锚：subString 里的 bst 子串不得命中（用户修复的原目标）。
     #[test]
     fn substring_still_not_matched() {
