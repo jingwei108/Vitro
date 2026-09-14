@@ -1,38 +1,19 @@
-# 算法标注 golden 人审清单（防线 6 · U1#1 ①，**v4 2026-09-14**）
-
-> **§6 代码侧第二批落地（2026-09-14 同日）——五项文案/挂载点修复，人审 ✗
-> 键全数处置**：#3 dp 子族具名（币种/物品循环，`dp_outer_subject`/
-> `dp_inner_subject` 特征词检测）；#4 insertion 位置 0 降级消除（`prev_vars`
-> 行入口 j，四变体文案统一）；#5 hanoi/finish 按 func_name 区分递归层返回
-> + topo/output 挂真 printf 行（出队独立新词条 `dequeue`）；#6
-> quick/partition_init 文案改"分区完成，枢轴落位下标"（phase 名另行裁定）；
-> #7 KMP 新词条 `build_nextval` 分离 nextval 段。**golden 基线：37 模板 /
-> 310 条 / 113 键**（300→310 = nextval 变体分离等）。§6 至此除 #8（历史
-> 登记复核项）与 #9（已修）外全部落地；⛔ 8 键的归属表达（golden 已带
-> algorithm 字段）待人审按算法分行复判后降级。
->
-> **§6 代码侧首批落地（2026-09-14 同日，红→绿）**：① §6-1 golden 增
-> `algorithm`/`display_name` 字段（三审 P0-2 裁定 (b) 落地——§1.2 的 8 个 ⛔
-> 键由此获得归属证据，算法标签漂移可检）；② §6-9 终态末帧重放根治
-> （`is_finished` 短路，红锚 `test_step_next_after_finish_no_tail_replay`）；
-> ③ §6-2 dp 初始化内层排除（j 分支补 `dp_loop_body_is_init`，✗ 键中的
-> `dpKnapsack/inner_loop`、`dpLCS/inner_loop`、`matrixChain/inner_loop` 三键
-> 修复——dpLCS 首现移真循环 L14，dpKnapsack/matrixChain 转无首现（内层是
-> w/k 变量、判据只认 j，属 §4 覆盖缺口非回归）。**golden 基线随批更新：
-> 37 模板 / 300 条 / 111 键**（317→300 = 三个模板的 17 个初始化变体，均为人审
-> ✗ 项）。§6 剩余：#3 dp 子族具名 / #4 insert 降级 / #5 hanoi 与 topo 挂载 /
-> #6 partition_init / #7 nextval 分段。
+# 算法标注 golden 人审清单（防线 6 · U1#1 ①，**v5 2026-09-14**）
 
 ## 0. 当前状态
 
 - **基线 = v3 golden**（`native/tests/golden/algorithm_annotations_v3.json`，已接 CI）：
-  **82 个 C 模板 = 37 有标注（317 条首现 / 113 个 (模板, phase) 键）+ 45 零标注**，0 错误帧。
-- **本版（v4）**：按《算法标注golden审阅意见三审20260914.md》§5 完成 8 项修复，
-  并在重建后的表上**以审阅人身份逐行判定**——结果 **✅ 94 / ✗ 11 / ⛔ 8**（113 键）。
+  **82 个 C 模板 = 37 有标注（310 条首现 / 113 个 (模板, phase) 键）+ 45 零标注**，0 错误帧。
+- **v4 → v5 两轮**：
+  1. **v4**：按《算法标注golden审阅意见三审20260914.md》§5 完成 8 项文档修复，并在重建后的
+     表上**以审阅人身份逐行判定**——首判 **✅ 94 / ✗ 11 / ⛔ 8**。
+  2. **v5（本版）**：§6 代码侧两批落地后（提交 `a528a4a` / `9cd1aa8`，含 golden 增 `algorithm` 归属），
+     **对 8 个 ⛔ 键按算法复判**，并复判 11 个 ✗ 键与 2 个新词条——结果
+     **✅ 110 / ✗ 3 / ⛔ 0**（113 键 / 310 条）。
 - **golden 定位（不变）**：三审修复链后的**行为基线快照，不是语义认证**。本表的人审结论
   与 golden 的差异即"基线已知偏差点"清单（§2），更新 golden 须附红→绿锚。
 - **口径（钉死，消除历史歧义）**：
-  1. 提取单位 = **每 `(phase, description)` 首现**（golden 的存储单位，本表「条」列之和 = 317）；
+  1. 提取单位 = **每 `(phase, description)` 首现**（golden 的存储单位，本表「条」列之和 = 310）；
      本表**按 `(模板, phase)` 折叠成一行**，「首现 description」列 = 该键下最先出现的那条。
   2. 取帧路径 = **serve 的 `step.next`**（学生端同款，含一帧延迟发布）；
      与 `payload.get`（引擎帧缓存）结果可能不同，**勿混作一谈**。
@@ -57,54 +38,84 @@
 | 5 | 四层头注数字互斥（37+45 / 36+46 / 38+44 / 34+48） | 头注收敛为本节，历史三批移入**附录 A（冻结·只读）** |
 | 6 | §3 档 A 建议①"改函数名对 golden 无影响"错误 | §3 改为「须同步更新 golden 并附红→绿锚」（golden 存 `src`） |
 | 7 | §6 引用不存在的「§1.2」 | §7 改为「附录 A.2」 |
-| 8 | golden 的 `algorithm` 归属不可见（bstSearch/bstDelete 混流无从判断） | 本版另跑 `tmp/annot_extract_v4_20260914.json` 取回 `algorithm_name / display_name / func_name`，**表内「算法」列与 M4 标记即由此而来**；golden schema 是否补字段见 §7 |
+| 8 | golden 的 `algorithm` 归属不可见（bstSearch/bstDelete 混流无从判断） | v4 先跑 `tmp/annot_extract_v4_20260914.json` 取回 `algorithm_name / display_name / func_name`（表内「算法」列与 M4 标记由此而来）；**v5 复核时该字段已由 `a528a4a` 正式写入 golden**（§0.2） |
 
-> **未改代码**：本版只动文档与审阅结论（+ 一个临时探针脚本 `tmp/annot_extract_v4.py`）。
-> 需要改代码才能落地的项集中登记在 §7。
+> **v4 只动文档**（+ 临时探针 `tmp/annot_extract_v4.py`）；**v5 不含任何代码改动**——
+> §6 代码侧由提交 `a528a4a`（golden 增归属 + 终态末帧重放根治 + dp 初始化内层排除）、
+> `9cd1aa8`（dp 子族具名 / insertion / hanoi-finish / topo-output / quick-partition / KMP nextval）落地，
+> 本轮只看结果、不碰代码。
+
+### 0.2 复判（v5，2026-09-14）
+
+| 复判对象 | 依据 | 结果 |
+|----------|------|------|
+| **8 个 ⛔ 键**（`bstSearch`/`bstDelete` × `recursive`/`create`/`compare`/`finish`） | golden 已增 `algorithm`/`display_name`（`a528a4a`），可按算法分行看 | **全部降为 ✅**——每条文案与其 `algorithm_name` 自洽（§1.2） |
+| 11 个 ✗ 键 | `9cd1aa8` 自报"人审 ✗ 键全数处置" | **7 键转 ✅**、**2 键整体消失**（`dpKnapsack`/`matrixChain` 的 `inner_loop` 缺陷键被移除）、**2 键仍 ✗**（`9cd1aa8` 的处置清单未覆盖） |
+| 2 个新词条 | 本轮改动新引入 | `topologicalSort/dequeue` ✅；`computeNextVal/build_nextval` **✗（复判新发现，见 §1.1）** |
+
+**基线一致性复核**：`tmp/annot_extract_v5_20260914.json`（当前 release 构建 × 4000 步）
+与当前 golden **逐条 0 差异**——310 条 / 113 键 / 37 模板，CI 基线可复现。
 
 ## 1. 审阅统计与结论
 
 | 判定 | 键数 | 含义 |
 |------|------|------|
-| ✅ 可进 golden | **94** | phase 与所挂语句一致、文案语义正确（含可接受的顶层调用帧） |
-| ✗ 必须改写 | **11** | 文案/挂载行/相位有误——**不阻断 golden 存在，但学生所见文案应修** |
-| ⛔ 必须作废或移出 | **8** | 归属不属于本模板主算法（§2 的 bst 混流），需先裁定归属表达方式 |
-| 合计 | **113** | 与 v3 golden 的 (模板, phase) 键数一致 |
+| ✅ 可进 golden | **110** | phase 与所挂语句一致、文案语义正确（含可接受的顶层调用帧） |
+| ✗ 必须改写 | **3** | 文案/挂载行/相位有误——**不阻断 golden 存在，但学生所见文案应修** |
+| ⛔ 必须作废或移出 | **0** | （v4 曾为 8 键 bst 归属不可表达；v5 复判后**归零**） |
+| 合计 | **113** | 与当前 golden 的 (模板, phase) 键数一致 |
 
-**一句话结论**：作为行为基线，v3 golden 是**可信的漂移探测器**；作为教学内容，
-有 **11 键文案需修、8 键归属需裁定**。两件事不要混着做——先按 §7 落地，
-再更新 golden 并附锚。
+**一句话结论**：基线可信且可复现（逐条 0 差异）；**⛔ 归零**——bst 归属已由 golden 的
+`algorithm` 字段表达清楚，那 8 键是"建树准备阶段"的帧，内容与归属都正确。
+剩余 **3 键是纯文案/挂载点问题**，不阻断 golden，登记待修。
 
-### 1.1 ✗ 必须改写（11 键）
+### 1.1 ✗ 必须改写（3 键）
 
-- **挂载点错（4 键）**：`dpKnapsack/inner_loop`、`dpLCS/inner_loop`、`matrixChain/inner_loop`
-  三条挂在 **dp 初始化双层循环**上（P1-1 已登记的"多行 for 体不可达"边界）；
-  `topologicalSort/output` 挂在出队行（输出在 L18 printf）。
-- **文案与挂载行不符（3 键）**：`binarySearchTreeValidation/recursive`（顶层调用行挂"递归体内分支收窄"）、
-  `hanoi/recursive`（顶层调用行挂问题陈述）、`hanoi/finish`（n==1 分支的 `return;` 挂"移动完成"）。
-- **值/时刻错位（2 键）**：`quick/partition_init`（"pivot=0" 是分区后**落位下标**，phase 名却是"分区初始化"）、
-  `computeNextVal/build_next`（文案说"构建 next"却挂在 nextval 赋值行）。
-- **文案不唯一/降级（2 键）**：`insertion/insert`（位置为 0 时降级成"将 key=11 插入"，同键两态）、
-  `dpCoinChange/outer_loop`（i 是币种索引，"遍历子问题"不成立）。
+- **`computeNextVal/build_nextval`（复判新发现）**：「构建 nextval 数组，**nextval[-1]**」挂在
+  L23 `nextval[0] = -1;`——**下标位被填成了值**（-1 是值，下标应为 0）；且该词条只给下标不给值
+  （`nextval[2]`/`nextval[3]`…），与 `构建 next 数组，next[N]=V` 的格式不一致。
+  建议统一为 `构建 nextval 数组，nextval[0]=-1`。
+- **`binarySearchTreeValidation/recursive`（旧判未处置）**：首现仍挂 L32 顶层调用行（M3），
+  文案仍描述递归体内两分支（L22/L23 区间收窄）——文案与所挂语句不符。
+  建议改入口语义，或把首现挂到 L22 的递归调用行。
+- **`hanoi/recursive`（旧判未处置）**：#5 只改了 `finish`；首现仍是 L15 顶层调用帧（M3）上的
+  **问题陈述**「移动 3 个盘子的汉诺塔问题」。建议改入口语义「从 A 柱移动 3 个盘子到 C 柱」。
 
-### 1.2 ⛔ 必须作废或移出（8 键）
+**已由 §6 代码侧消除的旧 ✗（9 键：7 转 ✅ + 2 键消失，留痕备查）**：dp 初始化循环挂载 ×3
+（`dpKnapsack`/`matrixChain` 的 `inner_loop` **缺陷键整体消失**，`dpLCS/inner_loop` 首现移回真内层 L14）、
+`topologicalSort/output` 挂载点、`hanoi/finish` 文案、`insertion/insert` 两态、
+`quick/partition_init` 值/下标、`dpCoinChange/outer_loop` 具名、`computeNextVal/build_next` nextval 混入。
+**仍 ✗ 的 2 键**（`binarySearchTreeValidation/recursive`、`hanoi/recursive`）不在 `9cd1aa8` 的处置范围内。
 
-全部集中在 **bst 家族跨算法混流**：`bstSearch`(4) + `bstDelete`(4) 的
-`recursive / create / compare / finish` 首现都落在 **main 里 `insert()` 建树阶段**的帧上
-（`func_name=insert`），文案是插入语义（"找到空位，创建新节点"/"BST 插入完成"）。
-它们**内容本身没错**——学生的程序确实在建树——错的是**归属**：这些帧的
-`algorithm_name` 是 `bst_insert`，不是 `bst_search`/`bst_delete`。
+### 1.2 ⛔ 已消除（8 键 → ✅）
 
-> 裁定建议：**golden 增 `algorithm_name` 字段**（载荷一直带着它，见 §6-1），
-> 人审表按"算法"分行勾选，本 8 键即可从 ⛔ 降为 ✅（归属 bst_insert）。
-> 在那之前，它们不能算作 bstSearch/bstDelete 的教学标注。
+v4 判 ⛔ 的唯一理由是**归属不可表达**：`bstSearch`(4) + `bstDelete`(4) 的
+`recursive / create / compare / finish` 首现落在 **main 里 `insert()` 建树阶段**的帧上
+（`func_name=insert`、`algorithm_name=bst_insert`），内容本身没错——学生的程序确实在建树。
 
-## 2. 主审表（113 键 / 317 条）
+v5 复判（golden 已有 `algorithm` 字段）逐条核对：
 
-列说明：「算法」= 该键下所有帧的 `algorithm_name`（多个即混流）；「条」= 该键下不同
+| 键 | 条目 | 判定 |
+|----|------|------|
+| `bstSearch/recursive` | [bst_insert] @L37 建树 ／ [bst_search]「递归进入子树查找」@L42 | ✅ 两条各自自洽 |
+| `bstSearch/compare` | [bst_insert] @L20 ／ [bst_search]「比较关键字与当前节点值」@L29 | ✅ |
+| `bstDelete/recursive` | [bst_insert] @L64 ／ [bst_delete]「递归在子树中定位并删除目标节点」@L71 | ✅ |
+| `bstDelete/compare` | [bst_insert] @L20 ／ [bst_delete]「比较目标关键字与当前节点值，决定递归方向」@L34 | ✅ |
+| `bstSearch`/`bstDelete` × `create` / `finish` | 仅 [bst_insert]（建树准备阶段） | ✅ 内容与归属一致 |
+
+> **残留观察（不判缺陷，供消费方考虑）**：4 个单归属键（`bstSearch`/`bstDelete` 的
+> `create`/`finish`）只承载 bst_insert 的建树语义，且**键级首现仍是建树帧**——因此按
+> `(模板, phase)` 排序展示时，bstSearch/bstDelete 的前几条会是"插入"。golden 已能表达
+> 归属，**消费方应按 `algorithm` 分组**（或把准备阶段单独呈现）；`bst_search`/`bst_delete`
+> 自身无 `create`/`finish` phase 已登记在 §4。
+
+## 2. 主审表（113 键 / 310 条）
+
+列说明：「算法」= 该键下所有帧的 `algorithm_name`（多个即"一键多算法"，见 M4 注，非缺陷）；「条」= 该键下不同
 `(phase, description)` 数；「首现 description」= 该键最先出现的那条文案；「行」= 首现挂载行号；
 「质检」= 机器可判标记（M1 未解析值 `?` / M2 结构位点哨兵 `-1` / M3 顶层调用帧 /
-M4 归属混流 / M5 同键文案多态）；「审阅」= 本次判定。
+M4 一键多算法（v5 起按"**非缺陷**"读：同一模板的不同阶段由不同算法产出标注，
+见下 M5 注）/ M5 同键文案多态）；「审阅」= 本次判定。
 
 | # | 模板 | 算法 | phase | 条 | 首现 description | 行 | 质检 | 审阅 | 备注 |
 |---|------|------|-------|----|------------------|----|------|------|------|
@@ -117,13 +128,13 @@ M4 归属混流 / M5 同键文案多态）；「审阅」= 本次判定。
 | 7 | `binary` | binary_search | `loop` | 1 | 搜索范围 [0, 4] | 5 | — | ✅ | L5 `while (left <= right)` ✓ |
 | 8 | `binary` | binary_search | `mid_calc` | 1 | 计算中点 mid=2 | 6 | — | ✅ | L6 `int mid = left + (right - left) / 2;`，首现 mid=2 ✓（P0-1 已修） |
 | 9 | `binary` | binary_search | `compare` | 1 | arr[2] 与目标值 5 比较 | 7 | — | ✅ | L7 `if (arr[mid] == target)`，target=5 与默认参数一致 ✓；默认参数一次命中，found/narrow_left 未出现（覆盖面） |
-| 10 | `binarySearchTreeValidation` | bst_validate | `recursive` | 1 | 递归校验子树：左子树区间收窄为 (min, val)，右子树为 (val, max) | 32 | M3 顶层调用帧 | ✗ | 挂 L32 **顶层调用行**，文案却描述递归体内两分支（L22/L23 区间收窄）——文案与所挂语句不符。建议改入口语义：「校验整棵树：以 (INT_MIN-1, INT_MAX+1) 开区间开始」 |
+| 10 | `binarySearchTreeValidation` | bst_validate | `recursive` | 1 | 递归校验子树：左子树区间收窄为 (min, val)，右子树为 (val, max) | 32 | M3 顶层调用帧 | ✗ | **复判仍 ✗（未处置）**：首现仍挂 L32 顶层调用行（M3），文案仍描述递归体内两分支（L22/L23 区间收窄），与所挂语句不符。建议改入口语义「校验整棵树：以 (INT_MIN-1, INT_MAX+1) 开区间开始」，或把首现挂到 L22 递归调用行 |
 | 11 | `binarySearchTreeValidation` | bst_validate | `empty_valid` | 1 | 空子树不违反 BST 性质，判定合法 | 20 | — | ✅ | L20 `if (root == NULL) return 1;` ✓ |
 | 12 | `binarySearchTreeValidation` | bst_validate | `range_check` | 1 | 校验当前节点值：必须严格落在开区间 (min, max) 内，越界即非法 | 21 | — | ✅ | L21 `if (root->val <= min \|\| root->val >= max) return 0;` ✓；缺「校验通过/非法」结论 phase |
-| 13 | `bstDelete` | bst_delete/bst_insert | `recursive` | 2 | 递归查找插入位置 | 64 | M3 顶层调用帧、M4 归属混流、M5 文案多态 | ⛔ | **归属**：首现 L64 `root = insert(root, 5);` 属 bst_insert（建树阶段），非删除步骤；bst_delete 的真实首现是 L71 `deleteNode(root, 3)`。M3+M4+M5 |
-| 14 | `bstDelete` | bst_insert | `create` | 1 | 找到空位，创建新节点 | 19 | — | ⛔ | **归属**：L19 `if (root == NULL) return createNode(val);` 属 bst_insert 建树阶段 |
-| 15 | `bstDelete` | bst_delete/bst_insert | `compare` | 2 | 比较插入值与当前节点值，决定向左或向右 | 20 | M4 归属混流、M5 文案多态 | ⛔ | **归属**：首现 L20 属 bst_insert；bst_delete 侧文案「比较目标关键字与当前节点值，决定递归方向」挂 L34 本正确，被混流盖住（M4） |
-| 16 | `bstDelete` | bst_insert | `finish` | 1 | BST 插入完成 | 24 | — | ⛔ | **归属**：L24 `return root;` 文案「BST 插入完成」属 bst_insert |
+| 13 | `bstDelete` | bst_delete/bst_insert | `recursive` | 2 | 递归查找插入位置 | 64 | M3 顶层调用帧、M4 一键多算法、M5 文案多态 | ✅ | **复判（golden 已带归属）**：2 条各自归属——[bst_insert]「递归查找插入位置」@L64（建树）、[bst_delete]「递归在子树中定位并删除目标节点」@L71 ✓。原 ⛔ 的根因是归属不可见，现降为 ✅ |
+| 14 | `bstDelete` | bst_insert | `create` | 1 | 找到空位，创建新节点 | 19 | — | ✅ | **复判**：唯一条目归属 bst_insert（建树准备阶段），内容与归属一致 ✓。注：bst_delete 自身无 create phase（§4） |
+| 15 | `bstDelete` | bst_delete/bst_insert | `compare` | 2 | 比较插入值与当前节点值，决定向左或向右 | 20 | M4 一键多算法、M5 文案多态 | ✅ | **复判**：2 条各自归属——[bst_insert] @L20、[bst_delete]「比较目标关键字与当前节点值，决定递归方向」@L34 ✓ |
+| 16 | `bstDelete` | bst_insert | `finish` | 1 | BST 插入完成 | 24 | — | ✅ | **复判**：唯一条目归属 bst_insert（「BST 插入完成」@L24）✓。注：bst_delete 自身无 finish phase（§4） |
 | 17 | `bstDelete` | bst_delete | `not_found` | 1 | 搜索到空节点，目标不存在 | 33 | — | ✅ | L33 `if (root == NULL) return NULL;` ✓ |
 | 18 | `bstDelete` | bst_delete | `single_child` | 1 | 判断孩子情况：叶子或单孩子节点可直接摘除 | 39 | — | ✅ | L39 `if (root->left == NULL) {` ✓ |
 | 19 | `bstDelete` | bst_delete | `find_successor` | 1 | 双孩子情况：找右子树最小节点作为中序后继 | 48 | — | ✅ | L48 `struct TreeNode* temp = findMin(root->right);` ✓ |
@@ -133,35 +144,35 @@ M4 归属混流 / M5 同键文案多态）；「审阅」= 本次判定。
 | 23 | `bstInsert` | bst_insert | `create` | 1 | 找到空位，创建新节点 | 19 | — | ✅ | L19 `if (root == NULL) return createNode(val);` ✓ |
 | 24 | `bstInsert` | bst_insert | `compare` | 1 | 比较插入值与当前节点值，决定向左或向右 | 20 | — | ✅ | L20 `if (val < root->val)` ✓ |
 | 25 | `bstInsert` | bst_insert | `finish` | 1 | BST 插入完成 | 24 | — | ✅ | L24 `return root;` ✓（每次递归返回都触发，文案「BST 插入完成」偏强，轻微） |
-| 26 | `bstSearch` | bst_insert/bst_search | `recursive` | 2 | 递归查找插入位置 | 37 | M3 顶层调用帧、M4 归属混流、M5 文案多态 | ⛔ | **归属**：首现 L37 `root = insert(root, 5);` 属 bst_insert；bst_search 侧文案「递归进入子树查找」挂 L42 ✓。M3+M4+M5 |
-| 27 | `bstSearch` | bst_insert | `create` | 1 | 找到空位，创建新节点 | 19 | — | ⛔ | **归属**：L19 属 bst_insert 建树阶段（搜索不创建节点） |
-| 28 | `bstSearch` | bst_insert/bst_search | `compare` | 2 | 比较插入值与当前节点值，决定向左或向右 | 20 | M4 归属混流、M5 文案多态 | ⛔ | **归属**：首现 L20 属 bst_insert；bst_search 侧文案「比较关键字与当前节点值」挂 L29 本正确（M4） |
-| 29 | `bstSearch` | bst_insert | `finish` | 1 | BST 插入完成 | 24 | — | ⛔ | **归属**：L24 文案「BST 插入完成」属 bst_insert |
+| 26 | `bstSearch` | bst_insert/bst_search | `recursive` | 2 | 递归查找插入位置 | 37 | M3 顶层调用帧、M4 一键多算法、M5 文案多态 | ✅ | **复判（golden 已带归属）**：2 条各自归属——[bst_insert] @L37（建树）、[bst_search]「递归进入子树查找」@L42 ✓。原 ⛔ 降为 ✅ |
+| 27 | `bstSearch` | bst_insert | `create` | 1 | 找到空位，创建新节点 | 19 | — | ✅ | **复判**：唯一条目归属 bst_insert（建树准备阶段）✓——搜索本身不创建节点，故该 phase 只出现在准备阶段。注：bst_search 自身无 create/finish（§4） |
+| 28 | `bstSearch` | bst_insert/bst_search | `compare` | 2 | 比较插入值与当前节点值，决定向左或向右 | 20 | M4 一键多算法、M5 文案多态 | ✅ | **复判**：2 条各自归属——[bst_insert] @L20、[bst_search]「比较关键字与当前节点值」@L29 ✓ |
+| 29 | `bstSearch` | bst_insert | `finish` | 1 | BST 插入完成 | 24 | — | ✅ | **复判**：唯一条目归属 bst_insert（@L24）✓ |
 | 30 | `bstSearch` | bst_search | `hit` | 1 | 找到目标节点 | 28 | — | ✅ | L28 `if (root == NULL \|\| root->val == key) return root;` ✓；该行同时含「未命中」，缺 miss/not_found phase |
 | 31 | `bubble` | bubble_sort | `outer_loop` | 4 | 第 1 趟：将第 1 大的元素放到正确位置 | 4 | — | ✅ | L4 `for (i < n - 1)` ✓（4 变体：第 1–4 趟） |
 | 32 | `bubble` | bubble_sort | `inner_loop` | 4 | 内层循环 j=0，比较相邻元素 | 5 | — | ✅ | L5 `for (j < n - i - 1)` ✓ |
 | 33 | `bubble` | bubble_sort | `compare` | 4 | 比较 arr[0] 与 arr[1] | 6 | — | ✅ | L6 `if (arr[j] > arr[j + 1])` ✓ |
 | 34 | `bubble` | bubble_sort | `swap` | 4 | 交换 arr[0]↔arr[1]，较大的元素向右移动 | 7 | — | ✅ | L7 `int temp = arr[j];` 文案「较大的元素向右移动」与冒泡方向一致 ✓ |
-| 35 | `computeNextVal` | string_match_kmp | `build_next` | 22 | 调用构建 next 数组 | 35 | M3 顶层调用帧、M5 文案多态 | ✗ | 22 条中多数为 `next[#]=-1` 形态且挂 **L26/L28 的 nextval 赋值行**（`nextval[j] = nextval[next[j]];` / `= next[j];`）——文案说「构建 next 数组」却在写 nextval，且下标来自读取到的值。建议：区分 next 构建 / nextval 构建两个 phase，读取值型 `next[#]=-1` 降级不报 |
-| 36 | `countingSort` | counting_sort | `collect` | 1 | 按数值从小到大收集元素 | 9 | — | ✅ | L9 `for (i < 10)` 值域遍历 ✓；缺 count（L5-6 统计频次）phase |
-| 37 | `countingSort` | counting_sort | `place` | 1 | 将数值放回原数组的正确位置 | 11 | — | ✅ | L11 `arr[index++] = i;` ✓（一审指出的 L8 初始化行已修） |
-| 38 | `dfs` | dfs | `recursive` | 5 | 递归深入：从节点 0 继续深度优先搜索 | 24 | M3 顶层调用帧 | ✅ | L24 `dfs(0, n);` 顶层调用帧，文案为入口语义 → 可接受（承一审） |
-| 39 | `dfs` | dfs | `visit` | 5 | 标记节点 0 为已访问 | 13 | — | ✅ | L13 `visited[u] = 1;` ✓ |
-| 40 | `dfs` | dfs | `scan` | 5 | 扫描节点 0 的邻居 | 15 | — | ✅ | L15 `for (v < n)` ✓ |
-| 41 | `dijkstra` | dijkstra | `confirm` | 4 | 顶点 1 的最短距离已确定 | 23 | — | ✅ | L23 `visited[u] = 1;`，首现 u=1 ✓ |
-| 42 | `dijkstra` | dijkstra | `relax` | 1 | 松弛操作，更新邻接顶点距离 | 25 | — | ✅ | L25 松弛条件行 ✓；缺 select_min（L16-20 找最近点）phase |
-| 43 | `dpCoinChange` | dp | `outer_loop` | 3 | 遍历子问题 i=0 | 9 | — | ✗ | L9 `for (i < coinCount)` 是**币种循环**，i 不索引 dp（dp 为 1 维 dp[amount]）→「遍历子问题 i=0」不成立。建议「遍历币种 i=0」。注：本批把「物品」泛化成「子问题」，对币种循环没变对，反而丢了「币种」信息 |
-| 44 | `dpCoinChange` | dp | `inner_loop` | 11 | 遍历子问题维度 j=1 | 10 | — | ✅ | L10 `for (j = coins[i]; j <= amount; j++)`，j 索引 dp[j] →「子问题维度」成立 ✓；建议具名「遍历金额 j」 |
-| 45 | `dpCoinChange` | dp | `transition` | 1 | 状态转移：计算当前子问题的最优解 | 11 | — | ✅ | L11 `dp[j] = min(dp[j], dp[j - coins[i]] + 1);` ✓ |
-| 46 | `dpCoinChange` | dp | `finish` | 1 | 动态规划计算完成 | 15 | — | ✅ | L15 `return dp[amount];` ✓；缺 init（L7-8）与无解分支（L14）phase |
-| 47 | `dpFib` | dp | `outer_loop` | 9 | 遍历子问题 i=2 | 8 | — | ✅ | L8 `for (i = 2; i <= n; i++)`，i 索引 dp[i] ✓ |
-| 48 | `dpFib` | dp | `transition` | 1 | 状态转移：计算当前子问题的最优解 | 9 | — | ✅ | L9 `dp[i] = dp[i - 1] + dp[i - 2];` ✓ |
-| 49 | `dpFib` | dp | `finish` | 1 | 动态规划计算完成 | 12 | — | ✅ | L12 `return 0;`（算法内联在 main，程序末尾）✓ |
-| 50 | `dpKnapsack` | dp | `inner_loop` | 15 | 遍历子问题维度 j=0 | 14 | — | ✗ | L14 `for (j = 0; j < 15; j++)` 是 **dp 初始化**双层循环内层（循环体 `dp[i][j] = 0;`）→ 挂载在初始化循环，非算法位点（P1-1 只修了 dpCoinChange/dpLIS，此属已登记的边界） |
-| 51 | `dpKnapsack` | dp | `outer_loop` | 2 | 遍历子问题 i=1 | 18 | — | ✅ | L18 `for (i = 1; i <= n; i++)`，i 索引 dp[i][w] 第一维 ✓；建议具名「遍历物品 i」（教学信息量） |
+| 35 | `computeNextVal` | string_match_kmp | `build_nextval` | 10 | 调用构建 nextval 数组 | 35 | M3 顶层调用帧、M5 文案多态 | ✗ | **#7 新引入的词条，但文案有值/下标错位**：10 条中 `构建 nextval 数组，nextval[-1]` 挂在 L23 `nextval[0] = -1;`——**下标位被填成了值 -1**（应为 0）；且本词条只给下标不给值（`nextval[2]`/`nextval[3]`…），与 `构建 next 数组，next[N]=V` 的格式不一致。建议统一为 `构建 nextval 数组，nextval[0]=-1`。首现 L35 `getNextVal(T, nextval);` 为调用点起手（入口语义）✓ |
+| 36 | `computeNextVal` | string_match_kmp | `build_next` | 21 | 调用构建 next 数组 | 21 | M5 文案多态 | ✅ | **复判**：nextval 段已分离到新词条 `build_nextval`（#7），本键 21 条全部落在 getNext 内真语句（L6/L12/L14）或调用点起手（首现 L21 `getNext(T, next);`，入口语义）✓，原 ✗ 消除。残留观察：L25 `if (T[j] == T[next[j]])` 上的「构建 next 数组，next[#]=-1」展示的是**读到的 next 值**，建议文案改「读取 next[j]=-1」 |
+| 37 | `countingSort` | counting_sort | `collect` | 1 | 按数值从小到大收集元素 | 9 | — | ✅ | L9 `for (i < 10)` 值域遍历 ✓；缺 count（L5-6 统计频次）phase |
+| 38 | `countingSort` | counting_sort | `place` | 1 | 将数值放回原数组的正确位置 | 11 | — | ✅ | L11 `arr[index++] = i;` ✓（一审指出的 L8 初始化行已修） |
+| 39 | `dfs` | dfs | `recursive` | 5 | 递归深入：从节点 0 继续深度优先搜索 | 24 | M3 顶层调用帧 | ✅ | L24 `dfs(0, n);` 顶层调用帧，文案为入口语义 → 可接受（承一审） |
+| 40 | `dfs` | dfs | `visit` | 5 | 标记节点 0 为已访问 | 13 | — | ✅ | L13 `visited[u] = 1;` ✓ |
+| 41 | `dfs` | dfs | `scan` | 5 | 扫描节点 0 的邻居 | 15 | — | ✅ | L15 `for (v < n)` ✓ |
+| 42 | `dijkstra` | dijkstra | `confirm` | 4 | 顶点 1 的最短距离已确定 | 23 | — | ✅ | L23 `visited[u] = 1;`，首现 u=1 ✓ |
+| 43 | `dijkstra` | dijkstra | `relax` | 1 | 松弛操作，更新邻接顶点距离 | 25 | — | ✅ | L25 松弛条件行 ✓；缺 select_min（L16-20 找最近点）phase |
+| 44 | `dpCoinChange` | dp | `outer_loop` | 3 | 遍历币种 i=0 | 9 | — | ✅ | **复判**：文案已具名为「遍历币种 i=0/1/2」✓（#3 dp 子族具名，`dp_outer_subject` 特征词），原 ✗ 消除 |
+| 45 | `dpCoinChange` | dp | `inner_loop` | 11 | 遍历金额 j=1 | 10 | — | ✅ | **复判**：文案已具名为「遍历金额 j=1..11」✓（#3）。j 索引 dp[j]，语义正确且信息量提升 |
+| 46 | `dpCoinChange` | dp | `transition` | 1 | 状态转移：计算当前子问题的最优解 | 11 | — | ✅ | L11 `dp[j] = min(dp[j], dp[j - coins[i]] + 1);` ✓ |
+| 47 | `dpCoinChange` | dp | `finish` | 1 | 动态规划计算完成 | 15 | — | ✅ | L15 `return dp[amount];` ✓；缺 init（L7-8）与无解分支（L14）phase |
+| 48 | `dpFib` | dp | `outer_loop` | 9 | 遍历子问题 i=2 | 8 | — | ✅ | L8 `for (i = 2; i <= n; i++)`，i 索引 dp[i] ✓ |
+| 49 | `dpFib` | dp | `transition` | 1 | 状态转移：计算当前子问题的最优解 | 9 | — | ✅ | L9 `dp[i] = dp[i - 1] + dp[i - 2];` ✓ |
+| 50 | `dpFib` | dp | `finish` | 1 | 动态规划计算完成 | 12 | — | ✅ | L12 `return 0;`（算法内联在 main，程序末尾）✓ |
+| 51 | `dpKnapsack` | dp | `outer_loop` | 2 | 遍历物品 i=1 | 18 | — | ✅ | **复判**：文案已具名为「遍历物品 i=1/2」✓（#3，`wt[` 特征词）。原 `inner_loop` 键（挂 dp 初始化双层循环）已随 #2 初始化内层排除**整体消失**——该 ✗ 属「缺陷键消失」而非改写；dpKnapsack 现为 2 键 |
 | 52 | `dpKnapsack` | dp | `transition` | 1 | 状态转移：计算当前子问题的最优解 | 23 | — | ✅ | 首现落 L23 `dp[i][w] = dp[i - 1][w];`（放不下的退化转移）；主转移 L21 未作首现 |
-| 53 | `dpLCS` | dp | `inner_loop` | 7 | 遍历子问题维度 j=0 | 11 | — | ✗ | L11 `for (j = 0; j <= n; j++)` 是 **dp 初始化**内层（循环体 `dp[i][j] = 0;`）→ 初始化循环挂载（同上登记边界） |
-| 54 | `dpLCS` | dp | `outer_loop` | 4 | 遍历子问题 i=1 | 13 | — | ✅ | L13 `for (i = 1; i <= m; i++)` ✓ |
+| 53 | `dpLCS` | dp | `outer_loop` | 4 | 遍历子问题 i=1 | 13 | — | ✅ | L13 `for (i = 1; i <= m; i++)` ✓ |
+| 54 | `dpLCS` | dp | `inner_loop` | 6 | 遍历子问题维度 j=1 | 14 | — | ✅ | **复判**：首现已从初始化内层 L11 移到真内层 L14 `for (j = 1; j <= n; j++)`，「遍历子问题维度 j」成立 ✓（#2） |
 | 55 | `dpLCS` | dp | `transition` | 1 | 状态转移：计算当前子问题的最优解 | 18 | — | ✅ | L18 `dp[i][j] = max(dp[i-1][j], dp[i][j-1]);`（else 分支）；相等分支 L16 未作首现 |
 | 56 | `dpLIS` | dp | `outer_loop` | 7 | 遍历子问题 i=1 | 9 | — | ✅ | L9 `for (i = 1; i < n; i++)` ✓ |
 | 57 | `dpLIS` | dp | `inner_loop` | 7 | 遍历子问题维度 j=0 | 10 | — | ✅ | L10 `for (j = 0; j < i; j++)` ✓ |
@@ -172,10 +183,10 @@ M4 归属混流 / M5 同键文案多态）；「审阅」= 本次判定。
 | 62 | `gcd` | gcd | `loop` | 3 | 辗转相除：a=48, b=18 | 4 | — | ✅ | L4 `while (b != 0)` ✓ |
 | 63 | `gcd` | gcd | `mod` | 3 | 计算 48 % 18 = 12（余数作为新的 b） | 6 | — | ✅ | L6 `b = a % b;`，首现「计算 48 % 18 = 12」✓（P0-4 行入口操作数修复生效） |
 | 64 | `gcd` | gcd | `finish` | 1 | 最大公约数为 6 | 9 | — | ✅ | L9 `return a;` ✓ |
-| 65 | `hanoi` | hanoi | `recursive` | 3 | 移动 3 个盘子的汉诺塔问题 | 15 | M3 顶层调用帧、M5 文案多态 | ✗ | L15 `hanoi(n, 'A', 'C', 'B');` 顶层调用帧，文案「移动 3 个盘子的汉诺塔问题」是**问题陈述**而非步骤，且与 phase=recursive 不符。建议入口语义：「从 A 柱移动 3 个盘子到 C 柱」 |
+| 65 | `hanoi` | hanoi | `recursive` | 3 | 移动 3 个盘子的汉诺塔问题 | 15 | M3 顶层调用帧、M5 文案多态 | ✗ | **复判仍 ✗（未处置）**：#5 只改了 `finish`；首现仍是 L15 顶层调用帧（M3）上的**问题陈述**「移动 3 个盘子的汉诺塔问题」。变体「递归移动 N 个盘子」@L8 正确。建议首现改入口语义「从 A 柱移动 3 个盘子到 C 柱」 |
 | 66 | `hanoi` | hanoi | `base` | 1 | 基准情况：直接把盘子从起始柱移到目标柱 | 4 | — | ✅ | L4 `if (n == 1) {` ✓ |
 | 67 | `hanoi` | hanoi | `move` | 3 | 移动第 1 个盘子 | 5 | — | ✅ | L5 `printf("Move disk 1 ...")` ✓（变体 L9 为第 2/3 个盘子） |
-| 68 | `hanoi` | hanoi | `finish` | 1 | 汉诺塔移动完成 | 6 | — | ✗ | L6 `return;` 是 **n==1 基准分支内的 return**，文案「汉诺塔移动完成」与行不符（真正结束在 L11 回溯出栈）。建议挂 L17 或改文案「基准情形结束」 |
+| 68 | `hanoi` | hanoi | `finish` | 1 | 该层递归结束，返回上一层 | 6 | — | ✅ | **复判**：文案已按 `func_name` 区分——体内 return 报「该层递归结束，返回上一层」@L6 ✓（#5），原 ✗ 消除 |
 | 69 | `hashTable` | hash_table | `hash` | 1 | 计算哈希值 | 10 | — | ✅ | L10 `return key % TABLE_SIZE;` ✓；该模板仅 1 个 phase，覆盖面极窄 |
 | 70 | `heapSort` | heap_sort | `build_heap` | 1 | 建堆：自底向上将数组调整为最大堆 | 20 | — | ✅ | L20 `for (i = n/2 - 1; i >= 0; i--)` ✓ |
 | 71 | `heapSort` | heap_sort | `heapify` | 1 | 递归堆化：确保子树满足堆性质 | 21 | — | ✅ | L21 `heapify(arr, n, i);` 调用帧，入口语义 ✓ |
@@ -184,7 +195,7 @@ M4 归属混流 / M5 同键文案多态）；「审阅」= 本次判定。
 | 74 | `huffmanTree` | huffman_tree | `merge` | 1 | 合并两个节点为新树 | 37 | — | ✅ | L37 `HT[s1].parent = i;` ✓；select（选两棵最小树）零触发，属覆盖缺口 |
 | 75 | `insertion` | insertion_sort | `outer_loop` | 4 | 第 1 个元素：准备插入到已排序部分 | 4 | — | ✅ | L4 `for (i = 1; i < n; i++)` ✓ |
 | 76 | `insertion` | insertion_sort | `inner_loop` | 4 | 元素后移 j=0，为插入腾出位置 | 7 | — | ✅ | L7 `while (j >= 0 && arr[j] > key)` ✓（后移动作在 L8；文案描述循环目的，可接受） |
-| 77 | `insertion` | insertion_sort | `insert` | 4 | 将 key=11 插入 | 11 | M5 文案多态 | ✗ | L11 `arr[j + 1] = key;` 同键**两态文案**：「将 key=11 插入」（无位置）vs「将 key=13 插入到正确位置 2」（有位置）。前者是 j+1==0 时的降级输出——位置为 0 时变量取不到值。须统一文案并修判据 |
+| 77 | `insertion` | insertion_sort | `insert` | 4 | 将 key=11 插入到正确位置 0 | 11 | — | ✅ | **复判**：4 变体文案已统一为「将 key=K 插入到正确位置 P」（含 P=0）✓（#4 用行入口快照 `prev_vars` 的 j），原 ✗ 消除 |
 | 78 | `kruskalMST` | kruskal_mst | `sort` | 1 | 按边权排序 | 26 | — | ✅ | L26 `if (edges[j].w < edges[min].w) min = j;`（选择排序找最小边）✓ |
 | 79 | `kruskalMST` | kruskal_mst | `check_cycle` | 1 | 并查集判环 | 37 | — | ✅ | L37 `if (Find(parent, u) != Find(parent, v))` ✓ |
 | 80 | `kruskalMST` | kruskal_mst | `add_edge` | 1 | 加入生成树并合并集合 | 39 | — | ✅ | L39 `Union(parent, u, v);` ✓（「加入生成树」的可见动作在 L38 printf，未标注） |
@@ -192,39 +203,51 @@ M4 归属混流 / M5 同键文案多态）；「审阅」= 本次判定。
 | 82 | `levelOrder` | level_order | `dequeue` | 1 | 取出队头节点访问 | 26 | — | ✅ | L26 `struct TreeNode* node = queue[front++];` ✓ |
 | 83 | `levelOrder` | level_order | `enqueue_left` | 1 | 左子节点入队 | 28 | — | ✅ | L28 ✓ |
 | 84 | `levelOrder` | level_order | `enqueue_right` | 1 | 右子节点入队 | 29 | — | ✅ | L29 ✓；缺「层分界/finish」phase |
-| 85 | `matrixChain` | dp | `inner_loop` | 1 | 遍历子问题维度 j=0 | 6 | — | ✗ | L6 `for (j = 0; j < n; j++)` 是 **dp 初始化**内层（L5-7 双层清零）→ 初始化循环挂载 |
-| 86 | `matrixChain` | dp | `outer_loop` | 5 | 遍历子问题 i=1 | 9 | — | ✅ | L9 `for (i = 1; i < n - len + 1; i++)` ✓；缺「枚举区间长度 len」（L8）phase |
-| 87 | `matrixChain` | dp | `transition` | 1 | 状态转移：计算当前子问题的最优解 | 13 | — | ✅ | L13 `int cost = dp[i][k] + dp[k+1][j] + p[i-1]*p[k]*p[j];`（候选代价）✓ |
-| 88 | `merge` | merge_sort | `recursive_split` | 5 | 启动归并：处理区间 [0, 4] | 30 | M3 顶层调用帧、M5 文案多态 | ✅ | L30 `mergeSort(arr, 0, n - 1);` 顶层调用帧，文案「启动归并：处理区间 [0, 4]」为入口语义 → 可接受；变体「将数组区间 [#, #] 递归分成两半」挂 L21/L22 ✓（M5 良性） |
-| 89 | `merge` | merge_sort | `merge` | 1 | 合并两个有序子数组 | 23 | — | ✅ | L23 `merge(arr, left, mid, right);` 调用帧入口语义 ✓；合并体内部（L7-15）无标注 |
-| 90 | `primMST` | prim_mst | `add_vertex` | 4 | 顶点 1 加入生成树 | 24 | — | ✅ | L24 `lowcost[k] = 0;` ✓（一审的「顶点 -1」已修） |
-| 91 | `primMST` | prim_mst | `update` | 1 | 更新邻接顶点的最小边权 | 26 | — | ✅ | L26 `if (lowcost[j] != 0 && G[k][j] < lowcost[j])` ✓；缺 select_min（L17-21）phase |
-| 92 | `quick` | quick_sort | `recursive` | 6 | 启动快速排序：处理区间 [left=0, right=4] | 31 | M3 顶层调用帧、M5 文案多态 | ✅ | L31 `quickSort(arr, 0, n - 1);` 顶层调用帧，文案「启动快速排序：处理区间」入口语义 → 可接受（P1-3/P1-4 收口后合规） |
-| 93 | `quick` | quick_sort | `partition_init` | 4 | 分区：选取枢轴 pivot=0 | 5 | — | ✗ | 「pivot=0」是 partition 的**返回值**（分区后枢轴落位下标），不是「选取的枢轴值」（枢轴值是 arr[high]=1）；phase 名 `partition_init`（分区初始化）与「分区已完成」的时刻不符。建议改文案「分区完成，枢轴落位下标 0」并改 phase 名；另 partition 体内扫描（L14-20）无 phase |
-| 94 | `radixSort` | radix_sort | `digit_loop` | 3 | 按第 1 位进行分配-收集 | 11 | — | ✅ | L11 `for (exp = 1; max / exp > 0; exp *= 10)` ✓（第 1/2/3 位三变体） |
-| 95 | `radixSort` | radix_sort | `count` | 1 | 统计当前位各数字出现次数 | 13 | — | ✅ | L13 `count[(arr[i] / exp) % 10]++` ✓（P1-2 `]++` 收紧生效） |
-| 96 | `radixSort` | radix_sort | `prefix` | 1 | 计算前缀和，确定位置 | 14 | — | ✅ | L14 `for (i = 1; i < 10; i++) count[i] += count[i - 1];` ✓ |
-| 97 | `radixSort` | radix_sort | `place` | 1 | 按前缀和放置元素 | 16 | — | ✅ | L16 `output[count[...] - 1] = arr[i];` ✓；缺「回写原数组」（L19）phase |
-| 98 | `selection` | selection_sort | `outer_loop` | 4 | 第 0 趟：从第 0 个位置开始找最小值 | 4 | — | ✅ | L4 `for (i < n - 1)` ✓ |
-| 99 | `selection` | selection_sort | `inner_loop` | 5 | 扫描 j=1，当前最小值在 min_idx=0 | 6 | — | ✅ | L6 `for (j = i + 1; j < n; j++)` ✓ |
-| 100 | `selection` | selection_sort | `compare` | 4 | 比较 arr[1] 与当前最小值 arr[0] | 7 | — | ✅ | L7 `if (arr[j] < arr[minIdx])`，首现「arr[1] 与 arr[0]」✓（`?` 已修） |
-| 101 | `selection` | selection_sort | `swap` | 5 | 将最小元素交换到位置 0 | 10 | — | ✅ | L10 `int temp = arr[i];` ✓；末趟「交换到位置 4」实为 i==minIdx 的空操作（5 变体中 1 条退化） |
-| 102 | `seqList` | seq_list | `update_len` | 1 | 更新表长度 | 26 | — | ✅ | L26 `L->length--;` ✓ |
-| 103 | `seqList` | seq_list | `finish` | 1 | 顺序表操作完成 | 27 | — | ✅ | L27 `return 1;` ✓；表内只覆盖 listDelete，插入/查找未标注 |
-| 104 | `shellSort` | shell_sort | `outer_loop` | 2 | 取增量 gap=2，分组进行插入排序 | 4 | — | ✅ | L4 `for (gap = n / 2; gap > 0; gap /= 2)` ✓ |
-| 105 | `shellSort` | shell_sort | `insert` | 1 | 保存当前元素，准备在同组内插入 | 6 | — | ✅ | L6 `int temp = arr[i];` ✓ |
-| 106 | `shellSort` | shell_sort | `inner_loop` | 1 | 同组内元素后移，腾出插入位置 | 9 | — | ✅ | L9 `arr[j] = arr[j - gap];`（后移语句，非 for 头 L8）✓ 轻微错位 |
-| 107 | `stringMatchBF` | string_match_bf | `compare` | 16 | 比较 S[0] 与 T[0] | 10 | — | ✅ | L10 `if (S[i] == T[j])` ✓（16 变体） |
-| 108 | `stringMatchBF` | string_match_bf | `backtrack` | 1 | 字符不匹配，主串回溯 | 14 | — | ✅ | L14 `i = i - j + 1;` ✓；缺 match/finish（L18-19）phase |
-| 109 | `stringMatchKMP` | string_match_kmp | `build_next` | 8 | 调用构建 next 数组 | 22 | M5 文案多态 | ✅ | L22 `getNext(T, next);` 调用帧入口语义 ✓；变体「构建 next 数组，next[#]=#」挂 L6/L12/L14 ✓ |
-| 110 | `stringMatchKMP` | string_match_kmp | `compare` | 1 | 比较主串与模式串字符 | 26 | — | ✅ | L26 `if (j == -1 \|\| S[i] == T[j])` ✓；缺 finish phase |
-| 111 | `topologicalSort` | topological_sort | `enqueue` | 1 | 入度为 0 的顶点入队 | 14 | — | ✅ | L14 `if (indegree[i] == 0) queue[rear++] = i;` ✓ |
-| 112 | `topologicalSort` | topological_sort | `output` | 6 | 输出顶点 0 | 17 | — | ✗ | 挂 L17 `int u = queue[front++];`（**出队**）而真正「输出」在 L18 `printf("%d ", u);`。建议挂 L18 或改文案「取出队头顶点」。另缺 init（L8-12 求入度）phase——教学上这是关键阶段 |
+| 85 | `matrixChain` | dp | `outer_loop` | 5 | 遍历子问题 i=1 | 9 | — | ✅ | L9 `for (i = 1; i < n - len + 1; i++)` ✓；缺「枚举区间长度 len」（L8）phase。原 `inner_loop` 键（挂 dp 初始化内层）已随 #2 **整体消失** |
+| 86 | `matrixChain` | dp | `transition` | 1 | 状态转移：计算当前子问题的最优解 | 13 | — | ✅ | L13 `int cost = dp[i][k] + dp[k+1][j] + p[i-1]*p[k]*p[j];`（候选代价）✓ |
+| 87 | `merge` | merge_sort | `recursive_split` | 5 | 启动归并：处理区间 [0, 4] | 30 | M3 顶层调用帧、M5 文案多态 | ✅ | L30 `mergeSort(arr, 0, n - 1);` 顶层调用帧，文案「启动归并：处理区间 [0, 4]」为入口语义 → 可接受；变体「将数组区间 [#, #] 递归分成两半」挂 L21/L22 ✓（M5 良性） |
+| 88 | `merge` | merge_sort | `merge` | 1 | 合并两个有序子数组 | 23 | — | ✅ | L23 `merge(arr, left, mid, right);` 调用帧入口语义 ✓；合并体内部（L7-15）无标注 |
+| 89 | `primMST` | prim_mst | `add_vertex` | 4 | 顶点 1 加入生成树 | 24 | — | ✅ | L24 `lowcost[k] = 0;` ✓（一审的「顶点 -1」已修） |
+| 90 | `primMST` | prim_mst | `update` | 1 | 更新邻接顶点的最小边权 | 26 | — | ✅ | L26 `if (lowcost[j] != 0 && G[k][j] < lowcost[j])` ✓；缺 select_min（L17-21）phase |
+| 91 | `quick` | quick_sort | `recursive` | 6 | 启动快速排序：处理区间 [left=0, right=4] | 31 | M3 顶层调用帧、M5 文案多态 | ✅ | L31 `quickSort(arr, 0, n - 1);` 顶层调用帧，文案「启动快速排序：处理区间」入口语义 → 可接受（P1-3/P1-4 收口后合规） |
+| 92 | `quick` | quick_sort | `partition_init` | 4 | 分区完成，枢轴落位下标 pivot=0 | 5 | — | ✅ | **复判**：文案已改「分区完成，枢轴落位下标 pivot=N」✓（#6），值/下标语义已正，原 ✗ 消除。残留观察：phase 名仍为 `partition_init`（「初始化」与「已完成」不符）——#6 已裁定「phase 名不动，词汇面改动另行裁定」；partition 体内扫描（L14-20）仍无 phase |
+| 93 | `radixSort` | radix_sort | `digit_loop` | 3 | 按第 1 位进行分配-收集 | 11 | — | ✅ | L11 `for (exp = 1; max / exp > 0; exp *= 10)` ✓（第 1/2/3 位三变体） |
+| 94 | `radixSort` | radix_sort | `count` | 1 | 统计当前位各数字出现次数 | 13 | — | ✅ | L13 `count[(arr[i] / exp) % 10]++` ✓（P1-2 `]++` 收紧生效） |
+| 95 | `radixSort` | radix_sort | `prefix` | 1 | 计算前缀和，确定位置 | 14 | — | ✅ | L14 `for (i = 1; i < 10; i++) count[i] += count[i - 1];` ✓ |
+| 96 | `radixSort` | radix_sort | `place` | 1 | 按前缀和放置元素 | 16 | — | ✅ | L16 `output[count[...] - 1] = arr[i];` ✓；缺「回写原数组」（L19）phase |
+| 97 | `selection` | selection_sort | `outer_loop` | 4 | 第 0 趟：从第 0 个位置开始找最小值 | 4 | — | ✅ | L4 `for (i < n - 1)` ✓ |
+| 98 | `selection` | selection_sort | `inner_loop` | 5 | 扫描 j=1，当前最小值在 min_idx=0 | 6 | — | ✅ | L6 `for (j = i + 1; j < n; j++)` ✓ |
+| 99 | `selection` | selection_sort | `compare` | 4 | 比较 arr[1] 与当前最小值 arr[0] | 7 | — | ✅ | L7 `if (arr[j] < arr[minIdx])`，首现「arr[1] 与 arr[0]」✓（`?` 已修） |
+| 100 | `selection` | selection_sort | `swap` | 5 | 将最小元素交换到位置 0 | 10 | — | ✅ | L10 `int temp = arr[i];` ✓；末趟「交换到位置 4」实为 i==minIdx 的空操作（5 变体中 1 条退化） |
+| 101 | `seqList` | seq_list | `update_len` | 1 | 更新表长度 | 26 | — | ✅ | L26 `L->length--;` ✓ |
+| 102 | `seqList` | seq_list | `finish` | 1 | 顺序表操作完成 | 27 | — | ✅ | L27 `return 1;` ✓；表内只覆盖 listDelete，插入/查找未标注 |
+| 103 | `shellSort` | shell_sort | `outer_loop` | 2 | 取增量 gap=2，分组进行插入排序 | 4 | — | ✅ | L4 `for (gap = n / 2; gap > 0; gap /= 2)` ✓ |
+| 104 | `shellSort` | shell_sort | `insert` | 1 | 保存当前元素，准备在同组内插入 | 6 | — | ✅ | L6 `int temp = arr[i];` ✓ |
+| 105 | `shellSort` | shell_sort | `inner_loop` | 1 | 同组内元素后移，腾出插入位置 | 9 | — | ✅ | L9 `arr[j] = arr[j - gap];`（后移语句，非 for 头 L8）✓ 轻微错位 |
+| 106 | `stringMatchBF` | string_match_bf | `compare` | 16 | 比较 S[0] 与 T[0] | 10 | — | ✅ | L10 `if (S[i] == T[j])` ✓（16 变体） |
+| 107 | `stringMatchBF` | string_match_bf | `backtrack` | 1 | 字符不匹配，主串回溯 | 14 | — | ✅ | L14 `i = i - j + 1;` ✓；缺 match/finish（L18-19）phase |
+| 108 | `stringMatchKMP` | string_match_kmp | `build_next` | 8 | 调用构建 next 数组 | 22 | M5 文案多态 | ✅ | L22 `getNext(T, next);` 调用帧入口语义 ✓；变体「构建 next 数组，next[#]=#」挂 L6/L12/L14 ✓ |
+| 109 | `stringMatchKMP` | string_match_kmp | `compare` | 1 | 比较主串与模式串字符 | 26 | — | ✅ | L26 `if (j == -1 \|\| S[i] == T[j])` ✓；缺 finish phase |
+| 110 | `topologicalSort` | topological_sort | `enqueue` | 1 | 入度为 0 的顶点入队 | 14 | — | ✅ | L14 `if (indegree[i] == 0) queue[rear++] = i;` ✓ |
+| 111 | `topologicalSort` | topological_sort | `dequeue` | 1 | 取出队头顶点 | 17 | — | ✅ | **#5 新拆词条**：「取出队头顶点」@L17 `int u = queue[front++];` ✓（出队与输出分离） |
+| 112 | `topologicalSort` | topological_sort | `output` | 6 | 输出顶点 0 | 18 | — | ✅ | **复判**：已挂真 printf 行 L18 `printf("%d ", u);` ✓（#5），原 ✗ 消除。残留：缺 init（L8-12 求入度）phase——教学上这是关键阶段 |
 | 113 | `topologicalSort` | topological_sort | `decrease` | 1 | 删边，邻接点入度减 1 | 21 | — | ✅ | L21 `indegree[v]--;` ✓ |
 
-> **M5 良性 vs 恶性**：M5 共 11 键。良性＝同键多条文案**各自挂在正确语句**上
-> （bfs/enqueue 起点 vs 邻居、merge 启动 vs 递归、quick 启动 vs 递归、hanoi move 第 1/2/3 个盘子等）；
-> 恶性＝同键两态**互相矛盾**（`insertion/insert` 有位置 vs 无位置）。表中已逐条区分。
+> **M4 / M5 怎么读**：**M4**（4 键，均在 bst 家族）＝同一模板里两种算法交替产出标注，
+> 归属已入 golden，**不是缺陷**——判据是"该条文案与其 `algorithm_name` 是否自洽"（§1.2 已逐条核）。
+> **M5**（11 键，判据 = **去数值化后同键仍有 >1 种文案模板**）分三类：
+> - **良性**（入口/语义变体，各自挂在正确语句上）：`bfs/enqueue`（起点入队 L16 ／ 邻居节点入队 L20）、
+>   `merge/recursive_split`（启动归并 L30 ／ 将数组区间 [#,#] 递归分成两半 L21）、
+>   `quick/recursive`（启动快速排序 L31 ／ 递归调用 quickSort L6）、
+>   `hanoi/recursive`（问题陈述 L15 ／ 递归移动 # 个盘子 L8）、
+>   `computeNextVal/build_next` 与 `stringMatchKMP/build_next`（调用构建 next 数组 ／ 构建 next 数组，next[#]=#）。
+> - **M4 伴生**（4 键：bstSearch/bstDelete 的 `recursive`、`compare`）：两种算法的文案落在同一 phase 名下，
+>   归属已入 golden，按 §1.2 逐条判 ✅。
+> - **恶性**（互相矛盾的两态）：v4 的 `insertion/insert`（有位置 vs 无位置）已由 #4 消除；
+>   v5 现存实例见 §1.1（`computeNextVal/build_nextval` 的 `nextval[-1]` 值/下标错位）。
+>
+> 注意：**"同键多文案"本身不是缺陷**——`hanoi/move`（第 1/2/3 个盘子）、`bubble/compare`（arr[i] 与 arr[i+1]）
+> 这类只变数值的，去数值化后是**单一模板**，不计入 M5。
 
 ## 3. 覆盖缺口（45 个零标注模板）
 
@@ -272,6 +295,8 @@ M4 归属混流 / M5 同键文案多态）；「审阅」= 本次判定。
 | `topologicalSort` | 无 init（L8-12 求入度） |
 | `dp 家族` | 无 init phase（dpCoinChange 的 L7-8 初始化未标） |
 | `dpKnapsack / dpLCS / matrixChain` | 截断 → 无 finish |
+| `bst_search / bst_delete` | 自身无 create / finish（这两个 phase 只由建树阶段的 bst_insert 提供，见 §1.2） |
+| `computeNextVal` | nextval 段展示格式不统一（`nextval[-1]` 值/下标错位，见 §1.1） |
 
 ## 5. 提取口径限制（非缺陷，登记备查）
 
@@ -295,24 +320,34 @@ M4 归属混流 / M5 同键文案多态）；「审阅」= 本次判定。
 **固化路径（不变）**：审阅勾选 → golden JSON → serve 会话收集比对进 CI（U1#1① 收口）
 → ② property 层（标注-行为一致性抽样）。
 
-**待落地（需改代码，本版未动）**：
+**已落地（v4→v5 期间，提交 `a528a4a` / `9cd1aa8`）**：
 
-1. **golden 增 `algorithm_name`（+`display_name`?）字段**——`AlgorithmStepSnapshot` 一直带
-   `algorithm_name`/`display_name`/`phase`/`description`（`native/src/unified/types.rs`），
-   只是固化时丢了。补上即可让 §1.2 的 8 个 ⛔ 键获得归属、并检出**算法标签漂移**（现 schema 检不出）。
-2. **P1-1 跨行上下文**：`dpKnapsack/inner_loop`、`dpLCS/inner_loop`、`matrixChain/inner_loop`
-   的初始化循环排除（多行 for 体不在 for 行内）。
-3. **dp 文案按子族具名**：`dpCoinChange/outer_loop` 的 i 是币种；knapsack 的 i 是物品。
-   统一"子问题"对 dpFib/dpLIS/dpLCS/matrixChain 成立，对币种/物品循环丢信息。
-4. **`insertion/insert` 位置为 0 的降级**：唯一化文案。
-5. **`hanoi/finish` 挂载点**（L6 基准分支 return → 应挂 L17 或改文案）、
-   `topologicalSort/output` 挂载点（L17 出队 → L18 printf 输出）。
-6. **`quick/partition_init`**：值/下标语义与 phase 名（partition 完成 ≠ 初始化）。
-7. **`computeNextVal` / `stringMatchKMP` 的 nextval 段**：区分 next 构建 / nextval 构建两个 phase。
-8. **登记未修（历史遗留，见附录 A）**：P1-3/P1-4 的顶层调用区分、P0-4 prev 操作数管道
-   ——**注意：本版 §0 判定规则 ③ 已把"顶层调用帧 + 入口语义"判为可接受**，
-   若后续按 `at_callee_entry && caller_is_main` 做区分，请同步复核 §2 表中 9 个 M3 键。
-9. **`step.next` 结束后重复发布末帧**（run_batch 终态重放）——消费方 `finished` 即停故低危，待修。
+| 项 | 提交 | 复核依据 |
+|----|------|----------|
+| 1. golden 增 `algorithm` / `display_name` 归属字段 | `a528a4a` | golden 310 条全部带 `algorithm`；本表「算法」列与 M4 标记；§1.2 的 8 个 ⛔ 由此可判 |
+| 2. dp 初始化循环排除 | `a528a4a` | `dpKnapsack`/`matrixChain` 的 `inner_loop` 缺陷键**整体消失**；`dpLCS/inner_loop` 首现回真内层 L14 |
+| 3. dp 子族具名（币种 / 物品 / 金额） | `9cd1aa8` | `遍历币种 i` / `遍历物品 i` / `遍历金额 j` 实测 |
+| 4. `insertion/insert` 位置 0 降级消除 | `9cd1aa8` | 4 变体文案统一为「将 key=K 插入到正确位置 P」 |
+| 5. `hanoi/finish` 按 func_name 区分；`topologicalSort/output` 挂真 printf 行 + `dequeue` 拆分 | `9cd1aa8` | §2 表对应行 |
+| 6. `quick/partition_init` 值/下标语义 | `9cd1aa8` | 文案改「分区完成，枢轴落位下标 pivot=N」 |
+| 7. `build_nextval` 词条分离 | `9cd1aa8` | 新键 10 条；**同时引入 §1.1 的 `nextval[-1]` 格式问题** |
+| 9. `step.next` 结束后重复发布末帧 | `a528a4a` | 终态末帧重放根治（各模板 `last_step_index` 较 v4 减 1 即为佐证） |
+
+**未落地（本表 ✗ 与残留，需改代码）**：
+
+1. **`build_nextval` 文案值/下标错位**（§1.1 首条）：`nextval[-1]` 应为 `nextval[0]=-1`，并统一"带值"格式。
+2. **`binarySearchTreeValidation/recursive` 首现挂载点**：顶层调用行 vs 递归体描述——改入口语义，或把首现移焦到 L22。
+3. **`hanoi/recursive` 首现文案**：问题陈述改入口语义（#5 只覆盖了 `finish`）。
+4. **`quick/partition_init` 的 phase 名**：`partition_init` 与"分区已完成"不符；#6 已裁定"词汇面改动另行裁定"，
+   需走词汇表单源（`native/src/unified/vocabulary.rs` + schema 附录 B）。
+5. **`computeNextVal/build_next` 的 L25 展示**：「构建 next 数组，next[#]=-1」实为**读取** next[j]，
+   建议改「读取 next[j]=-1」。
+6. **登记未修（历史遗留，见附录 A）**：P1-3/P1-4 的顶层调用区分、P0-4 prev 操作数管道——本版 §0 判定规则 ③
+   把"顶层调用帧 + 入口语义"判为可接受；若后续按 `at_callee_entry && caller_is_main` 做区分，
+   请同步复核 §2 表中 9 个 M3 键。
+7. **golden 文件名**：`algorithm_annotations_v3.json` 的内容已迭代到第五次全量提取（310 条），
+   文件名与内容版本脱节——建议改名或在文件内加 `baseline`/日期字段（改名前须同步
+   `algorithm_annotation_golden_test.rs` 的路径常量）。
 
 ## 7. 同族风险
 
@@ -363,6 +398,14 @@ P0-3 dp 判据、P1 判据批 10 项）；**主表待重提取对账后方可勾
 行为基线固化为 `native/tests/golden/algorithm_annotations_v3.json` 并接入 CI
 （`algorithm_annotation_golden_test`：Rust 直调 session_api 全量比对，双向防漂移；
 J9 埋雷已证红）。原始数据：`tmp/annot_extract_v3_20260914.json`。
+
+### A.5 v5 复判（2026-09-14，§6 代码侧两批落地后）
+代码侧落地（`a528a4a` golden 归属 + 终态末帧重放根治 + dp 初始化内层排除；`9cd1aa8` 文案/挂载点五项）
+后重跑全量提取（`tmp/annot_extract_v5_20260914.json`，38.6s）并复判：
+基线 **310 条 / 113 键 / 37 模板**（v3 为 317 条；300→310 = nextval 变体分离等，与提交自报一致），
+判定 **✅ 110 / ✗ 3 / ⛔ 0**。8 个 ⛔ 键按算法分行复判**全部转 ✅**；
+11 个旧 ✗ 中 **7 键转 ✅、2 键（dpKnapsack/matrixChain 的 inner_loop）整体消失、2 键仍 ✗**；
+新词条 2 个（`topologicalSort/dequeue` ✅、`computeNextVal/build_nextval` ✗）。
 
 > 二审文件对这组数字的建议是"34 模板 × 95 条（现 38 × 100）"——**两套口径**：
 > 二审按 `(算法, phase)` 计数，本表按 `(phase, desc)` 计数（=113 键 / 317 条）。

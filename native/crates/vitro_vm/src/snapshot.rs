@@ -232,11 +232,21 @@ impl CheckpointManager {
 
         self.checkpoints.push((step, snap));
 
-        // 移除最旧检查点；如果移除的是全量基准，需要把下一个全量之前的增量全删掉，
-        // 否则增量会 dangling。简化处理：一直删到第一个是全量为止。
-        // S3 A15（schema v0.1 签字回放）：step 0 锚点检查点**永不裁剪**——它是
-        // 时间旅行的起点，裁掉后越窗 seek（目标 < 窗口起点）将永久失败
-        //（实测 2050 步循环后 seek(5) 报"没有可用的检查点"）。
+        self.evict_over_limit();
+    }
+
+    /// 超上限时移除最旧检查点（U2#5：从 save 内抽出以便直接单测）。
+    ///
+    /// 不变量：**链中每个 Delta 的 `base_step` 必须解析到链内存在的 Full**。
+    /// - step 0 锚点检查点永不裁剪（S3 A15：时间旅行起点，裁掉后越窗 seek
+    ///   永久失败——实测 2050 步循环后 seek(5) 报"没有可用的检查点"）；
+    /// - **删 Full 时必须级联删其后的 Delta 到下一个 Full**（U2#5 修复）：
+    ///   悬空 Delta 的 base 指向被删的 Full，`nearest` 会把它叠到**更早**的
+    ///   Full 上——脏页错叠 = **seek 静默错内存**（无报错的最坏调试器缺陷）。
+    ///   原实现仅在删 Delta 时从链头级联，且 pinned 场景（[0] 恒 Full）删
+    ///   [1] 的 Full 时悬空 Delta 留存到数量达标退出；
+    /// - 删 Delta 无需级联：后继 Delta 与它同 base（基于最近 Full）。
+    fn evict_over_limit(&mut self) {
         while self.checkpoints.len() > self.max_checkpoints {
             let pinned = self.checkpoints[0].0 == 0;
             let remove_idx = if pinned { 1 } else { 0 };
@@ -245,9 +255,20 @@ impl CheckpointManager {
             }
             let removed_is_full = matches!(self.checkpoints[remove_idx].1.memory, MemoryImage::Full(_));
             self.checkpoints.remove(remove_idx);
-            if !removed_is_full {
-                // 如果删掉的是增量，继续删到下一个全量，保证链头是全量基准
-                while self.checkpoints.len() > 1
+            if removed_is_full {
+                // 删 Full：其后 Delta 全悬空（base 指向被删快照）——级联删到
+                // 下一个 Full。U2#5 修复：原实现此分支无级联，pinned 场景删
+                // [1] 的 Full 后悬空 Delta 留存（链头 [0] 恒 Full 掩盖了它）。
+                let next_full = self.checkpoints[remove_idx..]
+                    .iter()
+                    .position(|(_, s)| matches!(s.memory, MemoryImage::Full(_)))
+                    .map(|i| i + remove_idx)
+                    .unwrap_or(self.checkpoints.len());
+                self.checkpoints.drain(remove_idx..next_full);
+            } else if remove_idx == 0 {
+                // 删链头 Delta（防御——正常链头应恒为 Full）：删到 Full，
+                // 维持原实现的链头不变量。
+                while !self.checkpoints.is_empty()
                     && !matches!(self.checkpoints[0].1.memory, MemoryImage::Full(_))
                 {
                     self.checkpoints.remove(0);
@@ -300,5 +321,120 @@ impl CheckpointManager {
 
     pub fn is_empty(&self) -> bool {
         self.checkpoints.is_empty()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used)]
+
+    use super::*;
+
+    /// 最小可测快照（仅 memory 有意义；其余字段零值——本测试只打淘汰/重建路径）。
+    fn fake_snap(memory: MemoryImage) -> VMSnapshot {
+        VMSnapshot {
+            memory,
+            stack: Vec::new(),
+            call_stack: Vec::new(),
+            ip: 0,
+            mem_stack_top: 0,
+            step_count: 0,
+            current_line: 0,
+            finished: false,
+            exit_code: 0,
+            error: String::new(),
+            paused: false,
+            cancelled: false,
+            step_event_hit: false,
+            last_snapshot_step: 0,
+            snapshot_vars: std::collections::HashMap::new(),
+            qsort_depth: 0,
+            vis_event_queue: Vec::new(),
+            breakpoints: std::collections::HashSet::new(),
+            global_count: 0,
+            freed_logs: std::collections::BTreeMap::new(),
+            runtime: crate::snapshot::RuntimeSnapshot::from(&vitro_runtime::RuntimeState::default()),
+            memory_state: crate::snapshot::MemorySnapshot::from(&vitro_runtime::MemoryState::default()),
+        }
+    }
+
+    /// 链不变量：每个 Delta 的 base_step 都能解析到链内一个**步数不超过它**
+    /// 的 Full（且该 Full 真正是它写作时的基准——用 base 命中即可证不悬空）。
+    fn assert_no_dangling(mgr: &CheckpointManager) {
+        for (i, (step, snap)) in mgr.checkpoints.iter().enumerate() {
+            if let MemoryImage::Delta { base_step, .. } = &snap.memory {
+                assert!(
+                    mgr.checkpoints[..i]
+                        .iter()
+                        .any(|(s, b)| *s == *base_step && matches!(b.memory, MemoryImage::Full(_))),
+                    "检查点[{}]（step={}）悬空：base_step={} 不在链内（seek 到此将叠错内存）",
+                    i, step, base_step
+                );
+            }
+        }
+    }
+
+    /// U2#5 红锚（修复前红）：pinned 场景（step 0 锚点）删除 [1] 的 Full 时，
+    /// 其后基于该 Full 的 Delta 未级联删除——悬空留存，nearest 会把它们叠到
+    /// step 0 的 Full 上（脏页错叠 = seek 静默错内存）。
+    #[test]
+    fn evict_full_cascades_dangling_deltas() {
+        let mut mgr = CheckpointManager::new(20);
+        mgr.max_checkpoints = 4;
+        // 链：F@0(pinned), F@10, D@20(base 10), F@30, D@40(base 30)
+        mgr.checkpoints = vec![
+            (0, fake_snap(MemoryImage::Full(vec![0; 8]))),
+            (10, fake_snap(MemoryImage::Full(vec![1; 8]))),
+            (20, fake_snap(MemoryImage::Delta { base_step: 10, pages: vec![(0, vec![2; 8])] })),
+            (30, fake_snap(MemoryImage::Full(vec![3; 8]))),
+            (40, fake_snap(MemoryImage::Delta { base_step: 30, pages: vec![(0, vec![4; 8])] })),
+        ];
+        mgr.evict_over_limit();
+        // 修复前：删 [1]（Full@10）→ D@20 悬空留存（链 [0]=F, [1]=D@20, [2]=F@30...）
+        assert_no_dangling(&mgr);
+    }
+
+    /// 行为级锚：悬空链上 nearest(20) 的内存重建——修复前 D@20 被叠到 F@0
+    /// 上（结果 vec![0,..] 脏页覆盖为 [2]），修复后 D@20 已被级联删除，
+    /// nearest(20) 落到 F@0（vec![0;8]）——两者可区分（修复前输出 [2;8]）。
+    #[test]
+    fn nearest_on_evicted_chain_reconstructs_correctly() {
+        let mut mgr = CheckpointManager::new(20);
+        mgr.max_checkpoints = 4;
+        mgr.checkpoints = vec![
+            (0, fake_snap(MemoryImage::Full(vec![0; 8]))),
+            (10, fake_snap(MemoryImage::Full(vec![1; 8]))),
+            (20, fake_snap(MemoryImage::Delta { base_step: 10, pages: vec![(0, vec![2; 8])] })),
+            (30, fake_snap(MemoryImage::Full(vec![3; 8]))),
+            (40, fake_snap(MemoryImage::Delta { base_step: 30, pages: vec![(0, vec![4; 8])] })),
+        ];
+        mgr.evict_over_limit();
+        let (step, snap) = mgr.nearest(20).expect("nearest 应有解");
+        let mem = match snap.memory {
+            MemoryImage::Full(m) => m,
+            _ => panic!("nearest 应重建为 Full"),
+        };
+        // 修复后链 = [F@0, F@30, D@40]（D@20 已级联删）→ nearest(20) = F@0
+        assert_eq!(step, 0, "D@20 被级联删除后应落到 F@0");
+        assert_eq!(mem, vec![0u8; 8], "内存应为 F@0 基准（悬空叠错时为 [2;8]）");
+    }
+
+    /// 既有语义保持：删 Delta 无过度级联（同 base 的后继 Delta 不受影响）
+    /// 与 pinned 锚点永不裁剪。
+    #[test]
+    fn evict_delta_keeps_siblings_and_pin() {
+        let mut mgr = CheckpointManager::new(20);
+        mgr.max_checkpoints = 3;
+        mgr.checkpoints = vec![
+            (0, fake_snap(MemoryImage::Full(vec![0; 8]))),
+            (10, fake_snap(MemoryImage::Delta { base_step: 0, pages: vec![(0, vec![1; 8])] })),
+            (20, fake_snap(MemoryImage::Delta { base_step: 0, pages: vec![(0, vec![2; 8])] })),
+            (30, fake_snap(MemoryImage::Full(vec![3; 8]))),
+        ];
+        mgr.evict_over_limit();
+        assert_eq!(mgr.checkpoints[0].0, 0, "step 0 锚点永不裁剪");
+        assert_no_dangling(&mgr);
+        // 同 base 的兄弟 Delta：删 [1]（Delta）不应级联删 [2]（同 base 0）
+        assert!(mgr.checkpoints.iter().any(|(s, _)| *s == 20), "同 base 兄弟 Delta 不应被级联");
     }
 }

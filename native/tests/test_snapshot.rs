@@ -515,3 +515,80 @@ int main() {
     assert_eq!(vm_a.memory_ref(), vm_b.memory_ref());
     assert_eq!(session_a.runtime.output_chunks, session_b.runtime.output_chunks);
 }
+
+/// U2#5（2026-09-14）：>50 检查点触发淘汰后，回退 seek 的语义正确性——
+/// 悬空 Delta 在旧实现下会让 nearest 把脏页叠到更早的 Full 上（**静默旧值**，
+/// 无报错的最坏调试器缺陷）。与"不淘汰参考实现"（max_checkpoints 巨大）对照：
+/// 同步 seek 后变量值必须一致。
+#[test]
+fn test_u25_seek_after_eviction_matches_reference() {
+    let source = r#"
+#include <stdio.h>
+int main() {
+    int x = 0;
+    int sum = 0;
+    for (int i = 0; i < 400; i++) {
+        x = x + 3;
+        sum = sum + x;
+    }
+    printf("%d %d\n", x, sum);
+    return 0;
+}
+"#;
+    // run_batch 跑满（智能检查点在循环边界高频触发，>50 → 淘汰发生），
+    // 记录每步的 (step, x, sum)；随后回退 seek 到若干步并与记录对照。
+    use vitro_native::unified::engine::UnifiedEngine;
+
+    let collect = |max_checkpoints: usize| -> Vec<(i32, i64, i64)> {
+        let mut session = make_session(source);
+        let mut engine = UnifiedEngine::with_max_steps(1_000_000);
+        engine.checkpoints.max_checkpoints = max_checkpoints;
+        engine.reset();
+        let mut vm = setup_vm_for_session(&mut session);
+        session.runtime.running = true;
+        engine.checkpoints.save(0, &mut vm, &mut session.as_vm_context());
+        let mut trace = Vec::new();
+        loop {
+            let r = engine.run_batch(&mut vm, &mut session, 1).expect("run_batch");
+            // 每步从 frame_cache 尾帧读 x/sum
+            if let Some(p) = r.payloads.last() {
+                let x = p
+                    .local_vars
+                    .iter()
+                    .find(|v| v.name == "x")
+                    .and_then(|v| v.value.parse::<i64>().ok());
+                let sum = p
+                    .local_vars
+                    .iter()
+                    .find(|v| v.name == "sum")
+                    .and_then(|v| v.value.parse::<i64>().ok());
+                if let (Some(x), Some(sum)) = (x, sum) {
+                    trace.push((p.step_index, x, sum));
+                }
+            }
+            let fin = r.finished;
+            drop(r);
+            if fin {
+                break;
+            }
+        }
+        trace
+    };
+
+    let evicted = collect(50); // 生产配置：淘汰触发
+    let reference = collect(10_000); // 参考实现：不淘汰
+
+    assert!(evicted.len() > 600, "应收集足够步（实际 {}）", evicted.len());
+    assert!(!reference.is_empty());
+    // 两侧终值一致（程序语义相同）
+    let (.., ex, esum) = evicted.last().unwrap();
+    let (.., rx, rsum) = reference.last().unwrap();
+    assert_eq!((ex, esum), (rx, rsum), "终值必须一致（x={}, sum={} vs {}, {}）", ex, esum, rx, rsum);
+
+    // 中段抽点对照（淘汰窗口内外）
+    for probe in [evicted.len() / 4, evicted.len() / 2, evicted.len() * 3 / 4] {
+        let e = evicted[probe];
+        let r = reference[probe];
+        assert_eq!((e.1, e.2), (r.1, r.2), "步 {} 的 (x, sum) 淘汰侧 ({}, {}) != 参考侧 ({}, {})", e.0, e.1, e.2, r.1, r.2);
+    }
+}
