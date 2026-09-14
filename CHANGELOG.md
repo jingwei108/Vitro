@@ -51,6 +51,14 @@ buf/指针两形态语义等价契约测试 ×2。
   级联后常显形 E3023）→ 合成前查重（已注册返回占位名）+ push 点
   instantiated_class_names 单源查重
 
+### Fixed (U3#9 止血)：同名嵌套 struct 静默覆盖改显式冲突诊断
+
+两个类各含同名嵌套 struct（不同布局）时，展平命名下直接 insert 覆盖——
+后注册者胜出，先者的成员访问全部指向错误布局（A::Inner{x} 被 B::Inner{y}
+覆盖后 a.i.x 报 E3042 假错误）。改为保留首个 + 同名不同布局时显式 E3002
+（显式拒绝优于静默错布局）。完整根治（嵌套名 mangled 化 Outer__Inner +
+访问路径跟随）登记下批。
+
 ### Fixed (U3#2 先遣)：变参 double/long long 实参的 8 字节位模式中转
 
 从 4 字节 slot0 + 占位 slot1 止血迁至 8 字节专用槽（call.rs 四处：

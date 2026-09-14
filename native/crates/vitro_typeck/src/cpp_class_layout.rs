@@ -251,7 +251,31 @@ impl TypeChecker {
                     let sym = StructSymbol {
                         fields: decl.fields.iter().map(|f| (f.ty.clone(), f.name.clone())).collect(),
                     };
-                    self.structs.insert(decl.name.clone(), sym);
+                    // U3#9 止血：嵌套 struct 直接展平进全局 structs 表（无作用域），
+                    // 此前无条件 insert 覆盖——两个类各含同名 Inner 时，后注册者
+                    // 静默覆盖先者，先者的成员访问全部指向错误布局（实测
+                    // A::Inner{x} 被 B::Inner{y} 覆盖后 a.i.x 报 E3042）。
+                    // 改为保留首个 + 同名冲突显式报错（显式拒绝优于静默错布局；
+                    // 完整根治 = 嵌套名 mangled 化 Outer__Inner + 访问路径跟随，
+                    // 登记下批）。
+                    if let Some(existing) = self.structs.get(&decl.name) {
+                        let same = existing.fields.len() == sym.fields.len()
+                            && existing
+                                .fields
+                                .iter()
+                                .zip(sym.fields.iter())
+                                .all(|((et, en), (nt, nn))| et == nt && en == nn);
+                        if !same {
+                            self.report_error(
+                                &format!(
+                                    "嵌套 struct '{}' 与已有同名定义冲突（展平命名下无法共存：'{}' 内版本被忽略）。请重命名其中一个。", decl.name, name),
+                                &decl.loc,
+                                ErrorCode::E3002_StructRedeclared,
+                            );
+                        }
+                    } else {
+                        self.structs.insert(decl.name.clone(), sym);
+                    }
                 }
                 ClassMember::NestedClass { decl, .. } => {
                     self.register_single_class_layout(&decl.name, decl);

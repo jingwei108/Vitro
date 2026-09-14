@@ -804,3 +804,22 @@ fn test_u3_template_instantiation_round_limit_triggered() {
         "自递归模板必须在轮数上限处确定性报错（E1022），实际：{type_errors:?}"
     );
 }
+
+/// U3#9 止血锚（2026-09-14）：两个类各含同名嵌套 struct（不同布局）时，
+/// 展平命名下无法共存——修复前**静默覆盖**（后注册者胜出，先者的成员访问
+/// 全部指向错误布局：A::Inner{x} 被 B::Inner{y} 覆盖后 a.i.x 报 E3042 假
+/// 错误）；修复后显式 E3002 冲突诊断（显式拒绝优于静默错布局）。
+/// 完整根治（嵌套名 mangled 化 Outer__Inner）登记下批。
+#[test]
+fn test_u3_nested_struct_conflict_diagnosed() {
+    let src = "class A {\npublic:\n    struct Inner { int x; };\n    Inner i;\n};\nclass B {\npublic:\n    struct Inner { double y; };\n    Inner j;\n};\nint main() { return 0; }\n";
+    let (tokens, _) = vitro_native::compiler::lexer::Lexer::with_mode(src, true).tokenize();
+    let (program, errs) = vitro_native::compiler::parser::Parser::with_mode(tokens, true).parse();
+    assert!(errs.is_empty(), "parse: {errs:?}");
+    let mut program = program.unwrap();
+    let (type_errors, _, _) = vitro_native::compiler::typeck::TypeChecker::default().check(&mut program);
+    assert!(
+        type_errors.iter().any(|e| e.code == 3002 && e.message.contains("Inner")),
+        "同名嵌套 struct 冲突必须显式诊断（修复前静默覆盖 = 错误布局），实际：{type_errors:?}"
+    );
+}
