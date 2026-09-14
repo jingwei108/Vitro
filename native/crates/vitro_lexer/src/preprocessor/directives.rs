@@ -117,13 +117,31 @@ impl Lexer {
                     self.skip_to_line_end();
                 }
             }
-            // E2：拼接自定义头文件时的目录哨兵（线性扫描下精确维护目录栈）
+            // E2：拼接自定义头文件时的目录哨兵（线性扫描下精确维护目录栈）。
+            // U1#11：哨兵同时承担**条件栈边界记账**——push 时记录进入头文件前
+            // 的条件栈深度，pop 时校验头文件是否把条件组闭合干净（跨文件
+            // 条件栈污染的根治点，见 handle_endif / __vitro_pop_dir）。
             "__vitro_push_dir" => {
                 let dir = self.rest_of_line().trim().to_string();
                 self.include_resolver.dir_stack.push(PathBuf::from(dir));
+                self.include_cond_boundary.push(self.conditional_stack.len());
             }
             "__vitro_pop_dir" => {
                 self.include_resolver.dir_stack.pop();
+                if let Some(boundary) = self.include_cond_boundary.pop() {
+                    if self.conditional_stack.len() > boundary {
+                        // 头文件内有未闭合的 #if/#ifdef/#ifndef：若放任泄漏，
+                        // 包含者后续代码会被整段吞掉、EOF 的 E1013 错位到主文件
+                        // 末尾——在头文件边界闭合并定位报错。
+                        self.errors.push(lex_error(
+                            "头文件内未闭合的 #if/#ifdef/#ifndef（已在头文件末尾自动闭合，请检查头文件的条件编译配对）",
+                            self.line,
+                            0,
+                            ErrorCode::E1013_UnclosedConditional,
+                        ));
+                        self.conditional_stack.truncate(boundary);
+                    }
+                }
             }
             "undef" => {
                 if !self.is_skipping() {
@@ -135,14 +153,16 @@ impl Lexer {
             }
             "include" => {
                 if !self.is_skipping() {
+                    // include 指令行（供 E1021/E1015 定位报错；此时行尾尚未消费）
+                    let include_line = self.line;
                     self.skip_whitespace();
-                    if let Some(path) = self.parse_include_path() {
+                    if let Some((path, is_angle)) = self.parse_include_path() {
                         // 先整行消费 include 行（含换行），拼接内容从下一行起
                         self.skip_to_line_end();
                         if self.pos < self.chars.len() {
                             self.advance(); // consume '\n'
                         }
-                        self.handle_include(&path);
+                        self.handle_include(&path, is_angle, include_line);
                     } else {
                         self.skip_to_line_end();
                     }
@@ -227,7 +247,7 @@ impl Lexer {
                 &self.macros,
                 raw,
                 self.line,
-                &|p: &str| self.include_resolver.has_include(p),
+                &|p: &str, is_angle: bool| self.include_resolver.has_include(p, is_angle),
                 &mut self.errors,
                 &mut self.preprocessor_trace,
             );
@@ -268,7 +288,7 @@ impl Lexer {
             &self.macros,
             raw,
             self.line,
-            &|p: &str| self.include_resolver.has_include(p),
+            &|p: &str, is_angle: bool| self.include_resolver.has_include(p, is_angle),
             &mut self.errors,
             &mut self.preprocessor_trace,
         );
@@ -304,6 +324,19 @@ impl Lexer {
 
     fn handle_endif(&mut self) {
         self.skip_to_line_end();
+        // U1#11：include 边界记账——头文件内多余的 #endif 不得弹掉包含者的
+        // 条件组（否则包含者的结构被破坏、E1011 错位到主文件自己的 #endif 行）。
+        if let Some(&boundary) = self.include_cond_boundary.last() {
+            if self.conditional_stack.len() <= boundary {
+                self.errors.push(lex_error(
+                    "头文件中的 #endif 没有匹配的 #if/#ifdef/#ifndef（将弹掉包含文件的条件编译组，已忽略该 #endif）",
+                    self.line,
+                    0,
+                    ErrorCode::E1011_UnmatchedConditional,
+                ));
+                return;
+            }
+        }
         if self.conditional_stack.pop().is_none() {
             self.errors.push(lex_error(
                 "没有匹配的 #if/#ifdef/#ifndef 就出现 #endif",
@@ -316,14 +349,46 @@ impl Lexer {
 
     // ---------- include ----------
 
-    fn handle_include(&mut self, path: &str) {
+    fn handle_include(&mut self, path: &str, is_angle: bool, include_line: i32) {
+        // 动态嵌套深度保险丝（U1#11）：dir_stack 深度即当前 include 嵌套层数，
+        // 超限报 E1015 并跳过拼接——保险丝可触发性由
+        // test_u11_include_depth_fuse 锚定。
+        if self.include_resolver.dir_stack.len() >= super::resolver::MAX_INCLUDE_DEPTH {
+            self.errors.push(lex_error(
+                format!(
+                    "#include 嵌套过深（上限 {} 层，已跳过 '{}'）",
+                    super::resolver::MAX_INCLUDE_DEPTH,
+                    path
+                ),
+                include_line,
+                0,
+                ErrorCode::E1015_IncludeCycle,
+            ));
+            return;
+        }
+
         let is_stub = IncludeResolver::load_stub(path).is_some();
+        // H-3（U1#11 收紧）：`<>` 只匹配标准库存根，不再搜索文件系统目录——
+        // 与 Clang 的 <> 语义对齐。存量语料扫描（2026-09-14）：655 处 `<>`
+        // include 全部为标准头名，零存量依赖。
+        if is_angle && !is_stub {
+            self.errors.push(lex_error(
+                format!(
+                    "<> 形式只匹配标准库头文件（未收录 '{}'）；自定义头文件请使用 #include \"{}\"",
+                    path, path
+                ),
+                include_line,
+                0,
+                ErrorCode::E1021_IncludeNotFound,
+            ));
+            return;
+        }
         match self.include_resolver.should_include(path, is_stub) {
             Ok(()) => {}
             Err(Some(cycle)) => {
                 self.errors.push(lex_error(
                     format!("检测到 #include 依赖环：{}（已跳过该 include）", cycle),
-                    self.line,
+                    include_line,
                     0,
                     ErrorCode::E1015_IncludeCycle,
                 ));
@@ -337,7 +402,21 @@ impl Lexer {
         } else {
             self.include_resolver.resolve_path(path).and_then(|full| std::fs::read_to_string(full).ok())
         };
-        let Some(mut content) = content else { return };
+        // H-1（U1#11）：找不到头文件必须定位报错（E1021，include 行）——
+        // 修复前此处静默 `return`，错误错位到使用点（E3023 报在几十行之外），
+        // 学生按提示找声明永远找不到根因。
+        let Some(mut content) = content else {
+            self.errors.push(lex_error(
+                format!(
+                    "找不到头文件 '{}'（已搜索：当前文件目录、源文件目录；标准库存根未收录该名字）",
+                    path
+                ),
+                include_line,
+                0,
+                ErrorCode::E1021_IncludeNotFound,
+            ));
+            return;
+        };
 
         // 自定义头文件：以哨兵指令包裹内容，线性扫描到内容首/尾时精确压/弹
         // 目录栈（嵌套 quote-include 按"包含者目录优先"解析，C 语义）
@@ -366,7 +445,10 @@ impl Lexer {
         self.line -= inserted_newlines;
     }
 
-    pub(crate) fn parse_include_path(&mut self) -> Option<String> {
+    /// 解析 include 路径与定界形式：返回 `(路径, 是否 <> 形式)`。
+    /// U1#11 起携带定界符——`<>` 只查标准库存根（H-3），`"` 走文件系统候选链，
+    /// 两形式的判定在 handle_include / has_include 单源分发。
+    pub(crate) fn parse_include_path(&mut self) -> Option<(String, bool)> {
         let delimiter = self.peek(0);
         if delimiter != '<' && delimiter != '"' {
             return None;
@@ -381,7 +463,7 @@ impl Lexer {
         if self.pos < self.chars.len() && self.peek(0) == end_delim {
             self.advance(); // consume closing delimiter
         }
-        Some(path)
+        Some((path, delimiter == '<'))
     }
 
     // ---------- define / undef ----------

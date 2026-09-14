@@ -13,6 +13,16 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
 
+/// include 嵌套深度上限（U1#11）：静态环检测 DFS 的深度封顶与动态拼接的
+/// 嵌套深度保险丝**共用**此值——两个口径分叉会重演"保险丝口径错"失效形态
+///（DFS 封顶小于动态保险丝时无环深链会被误判为环，反之则漏拦）。
+/// 量级对齐 clang `-fmax-include-depth=200` 的教学压缩（教学子集取 64）。
+pub const MAX_INCLUDE_DEPTH: usize = 64;
+
+/// 静态环检测 DFS 的访问节点数封顶（U1#11）：防病态依赖图拖垮编译；
+/// 提高自 64 以覆盖教学项目级的头文件群（20 文件环实测检出）。
+pub const MAX_INCLUDE_GRAPH_NODES: usize = 512;
+
 /// include 解析状态（随单次 tokenize 存活）。
 #[derive(Debug, Default)]
 pub struct IncludeResolver {
@@ -66,9 +76,12 @@ impl IncludeResolver {
     ///
     /// 返回 `Ok(())` = 拼接；`Err(Some(环描述))` = 环检测命中（报 E1015 后跳过）；
     /// `Err(None)` = include-once 命中（静默跳过）。
+    ///
+    /// `key_for` 失败（文件不存在等）时仍放行（`Ok(())`）——fail-closed 由调用方
+    /// `handle_include` 的存在性诊断承担（U1#11 H-1 修复前是静默 `return`，
+    /// 现在报 E1021，本函数无需重复报错路径）。
     pub fn should_include(&mut self, path: &str, is_stub: bool) -> Result<(), Option<String>> {
         let Some(key) = self.key_for(path, is_stub) else {
-            // 无法规范化（文件不存在等）：交由调用方的存在性检查兜底
             return Ok(());
         };
         if self.processed.contains(&key) {
@@ -84,12 +97,20 @@ impl IncludeResolver {
         Ok(())
     }
 
-    /// `__has_include(<p>)` / `__has_include("p")`：存根存在或自定义文件存在。
-    pub fn has_include(&self, path: &str) -> bool {
+    /// `__has_include(<p>)` / `__has_include("p")`（U1#11 H-2/H-3 修复）：
+    /// 与 `#include` 的解析口径**单源**——
+    /// - `<p>`：只查标准库存根（与收紧后的 `#include <p>` 对齐，不搜文件系统）；
+    /// - `"p"`：存根优先，未命中走 quote 候选链（当前文件目录 → 源文件目录，
+    ///   即 [`Self::resolve_path`]）。修复前只查 `base_path`，头文件内部与紧随
+    ///   其后的 `#include` 判定互相矛盾（T14 实锤）。
+    pub fn has_include(&self, path: &str, is_angle: bool) -> bool {
         if Self::load_stub(path).is_some() {
             return true;
         }
-        self.base_path.as_ref().map(|b| b.join(path).exists()).unwrap_or(false)
+        if is_angle {
+            return false;
+        }
+        self.resolve_path(path).is_some()
     }
 
     /// 静态依赖环检测：从已解析的 `start_key`（规范路径）出发，沿自定义头文件
@@ -108,7 +129,10 @@ impl IncludeResolver {
         visited: &mut HashSet<String>,
         depth: usize,
     ) -> Option<String> {
-        if depth > 16 || visited.len() > 64 {
+        // U1#11：封顶 16/64 → MAX_INCLUDE_DEPTH/MAX_INCLUDE_GRAPH_NODES——旧封顶下
+        // 20 文件环在 depth=17 处静默截断、零诊断（环被 include-once 断链兜住，
+        // 学生看到的只是头文件内容没生效）。
+        if depth > MAX_INCLUDE_DEPTH || visited.len() > MAX_INCLUDE_GRAPH_NODES {
             return None;
         }
         let key = full.to_string_lossy().to_string();

@@ -123,6 +123,15 @@ jobs:
         run: python scripts/serve_smoke.py
         shell: bash
 
+      # R2（2026-09-14）：回放驱动纳入 CI——此前它不在任何验证循环里，
+      # "Go 驱动没跑"导致 step.next 重复投递（0,0,1，违反 spec 附录 A
+      # step_index 严格递增冻结不变量）漏过 U1#1 缓冲批的验收。本步骤含
+      # J9 selftest（判定口径埋雷，含版本下限比较组）+ S1~S5 全量断言
+      #（A7b = 帧序列主锚）。依赖 Debug 构建的 vitro_cli。
+      - name: replay S1-S5 protocol assertions (frame-sequence invariant)
+        run: go run ./scripts/replay
+        shell: bash
+
       # G2（R4）：出口 2 守护——wasm32 构建 + Node 冒烟（ABI 导出 + capi 全链路，
       # 纯 stdout 通道断言；wasm-bindgen 占位导入以 Proxy 桩通过）
       - name: wasm32 build & smoke (Exit 2 guard)

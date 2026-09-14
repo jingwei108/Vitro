@@ -26,12 +26,13 @@ pub struct CondOutcome {
 /// 求值 `#if` / `#elif` 表达式。
 ///
 /// `raw` 为指令行的原始文本（`#if` 之后的部分）；`has_include` 回调由
-/// resolver 提供。出错（语法/除零/展开保险丝）记入 `errors` 并返回假。
+/// resolver 提供（参数 = (路径, 是否 `<>` 形式)，U1#11 起与 `#include`
+/// 解析口径单源）。出错（语法/除零/展开保险丝）记入 `errors` 并返回假。
 pub fn evaluate(
     macros: &MacroTable,
     raw: &str,
     line: i32,
-    has_include: &dyn Fn(&str) -> bool,
+    has_include: &dyn Fn(&str, bool) -> bool,
     errors: &mut Vec<LexerError>,
     trace: &mut Vec<String>,
 ) -> CondOutcome {
@@ -53,7 +54,7 @@ fn evaluate_inner(
     macros: &MacroTable,
     raw: &str,
     line: i32,
-    has_include: &dyn Fn(&str) -> bool,
+    has_include: &dyn Fn(&str, bool) -> bool,
     errors: &mut Vec<LexerError>,
     trace: &mut Vec<String>,
 ) -> Result<CondOutcome, String> {
@@ -102,7 +103,9 @@ fn evaluate_inner(
 }
 
 /// 文本级替换 `__has_include(<p>)` / `__has_include("p")`。
-fn replace_has_include(text: &str, has_include: &dyn Fn(&str) -> bool) -> String {
+/// 定界形式随路径传给回调（U1#11：`<>` 只查存根、`"` 走候选链——与
+/// `#include` 单源，防同一文件内两者判定互相矛盾）。
+fn replace_has_include(text: &str, has_include: &dyn Fn(&str, bool) -> bool) -> String {
     let mut out = String::new();
     let mut rest = text;
     while let Some(idx) = rest.find("__has_include") {
@@ -114,9 +117,9 @@ fn replace_has_include(text: &str, has_include: &dyn Fn(&str) -> bool) -> String
         } else {
             rest.trim_start()
         };
-        let (open, close) = match after_call.chars().next() {
-            Some('<') => ('<', '>'),
-            Some('"') => ('"', '"'),
+        let (open, close, is_angle) = match after_call.chars().next() {
+            Some('<') => ('<', '>', true),
+            Some('"') => ('"', '"', false),
             _ => {
                 out.push_str("__has_include");
                 continue;
@@ -128,7 +131,7 @@ fn replace_has_include(text: &str, has_include: &dyn Fn(&str) -> bool) -> String
             continue;
         };
         let path = after_open[..close_idx].trim();
-        let v = if has_include(path) { "1" } else { "0" };
+        let v = if has_include(path, is_angle) { "1" } else { "0" };
         out.push_str(v);
         let mut tail = &after_open[close_idx + close.len_utf8()..];
         // 吞掉调用右括号

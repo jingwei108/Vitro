@@ -33,6 +33,10 @@ pub struct Lexer {
     pub(crate) macro_body_mode: bool,
     /// E2：include 解析（include-once + 环检测 + 存根加载）。
     pub(crate) include_resolver: preprocessor::IncludeResolver,
+    /// U1#11：include 边界的条件栈记账——`#__vitro_push_dir` 时记录进入头文件
+    /// 前的条件栈深度，`#__vitro_pop_dir` / `handle_endif` 时校验头文件把条件
+    /// 组闭合干净（跨文件条件栈污染的根治点）。
+    pub(crate) include_cond_boundary: Vec<usize>,
     /// E2 白箱教学层：展开链与 #if 分支选择原因（容量封顶）。
     pub(crate) preprocessor_trace: Vec<String>,
 }
@@ -63,6 +67,7 @@ impl Lexer {
             warnings: Vec::new(),
             macro_body_mode: false,
             include_resolver: preprocessor::IncludeResolver::new(base_path.clone()),
+            include_cond_boundary: Vec::new(),
             preprocessor_trace: Vec::new(),
         }
     }

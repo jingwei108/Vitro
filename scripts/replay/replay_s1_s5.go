@@ -61,17 +61,24 @@ func marr(v any) []any {
 	return a
 }
 
-// abiVersionAtLeast 解析 "major.minor.patch" 版本串并断言下限；
-// 解析失败 / major 不同 / 低于要求 → false（A4a 必红）。
+// abiVersionAtLeast 解析 "major.minor.patch" 版本串并断言**下限**（semver）：
+// major 更高即满足；major 相同时比 minor；解析失败 → false。
+// R2（2026-09-14）：旧实现 "major 不同即 false" 把更高的 ABI 2.0.0 误拒
+//（2.0.0 ≥ 1.1.0 本应通过——项目更名批升 2.0.0 当天即被本断言误拦）。
+// 埋雷锚：selftest 的版本比较注入组（低于下限/垃圾串必红）。
 func abiVersionAtLeast(v string, minMajor, minMinor int) bool {
 	var major, minor, patch int
 	if _, err := fmt.Sscanf(v, "%d.%d.%d", &major, &minor, &patch); err != nil {
 		return false
 	}
-	if major != minMajor {
+	switch {
+	case major > minMajor:
+		return true
+	case major < minMajor:
 		return false
+	default:
+		return minor >= minMinor
 	}
-	return minor >= minMinor
 }
 
 func mstr(v any) string {
@@ -382,21 +389,30 @@ func runS1(s *Serve, rep *Report) {
 
 	a7 := true
 	var prev float64
+	sawFrame := false
 	for i := 0; i < 3; i++ {
 		r := s.request("step.next", nil)
 		pls := marr(mmap(r["result"])["payloads"])
+		// R2 口径更新（2026-09-14）：一帧发布缓冲（U1#1 P0-1）语义下首调
+		// 返回空 payloads（缓冲建立、滞后一帧），此后每次恰 1 帧；全序列
+		// step_index 严格递增各恰一次（spec 附录 A 冻结不变量——重复投递
+		// 0,0,1 形态即红，下游 PR 审阅实锤回归，本断言为拦住它的主锚）。
+		if i == 0 && len(pls) == 0 {
+			continue
+		}
 		if len(pls) != 1 {
 			a7 = false
 			break
 		}
 		idx := mnum(mmap(pls[0])["step_index"])
-		if i > 0 && idx != prev+1 {
+		if sawFrame && idx != prev+1 {
 			a7 = false
 			break
 		}
 		prev = idx
+		sawFrame = true
 	}
-	rep.check("S1", "A7b", a7, "3 次 step.next 各恰 1 payload 且 step_index 连续")
+	rep.check("S1", "A7b", a7, "首调空帧（一帧发布缓冲）+ 其后每次恰 1 payload 且 step_index 严格递增")
 
 	r109 := s.request("compile", map[string]any{"source": s1K3})
 	r110 := s.request("payload.get", map[string]any{"start": 0, "end": 3})
@@ -562,11 +578,18 @@ func runS3(s *Serve, rep *Report) string {
 	rep.check("S3", "A2", stick, "暂停态粘性（不推进）")
 
 	s.request("breakpoints.set", map[string]any{"lines": []int{}})
+	// R2 口径更新（2026-09-14）：一帧发布缓冲在暂停冲刷（断点行帧随暂停发布，
+	// 断点 UI 依赖）后**重建**——首个恢复响应 payloads 为空（同首调），下一轮
+	// 才发布断点后的新帧。旧断言"恢复轮即有新帧"的绿恰好依赖修复前的克隆
+	// 直发实现（同一帧发布两次），与 A7b 严格递增互斥，按缓冲语义重写。
 	rResume := s.request("step.next", nil)
 	res := mmap(rResume["result"])
-	pls := marr(res["payloads"])
-	a3 := res["paused"] == false && len(pls) > 0 && mnum(mmap(pls[0])["step_index"]) > mnum(hitPl["step_index"])
-	rep.check("S3", "A3", a3, "清断点后恢复推进且不重编号")
+	a3 := res["paused"] == false && isPresentArray(res, "payloads") && len(marr(res["payloads"])) == 0
+	rNext := s.request("step.next", nil)
+	res2 := mmap(rNext["result"])
+	pls2 := marr(res2["payloads"])
+	a3 = a3 && len(pls2) == 1 && mnum(mmap(pls2[0])["step_index"]) > mnum(hitPl["step_index"])
+	rep.check("S3", "A3", a3, "清断点后恢复推进（首响应空帧=缓冲重建，次响应新帧且不重编号）")
 
 	// 推进至 swap 体内（指针快照出现）
 	var ptrPl map[string]any
@@ -1049,6 +1072,13 @@ func selfTest() {
 			v, has := p["algorithm_step"]
 			return has && v == nil
 		}()},
+		// R2：abiVersionAtLeast 下限语义——低于下限/垃圾串必红，更高 major 必绿
+		//（旧实现 "major 不同即 false" 恰在 2.0.0 上翻车，此组为它的埋雷锚）
+		{"版本下限：低于下限必拒", !abiVersionAtLeast("0.9.9", 1, 1)},
+		{"版本下限：同 major 低 minor 必拒", !abiVersionAtLeast("1.0.9", 1, 1)},
+		{"版本下限：垃圾串必拒", !abiVersionAtLeast("garbage", 1, 1)},
+		{"版本下限：更高 major 必过", abiVersionAtLeast("2.0.0", 1, 1)},
+		{"版本下限：边界相等必过", abiVersionAtLeast("1.1.0", 1, 1)},
 	}
 	nFail := 0
 	for _, c := range checks {

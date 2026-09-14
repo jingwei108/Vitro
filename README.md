@@ -18,7 +18,7 @@
 vitro 引擎核心（Rust workspace，禁止平台 API 耦合）
 │
 ├─ 出口 1：native cdylib / C ABI（native/src/capi/，ABI 版本化 vitro_abi_version()）
-│    第一消费者：vitro_cli、scripts/shadow_verify.go（capi 直调，671 个用例的生产验证）
+│    第一消费者：vitro_cli、scripts/shadow_verify.go（capi 直调，675 个用例的生产验证）
 │    外部消费者：第三方教学 IDE（.NET P/Invoke 子进程等）、任意语言 FFI
 │
 ├─ 出口 2：wasm32-unknown-unknown（.wasm + 薄 JS/TS 绑定）

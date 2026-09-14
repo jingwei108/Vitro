@@ -7,6 +7,76 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (出口 3)：R2——step.next 一帧发布缓冲重复投递（0,0,1，违反 spec 附录 A 冻结不变量）+ replay A4a 版本下限误拒 + 防线缺口闭合（来源：下游 PR 引擎回归审阅）
+
+**回归来源**：U1#1 修"首帧显示赋值前旧值"引入的一帧发布缓冲，声明代价"滞后一帧"，
+实现却成重复发布——首帧 `curr` 的克隆被发布后又把 `curr` 入缓冲，下一轮缓冲帧再度
+发布（实测序列 `0,0,1`，同一真实步投递两次，违反 schema 附录 A
+"`step_index` 严格递增"冻结不变量；M3/V 步进 UI 消费前必须修复，M1 判分不受影响）。
+
+- **引擎修复**（`session_api.rs` `step_next` None 分支）：首调**只建立缓冲、返回空
+  payloads 序列**——"滞后一帧"的完整语义。消费方契约变化（schema §6.1 已冻结）：
+  首调 `payloads: []`；此后每次恰 1 帧（上一步的帧，语句中间帧清行末标注）；
+  `finished` / `paused`（断点 UI 依赖断点行帧随暂停发布）/ `waiting_input` 时冲刷；
+  恢复后缓冲重建（首个恢复响应为空）；全序列每真实步恰投递一次；
+- **驱动 bug**（`scripts/replay`）：A4a `abiVersionAtLeast` 旧实现 "major 不同即
+  false" 把更高的 ABI **2.0.0 误拒**（2.0.0 ≥ 1.1.0 本应通过——项目更名批升 2.0.0
+  当天即被误拦）；改 semver 下限语义，selftest 补 5 条埋雷（低于下限/同 major 低
+  minor/垃圾串必红，更高 major/边界相等必过）；
+- **防线缺口闭合**（审阅实锤："能拦住它的签字回放断言恰好不在上游的验证循环里"）：
+  ① `go run ./scripts/replay` 纳入 CI（此前 Go 驱动不在任何验证循环，S1 A7b 断言
+  从未跑到）；② replay A7b 口径按缓冲语义重写（首调空帧 + 其后恰 1 帧 + 严格递增，
+  重复投递 0,0,1 形态即红）；③ replay S3 A3 口径重写（旧断言的绿恰好依赖修复前的
+  克隆直发实现，与 A7b 严格递增互斥——恢复首响应空帧=缓冲重建，次响应新帧不重编号）；
+  ④ serve_smoke 旧断言"单次响应 payloads 非空"对重复投递与首调空帧双失明，改合并
+  序列断言（非空 + `step_index` 严格递增，+3 条断言）。
+
+红→绿：replay 修复前 `S1 A7b` + `S5 A4a` 双 FAIL 留痕（61 断言 59/2）；修复后
+61/61。验收：cargo 69 套件全绿；shadow C 675 零非预期差异；serve 冒烟 57/57
+（RSS 护栏绿）；clippy `-D warnings` 零警告；facts check 漂移清零（serve 断言
+54→57 机器同步）。**登记（不扩批）**：`go vet ./scripts/...` 存量 3 处
+`possible misuse of unsafe.Pointer`（`internal/capi` PtrToGoString 长窗口扫描 ×2
++ `gosmoke/cabi_smoke` cString ×1，后者注释自称"vet 合规"与事实不符）——CI 无
+vet 步骤故长期未暴露；修复须与"CI 补 vet"同批，登记待办。
+
+### Fixed (预处理器)：U1#11 预处理器 P0 批——include 静默跳过 / `__has_include` 口径分叉 / `<>` 收紧 / 跨文件条件栈污染 / 环检测长链漏报（全部红→绿闭环）
+
+来源：路线图 U1#11 两处（条件栈污染 + 环检测 fail-open）扩容合并
+`实测发现登记20260913_性能与头文件.md` 的 H-1/H-2/H-3（四处修复），六项收口：
+
+- **H-1（include 找不到静默跳过，错误错位到使用点）**：`handle_include` 的
+  静默 `return` 改报 **`E1021_IncludeNotFound`**（新增错误码，定位在 include 行，
+  文案列出已搜索目录）；既有单测 `test_preprocessor_include_once` 曾把该缺陷
+  固化为 `errs.is_empty()` 断言，已改写（include-once 语义改用真实头验证）；
+- **H-2（`__has_include` 与 `#include` 口径分叉）**：`has_include` 改与
+  `resolve_path` 候选链单源（包含者目录优先），并携带定界形式——
+  `__has_include("x.h")` 在头文件内部不再误判 0（T14 实锤修复）；
+- **H-3（`<>` 也搜源目录，比 Clang 宽松）**：**收紧**——`<>` 只匹配标准库存根
+  （14 个名字），不搜索文件系统目录；`parse_include_path` 起携带定界符。
+  存量语料扫描：655 处 `<>` include 全为标准头名，**零存量依赖**；wasm 冒烟
+  与 C++ 用例均不受影响；
+- **跨文件条件栈污染**：`#__vitro_push_dir` 哨兵起同时记录条件栈深度
+  （`include_cond_boundary`）——头文件内未闭合 `#if` 在边界自动闭合报
+  `E1013`（不再吞掉包含者后续代码）；头内多余 `#endif` 被拦截报 `E1011`
+  （不再弹掉包含者的条件组、错误不再错位到主文件）；
+- **环检测长链漏报 + 动态深度保险丝**：静态 DFS 封顶 16/64 → **64/512**
+  （`MAX_INCLUDE_DEPTH`/`MAX_INCLUDE_GRAPH_NODES`，20 文件环实测检出——旧封顶
+  下静默漏报零诊断）；新增动态嵌套深度保险丝（`dir_stack` 深度 ≥64 报
+  `E1015`，两口径共用同一常量防"保险丝口径错"复发）；`should_include` 的
+  key_for 失败放行注释更新（fail-closed 由 handle_include 的 E1021 诊断承担）；
+- **文档随批（D-1/D-2/D-3）**：C语言子集规范 §1.2 排除原则勘误（旧例
+  "完整预处理器、自定义头文件"已由 E2 推翻）、已知差异表 include 行重写、
+  §2.11 六项行为变更登记（含 U1#6 漏更的展开保险丝字节口径一并修正）；
+  架构设计.md ABI 版本 1.2.0 → 2.0.0。
+
+红→绿锚：`lexer_unit_test` U1#11 组 ×8（修复前 8 FAIL 留痕——含 E1011 错位
+line=3 实锤、20 环零诊断实锤）；shadow 新用例 ×4（`e2_include_not_found_quote`
+双侧编译失败 / `e2_include_not_found_angle`、`e2_angle_local_header` 修复前
+vitro_better→match / `e2_has_include_chain` 修复前 output_gap 输出 0 vs 13）。
+验收：cargo 69 套件全绿；shadow C 675（668 match + 3 known_issue +
+4 gap_extension，零非预期差异）；C++ shadow 非预期 0；serve 冒烟 54/54
+（RSS 护栏绿）；clippy -D warnings 零警告；facts check 漂移清零。
+
 ### Changed：项目更名 Cide → Vitro（全量符号落地，ABI 2.0.0）
 
 品牌与符号层一次性统一为 **Vitro**（*in vitro*，"在玻璃之中"——白箱观察 +

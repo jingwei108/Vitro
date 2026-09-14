@@ -254,6 +254,13 @@ pub fn step_next(session: &mut Session) -> Result<Value, String> {
     // `if let Some(pending)` 块内，而该字段初始为 `None`（session.rs）——
     // 分支永不进入 ⇒ 字段永远是 None ⇒ **整段缓冲从未执行**（死锁），
     // 首帧旧值照样下发。赋值必须无条件执行（放在 if 之外）。
+    //
+    // R2（2026-09-14，下游 PR 审阅实锤回归）：首调（None 分支）曾发布
+    // curr 的克隆后又把 curr 入缓冲——下一轮 pending 再度发布，同一真实步
+    // 被投递两次（实测序列 0,0,1，违反 spec 附录 A "step_index 严格递增"
+    // 冻结不变量）。修正为**首调只建立缓冲、返回空 payloads 序列**——
+    // 这才是"滞后一帧"声明的完整语义（首调无帧可发；此后每次发布上一
+    // 步的帧；程序结束冲刷）。消费方需容忍首调空数组（schema §6.1）。
     let flushed = result.payloads.is_empty() || result.finished;
     if flushed {
         // 程序结束/无新帧：冲刷缓存帧（与结束帧同行则它不是行末，清标注）
@@ -276,13 +283,8 @@ pub fn step_next(session: &mut Session) -> Result<Value, String> {
                 result.payloads.insert(0, pending);
             }
             None => {
-                // 首帧（全局第一帧）：没有下一帧可对比，无法判定它是否为
-                // 行末帧。保守清除标注——宁可少报一条，不可把赋值前的旧
-                // 值当正确值呈现给学生。
-                if let Some(mut c) = curr.clone() {
-                    c.algorithm_step = None;
-                    result.payloads = vec![c];
-                }
+                // 首调：curr 仅入缓冲、不发布（curr 已 pop，剩余本为空）。
+                // 发布克隆的旧实现即 R2 重复投递的根源。
             }
         }
         session.unified_pending = curr;

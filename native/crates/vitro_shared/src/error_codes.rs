@@ -26,6 +26,8 @@ pub enum ErrorCode {
     W1018_MacroShadowing = 1018,
     W1019_MacroArgSideEffect = 1019,
     E1020_StaticAssertFailed = 1020,
+    /// include 目标不存在（U1#11 H-1：此前静默跳过、错误错位到使用点）。
+    E1021_IncludeNotFound = 1021,
     E2001_ExpectedType = 2001,
     E2002_ExpectedArraySize = 2002,
     E2003_ExpectedExpr = 2003,

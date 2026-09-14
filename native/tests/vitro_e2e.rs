@@ -203,8 +203,16 @@ fn run_case_with_compiler(
 #[test]
 fn test_vitro_e2e_baseline() {
     // E2：故意双侧编译失败的用例（Shadow 判 match：环检测 vs Clang 无限嵌套
-    // 包含错误），e2e 的"必须可运行"契约不适用
-    const KNOWN_BASELINE_COMPILE_FAILURES: &[&str] = &["e2_include_cycle", "e3_static_assert_fail"];
+    // 包含错误），e2e 的"必须可运行"契约不适用。
+    // U1#11 新增三例（H-1/H-3）：include 找不到 / <> 引自定义头——Vitro 修复
+    // 后报 E1021 编译失败，Clang 同样 fatal error（stdout 均空，Shadow 判 match）。
+    const KNOWN_BASELINE_COMPILE_FAILURES: &[&str] = &[
+        "e2_include_cycle",
+        "e3_static_assert_fail",
+        "e2_include_not_found_quote",
+        "e2_include_not_found_angle",
+        "e2_angle_local_header",
+    ];
 
     let cases = load_cases(Path::new("tests/cases/baseline"));
     let known_compile_fail: std::collections::HashSet<&str> =

@@ -146,9 +146,25 @@ def main():
     check("3" in delta, "output.delta 含程序输出", repr(delta[:80]))
     check(by_id[4]["result"]["cursor"] == by_id[4]["result"]["total"], "游标推进到末尾")
 
-    step = by_id[6]["result"]
-    check(isinstance(step.get("payloads"), list) and bool(step["payloads"]), "step.next 返回 payload")
-    payload_keys = set(step["payloads"][0].keys())
+    # R2（2026-09-14）：一帧发布缓冲（U1#1 P0-1）语义下 step.next **首调返回空
+    # payloads 数组**（缓冲建立、滞后一帧），此后每次恰 1 帧。旧断言只查
+    # "单次响应 payloads 非空"——对重复投递（0,0,1）与首调空帧两形态都失明
+    #（下游 PR 审阅实锤：能拦住它的断言不在本驱动的验证循环里）。现改为
+    # 合并序列断言：非空 + step_index 严格递增（spec 附录 A 冻结不变量）。
+    frames = []
+    for rid in (6, 7):
+        r = by_id[rid]["result"]
+        check(isinstance(r.get("payloads"), list), f"step.next(id={rid}) 返回 payloads 数组")
+        frames.extend(r.get("payloads") or [])
+    check(bool(frames), "step.next 帧序列非空（首调空 + 后续逐帧的合并序列）")
+    idx_seq = [p.get("step_index") for p in frames]
+    check(
+        all(isinstance(i, int) for i in idx_seq)
+        and all(b == a + 1 for a, b in zip(idx_seq, idx_seq[1:])),
+        "step_index 严格递增且无重复投递（spec 附录 A）",
+        str(idx_seq),
+    )
+    payload_keys = set(frames[0].keys())
     check(
         {"step_index", "code_line", "func_name", "local_vars", "pointer_snapshots"} <= payload_keys,
         "StepPayload 含 schema 字段",
