@@ -36,7 +36,7 @@ use std::ptr;
 /// `cide_*` → `vitro_*`（41 个入口），二进制名 `cide_native.dll` →
 /// `vitro_native.dll`。符号面 breaking → major。语义与 JSON 帧格式
 /// （wire format v0.1）零变化；消费方迁移 = 纯符号改名 + 重链接。
-pub const VITRO_ABI_VERSION: &str = "2.0.0";
+pub const VITRO_ABI_VERSION: &str = "2.1.0";
 
 /// 把 Rust 字符串的所有权交给调用方（rust-alloc）。
 fn owned_c_string(s: String) -> *mut c_char {
@@ -83,10 +83,52 @@ pub extern "C" fn vitro_abi_version() -> *mut c_char {
     owned_c_string(VITRO_ABI_VERSION.to_string())
 }
 
+/// ABI 版本串写入调用方缓冲（buf 写入式，ABI 2.1.0）。
+///
+/// 与 `vitro_abi_version`（rust-alloc 所有权）语义等价，零所有权转移：
+/// 内容写入 `buf`（至多 `max_len-1` 字节 + NUL），返回写入字节数（不含 NUL）。
+///
+/// # Safety
+/// - `buf` 若非空，必须指向至少 `max_len` 字节的有效可写内存。
+#[no_mangle]
+pub unsafe extern "C" fn vitro_abi_version_into(buf: *mut std::os::raw::c_char, max_len: std::os::raw::c_int) -> std::os::raw::c_int {
+    crate::capi::guard(0, || {
+        if buf.is_null() || max_len <= 0 {
+            return 0;
+        }
+        let ver = VITRO_ABI_VERSION;
+        crate::capi::write_c_buf(ver, buf, max_len);
+        // 返回完整所需长度（截断可检测，同 mod.rs 口径）
+        ver.len() as std::os::raw::c_int
+    })
+}
+
 #[no_mangle]
 /// 返回引擎版本串：crate 版本（+ 构建期注入的 git hash，若可用）。
 pub extern "C" fn vitro_engine_version() -> *mut c_char {
     owned_c_string(engine_version_string())
+}
+
+/// 引擎版本串写入调用方缓冲（buf 写入式，ABI 2.1.0）。
+///
+/// 与 `vitro_engine_version`（rust-alloc 所有权）语义等价，零所有权转移：
+/// 内容写入 `buf`（至多 `max_len-1` 字节 + NUL），返回写入字节数（不含 NUL）。
+/// `max_len` 不足容纳完整版本串时内容被截断（返回实际写入数）——消费方应
+/// 传入 ≥64 字节缓冲（版本串形如 "0.1.0 (abcdef1)"）。
+///
+/// # Safety
+/// - `buf` 若非空，必须指向至少 `max_len` 字节的有效可写内存。
+#[no_mangle]
+pub unsafe extern "C" fn vitro_engine_version_into(buf: *mut std::os::raw::c_char, max_len: std::os::raw::c_int) -> std::os::raw::c_int {
+    crate::capi::guard(0, || {
+        if buf.is_null() || max_len <= 0 {
+            return 0;
+        }
+        let ver = engine_version_string();
+        crate::capi::write_c_buf(&ver, buf, max_len);
+        // 返回完整所需长度（截断可检测，同 mod.rs 口径）
+        ver.len() as std::os::raw::c_int
+    })
 }
 
 /// 引擎版本串的 Rust 侧单源（`vitro_engine_version` 与 `capabilities.engine_version` 共用）。

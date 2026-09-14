@@ -1,10 +1,10 @@
 // cabi_smoke.go — Go syscall 驱动 vitro_native.dll 的 C ABI 冒烟（D5 前置验证）。
-// 验证三类边界：版本串（rust-alloc 字符串：指针取回 + vitro_free_string 释放）、句柄指针往返。
+// 验证两类边界：版本串（buf 写入式读取，ABI 2.1.0：零所有权转移）、句柄指针往返。
 // 运行：go run cabi_smoke.go（需先 cargo build --release）
-// vet 说明：`go vet -unsafeptr=false cabi_smoke.go` 零告警。unsafeptr 单项豁免是已裁定的：
-// DLL Call 返回值天然是 uintptr，转 unsafe.Pointer 是 Win32 互操作的必然形态
-// （golang.org/x/sys/windows 同型），vet 无法静态证明其合法性而非缺陷。
-// 共享 helper 落地时该豁免集中在 helper 一处，业务脚本不得自行转换。
+// vet 说明（U2#13 修订）：旧头注声称"unsafeptr 单项豁免是已裁定的"——与事实不符，
+// vet unsafeptr 检查器不接受任何 uintptr→unsafe.Pointer 逆向转换（无论豁免与否
+// 它都在默认检查集内）。本文件的 cString 曾是三处 vet 命中之一，已随 buf 写入式
+// API（vitro_*_version_into）整体移除；`go vet ./scripts/...` 现零输出且为 CI 门禁。
 package main
 
 import (
@@ -25,26 +25,27 @@ var dllPath = func() string {
 }()
 
 var (
-	dll         = syscall.NewLazyDLL(dllPath)
-	abiVersion  = dll.NewProc("vitro_abi_version")
-	engineVer   = dll.NewProc("vitro_engine_version")
-	freeString  = dll.NewProc("vitro_free_string")
-	sessionNew  = dll.NewProc("vitro_session_create")
-	sessionFree = dll.NewProc("vitro_session_destroy")
+	dll            = syscall.NewLazyDLL(dllPath)
+	abiVersionInto = dll.NewProc("vitro_abi_version_into")
+	engineVerInto  = dll.NewProc("vitro_engine_version_into")
+	sessionNew     = dll.NewProc("vitro_session_create")
+	sessionFree    = dll.NewProc("vitro_session_destroy")
 )
 
-// cString 从 C 字符串指针读 NUL 结尾内容为 Go string（只读扫描，不接管所有权）。
-// 这是共享 DLL helper 的雏形——vitro_output.py 的 "restype 必须 c_void_p" 口径在 Go 侧的对应物。
-// vet 合规要求 uintptr → unsafe.Pointer 转换与解引用在同一表达式内完成，不得先存变量再转。
-func cString(ptr uintptr) string {
-	if ptr == 0 {
+// engineVersionInto 读引擎版本串（buf 写入式 ABI 2.1.0）：调用方缓冲 + 正向
+// 指针，零所有权转移。U2#13 收口：原 cString 的 uintptr→unsafe.Pointer 逆向
+// 转换（注释自称"vet 合规形态"与事实不符——unsafeptr 检查器不接受任何
+// uintptr→Pointer 转换，无论是否先存变量）随此移除。
+func readIntoProc(proc *syscall.LazyProc) string {
+	buf := make([]byte, 64)
+	r, _, _ := proc.Call(uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf)))
+	runtime.KeepAlive(buf)
+	n := int(int32(r))
+	if n <= 0 {
 		return ""
 	}
-	p := unsafe.Pointer(ptr) // uintptr → Pointer 立即转换（vet 合规形态：不参与后续算术）
-	buf := unsafe.Slice((*byte)(p), 4096) // 版本串远小于 4KB，NUL 一定在其中
-	n := 0
-	for buf[n] != 0 {
-		n++
+	if n >= len(buf) {
+		n = len(buf) - 1
 	}
 	return string(buf[:n])
 }
@@ -59,24 +60,16 @@ func mustFind() {
 func main() {
 	mustFind()
 
-	// ① ABI 版本（返回 rust-alloc 字符串 "1.1.0"，不是整数——capi/first_batch.rs:66）
-	abip, _, _ := abiVersion.Call()
-	if abip == 0 {
-		fmt.Fprintln(os.Stderr, "vitro_abi_version 返回 NULL")
+	// ① ABI 版本（buf 写入式 ABI 2.1.0，零所有权转移）
+	abi := readIntoProc(abiVersionInto)
+	if abi == "" {
+		fmt.Fprintln(os.Stderr, "vitro_abi_version_into 读取失败")
 		os.Exit(1)
 	}
-	abi := cString(abip)
-	_, _, _ = freeString.Call(abip) // rust-alloc 所有权契约：立即归还
 	fmt.Printf("vitro_abi_version = %q\n", abi)
 
 	// ② 引擎版本串（同契约）
-	vp, _, _ := engineVer.Call()
-	if vp == 0 {
-		fmt.Fprintln(os.Stderr, "vitro_engine_version 返回 NULL")
-		os.Exit(1)
-	}
-	ver := cString(vp)
-	_, _, _ = freeString.Call(vp)
+	ver := readIntoProc(engineVerInto)
 	fmt.Printf("vitro_engine_version = %q\n", ver)
 
 	// ③ 句柄指针往返：create → destroy（非 NULL 即契约成立）

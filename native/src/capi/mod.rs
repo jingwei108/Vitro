@@ -140,6 +140,30 @@ pub unsafe extern "C" fn vitro_get_compile_errors(s: *mut Session) -> *const c_c
 }
 
 #[no_mangle]
+/// 编译错误 JSON 写入调用方缓冲（buf 写入式，ABI 2.1.0；与
+/// `vitro_get_compile_errors` + length 的定长读取语义等价，零所有权转移）。
+/// 返回写入字节数（不含 NUL；无错误返回 0）。
+///
+/// # Safety
+/// - `s` 必须是由 `vitro_session_create` 返回的有效 `Session` 指针，且未被 `vitro_session_destroy` 销毁。
+/// - `buf` 若非空，必须指向至少 `max_len` 字节的有效可写内存。
+pub unsafe extern "C" fn vitro_get_compile_errors_into(s: *mut Session, buf: *mut c_char, max_len: c_int) -> c_int {
+    guard(0, || {
+        if s.is_null() || buf.is_null() || max_len <= 0 {
+            return 0;
+        }
+        let session = &mut *s;
+        if session.compile.errors.is_empty() {
+            return 0;
+        }
+        let errors = session.compile.errors.clone();
+        write_c_buf(&errors, buf, max_len);
+        // 同 vitro_get_runtime_error_into：返回完整所需长度（截断可检测）
+        errors.len() as c_int
+    })
+}
+
+#[no_mangle]
 /// vitro_get_compile_errors_length 的 C API 封装（ABI 1.2.0，加函数 = minor）。
 ///
 /// 返回编译错误 JSON 的字节长度（不含 NUL 终止符），无错误时返回 0。
@@ -283,6 +307,37 @@ pub unsafe extern "C" fn vitro_get_runtime_error(s: *mut Session) -> *const c_ch
 }
 
 #[no_mangle]
+/// 运行时错误写入调用方缓冲（buf 写入式，ABI 2.1.0）。
+///
+/// 与 `vitro_get_runtime_error`（返回 rust-alloc 所有权指针）语义等价，但
+/// **零所有权转移**：内容写入 `buf`（至多 `max_len-1` 字节 + NUL 终止），
+/// 返回写入的字节数（不含 NUL；错误/空错误返回 0）。跨语言 FFI 消费方
+///（Go/Python ctypes）优先用本形态——不需要 `vitro_free_string`，也不依赖
+/// 对返回指针的扫描窗口假设（U2#13 收口：scripts 侧 uintptr→unsafe.Pointer
+/// 的 vet unsafeptr 命中随此 API 根治）。
+///
+/// # Safety
+/// - `s` 必须是由 `vitro_session_create` 返回的有效 `Session` 指针，且未被 `vitro_session_destroy` 销毁。
+/// - `buf` 若非空，必须指向至少 `max_len` 字节的有效可写内存。
+pub unsafe extern "C" fn vitro_get_runtime_error_into(s: *mut Session, buf: *mut c_char, max_len: c_int) -> c_int {
+    guard(0, || {
+        if s.is_null() || buf.is_null() || max_len <= 0 {
+            return 0;
+        }
+        let session = &mut *s;
+        let text = session.runtime.error.clone();
+        if text.is_empty() {
+            return 0;
+        }
+        write_c_buf(&text, buf, max_len);
+        // 返回**完整所需长度**（可能 > max_len-1）：调用方据此检测截断
+        //（n >= max_len 即被截断）——此前返回 min(len, max_len-1) 会让
+        // 消费方的截断护栏永假（审阅 P2：死护栏）。
+        text.len() as c_int
+    })
+}
+
+#[no_mangle]
 /// vitro_set_input 的 C API 封装。
 ///
 /// 语义：**保留换行**的标准输入（C 的 stdin 是字节流，`getchar()` 需读到 `'\n'`）。
@@ -364,7 +419,7 @@ pub unsafe extern "C" fn vitro_provide_input_line(s: *mut Session, line: *const 
 ///
 /// # Safety
 /// - `buf` 若非空，必须指向至少 `max_len` 字节的有效可写内存。
-unsafe fn write_c_buf(text: &str, buf: *mut c_char, max_len: c_int) {
+pub(crate) unsafe fn write_c_buf(text: &str, buf: *mut c_char, max_len: c_int) {
     if buf.is_null() || max_len <= 0 {
         return;
     }

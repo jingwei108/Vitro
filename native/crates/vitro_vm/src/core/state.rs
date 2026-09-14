@@ -15,6 +15,10 @@ pub use vitro_runtime::{
 
 pub use vitro_runtime::{FuncMeta, Symbol as VMSymbol};
 
+/// 函数表容量上限（U2#13）：真实教学程序的函数数远小于此；恶意/损坏的
+/// 索引（如 u32::MAX）曾直接 `resize(idx+1)` —— 4G 项 FuncMeta 即 OOM abort。
+pub const MAX_FUNCTIONS: usize = 65_536;
+
 #[derive(Debug, Clone)]
 pub struct FreedRegionInfo {
     pub addr: u32,
@@ -293,20 +297,34 @@ impl VitroVM {
         self.argv_addr = array_addr;
     }
 
-    pub fn register_function(&mut self, idx: u32, meta: FuncMeta) {
+    /// 注册函数元数据；超上限索引拒绝（返回 false，表不扩）。
+    pub fn register_function(&mut self, idx: u32, meta: FuncMeta) -> bool {
         let idx = idx as usize;
+        if idx >= MAX_FUNCTIONS {
+            return false;
+        }
         if idx >= self.func_table.len() {
             self.func_table.resize(idx + 1, FuncMeta::default());
         }
         self.func_table[idx] = meta;
+        true
     }
 
-    pub fn register_function_name(&mut self, idx: u32, name: String) {
+    /// 函数表当前长度（上限测试用）。
+    pub fn func_table_len(&self) -> usize {
+        self.func_table.len()
+    }
+
+    pub fn register_function_name(&mut self, idx: u32, name: String) -> bool {
         let idx = idx as usize;
+        if idx >= MAX_FUNCTIONS {
+            return false;
+        }
         if idx >= self.func_names.len() {
             self.func_names.resize(idx + 1, String::new());
         }
         self.func_names[idx] = name;
+        true
     }
 
     pub fn set_symbols(&mut self, symbols: Vec<VMSymbol>) {
@@ -375,6 +393,19 @@ impl VitroVM {
             return None;
         }
         let meta = self.func_table[idx].clone();
+        // U2#13：非 4 字节参数（如把 `int cmp(double,double)` 传给 qsort）此前
+        // assert! panic 崩溃进程——改教学诊断（trap + None，qsort/bsearch 按
+        // 比较失败处理）。检查在状态保存之前，零状态污染。
+        if !meta.param_sizes.iter().all(|&sz| sz == 1) {
+            self.trap(
+                &format!(
+                    "比较函数的参数必须是 4 字节指针（当前参数形状 {:?}）：qsort/bsearch 的比较函数签名应为 int (*)(const void*, const void*)。",
+                    meta.param_sizes
+                ),
+                &SourceLoc::default(),
+            );
+            return None;
+        }
         let frame_size = meta.local_count as u64;
         if frame_size > MEM_SIZE as u64 || frame_size > self.mem_stack_top as u64 {
             return None;
@@ -403,13 +434,8 @@ impl VitroVM {
         let locals_base = self.mem_stack_top;
         // Arguments: args[0] is first param, args[n-1] is last param.
         // VM Call convention: first param is at locals_base + 0
-        // 当前 call_user_function 仅用于 qsort 回调（参数均为 4 字节指针）。
+        // 参数均为 4 字节指针（形状检查已在状态保存前完成，见上方 U2#13）。
         // 若未来扩展为 8 字节参数（double/long long），需按 type_size 选择 store_i32/store_i64。
-        assert!(
-            meta.param_sizes.iter().all(|&sz| sz == 1),
-            "call_user_function 暂不支持非 4 字节参数（param_sizes {:?}）",
-            meta.param_sizes
-        );
         for i in 0..meta.param_count {
             let arg = if (i as usize) < args.len() { args[i as usize] } else { 0 };
             let arg_addr = (locals_base as u64) + (i as u64) * 4;
@@ -666,15 +692,53 @@ impl VitroVM {
     /// churn 稳态 ~16k 条 × 每次分配）。互不重叠 ⟹ addr 序即 end 序：
     /// 降序扫，遇 end ≤ start 即停（更小 addr 的块 end 只会更小）。
     pub(crate) fn freed_logs_remove_overlapping(&mut self, start: u32, end: u32) {
-        let mut to_remove: Vec<u32> = Vec::new();
+        // U2#13：精确裁剪——旧记录与新区间**部分重叠**时只移除重叠段、保留
+        // 未重叠残段（前缀 [laddr, start) / 后缀 [end, l_end)，嵌套时两条都留）。
+        // 此前整条删除：free X(100) 后 malloc Y(60) 复用前段，X 尾部 [x+60, x+100)
+        // 的 UAF 检测窗口随整条记录一起消失——UAF 假阴性。
+        // 完全被覆盖（start <= laddr && l_end <= end）才整条删除。
+        let mut to_delete: Vec<u32> = Vec::new();
+        let mut inserts: Vec<FreedRegionInfo> = Vec::new();
+        let mut shrink: Vec<(u32, u32)> = Vec::new(); // (laddr, new_size)——前缀保留
         for (&laddr, log) in self.freed_logs.range(..end).rev() {
-            if laddr.saturating_add(log.size) <= start {
-                break;
+            let l_end = laddr.saturating_add(log.size);
+            if l_end <= start {
+                break; // 降序且互不重叠：后续全部不重叠
             }
-            to_remove.push(laddr);
+            if start <= laddr && l_end <= end {
+                to_delete.push(laddr);
+                continue;
+            }
+            let keep_prefix = laddr < start; // [laddr, start)
+            let keep_suffix = l_end > end; // [end, l_end)
+            if keep_prefix {
+                // 键（addr）不变，缩 size；后缀（若有）另插新条目
+                shrink.push((laddr, start - laddr));
+                if keep_suffix {
+                    let mut tail = log.clone();
+                    tail.addr = end;
+                    tail.size = l_end - end;
+                    inserts.push(tail);
+                }
+            } else {
+                // 只剩后缀：键要变（addr=end），删旧插新
+                to_delete.push(laddr);
+                let mut tail = log.clone();
+                tail.addr = end;
+                tail.size = l_end - end;
+                inserts.push(tail);
+            }
         }
-        for laddr in to_remove {
+        for laddr in to_delete {
             self.freed_logs.remove(&laddr);
+        }
+        for (laddr, new_size) in shrink {
+            if let Some(log) = self.freed_logs.get_mut(&laddr) {
+                log.size = new_size;
+            }
+        }
+        for info in inserts {
+            self.freed_logs.insert(info.addr, info);
         }
     }
 

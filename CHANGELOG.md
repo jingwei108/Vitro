@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (ABI 2.0.0 → 2.1.0)：四个 buf 写入式 C ABI 出口（零所有权转移）
+
+`vitro_abi_version_into` / `vitro_engine_version_into` / `vitro_get_runtime_error_into` /
+`vitro_get_compile_errors_into`——调用方缓冲 + NUL 终止，返回**完整所需长度**
+（`n >= max_len` 即截断，消费方可检测）。跨语言 FFI 消费方优先用本形态。
+动机（U2#13）：scripts 侧三处 `uintptr→unsafe.Pointer` 逆向转换是 vet
+unsafeptr 检查器的不可豁免命中，buf 形态从根上消除——Go 侧 `PtrToGoString`
+整体退役删除，`go vet ./scripts/...` 零输出并新入 CI 门禁；头文件四声明同步、
+buf/指针两形态语义等价契约测试 ×2。
+
+### Fixed (U2#13 libc 边界批 + 审阅 P1 修订)
+
+- fseek 负偏移三形态（二进制 `as usize` 绕回 / 文本 SEEK_SET 同病 / 文本
+  CUR-END 钳 0 假成功）统一为返回 -1 且游标不动（glibc EINVAL 语义）
+- bsearch 野指针 key：切片 panic → 按"未找到"返回 NULL；越界早退移到
+  `set_qsort_depth(+1)` 之前（审阅 P1-a：早退泄漏深度计数会让 8 次野指针后
+  bsearch 永久 NULL、qsort 静默 no-op）
+- host_strerror 补齐与 strdup 同型的分配三步契约（审阅 P1-b：无条件
+  push_region 在地址复用时造同址双条目 + 索引失配；stale freed_logs 拦截
+  写入返回全零缓冲）
+- freed_logs 部分重叠整条删除改精确裁剪（前缀缩 size / 后缀改键插新 /
+  嵌套拆两条）——UAF 假阴性窗口保留
+- `register_function(_name)` 加 `MAX_FUNCTIONS=65536` 上限（u32::MAX 即
+  resize 4G 项 OOM abort 的形态由同上限拦截）
+- `call_user_function` 非 4 字节参数比较器：assert! panic → 教学 trap
+  （检查前移至状态保存前，零污染）
+
+### Fixed (U3#2 先遣)：变参 double/long long 实参的 8 字节位模式中转
+
+从 4 字节 slot0 + 占位 slot1 止血迁至 8 字节专用槽（call.rs 四处：
+Call/CallPtr × D/Q）——两槽分配顺序由各自首次使用决定、不保证相邻，
+跨槽写可踩相邻局部变量（3 起槽位 bug 同病灶）。
+
+
+## [Unreleased]
+
 ### Fixed (CI 门禁)：Bytecode Libc 预编译产物在更名提交中被"文本替换"而非重生成——`--check` 自 `3a5e2f8` 起必红
 
 CI 在 `python scripts/precompile_bytecode_libc.py --check` 失败（产物记录

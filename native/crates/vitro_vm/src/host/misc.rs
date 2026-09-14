@@ -260,6 +260,16 @@ pub fn host_bsearch(vm: &mut VitroVM, session: &mut VmContext<'_>) {
         return;
     }
 
+    // U2#13：key 侧边界——base 侧已检查，key 指向 [key, key+size) 越界时
+    //（学生常见野指针）此前直接切片 panic；按"未找到"返回 NULL。
+    // 检查必须在 set_qsort_depth(+1) 之前：qsort_depth 与 qsort 共用（门限 8），
+    // 早退不减深度会让计数器只增不减——8 次野指针 key 后 bsearch 永久 NULL、
+    // qsort 静默 no-op（审阅 P1-a，静默错值）。
+    if (key as u64) + size as u64 > mem_size as u64 {
+        vm.push(0);
+        return;
+    }
+
     vm.set_qsort_depth(vm.qsort_depth() + 1);
 
     const MAX_COMPARE_STEPS: i32 = 1000;
@@ -458,14 +468,53 @@ pub fn host_strerror(vm: &mut VitroVM, session: &mut VmContext<'_>) {
         5 => "Permission denied\0",
         _ => "Unknown error\0",
     };
-    let addr = match session.memory.allocate_raw(msg.len() as u32, vm.get_memory_size()) {
+    let size = msg.len() as i32;
+    let aligned = ((size as u32) + 3) & !3;
+    let addr = match session.memory.allocate_raw(aligned, vm.get_memory_size()) {
         Some(a) => a,
         None => {
             vm.push(0);
             return;
         }
     };
-    vm.write_memory(addr, msg.as_bytes());
+    // U2#13：与 host_strdup 逐字同型的分配三步契约（审阅 P1-b：无条件
+    // push_region 只做了第一步——复用路径（free_list 取回已用地址）会造同址
+    // 双条目 + 索引失配；stale freed_logs 未清会让下方 write_memory 被 UAF
+    // 检查拦截，返回全零缓冲）。
+    let new_end = addr.saturating_add(aligned);
+    vm.freed_logs_remove_overlapping(addr, new_end);
+    match session.memory.find_region_mut(addr) {
+        Some(r) if r.is_freed => {
+            r.is_freed = false;
+            r.size = size;
+            r.alloc_line = vm.get_current_line();
+            r.alloc_by = "strerror".to_string();
+        }
+        Some(r) => {
+            r.alloc_line = vm.get_current_line();
+            r.alloc_by = "strerror".to_string();
+        }
+        None => {
+            session.memory.alloc_counter += 1;
+            session.memory.push_region(vitro_runtime::MemoryRegionData {
+                addr,
+                size,
+                name: format!("heap_{}", session.memory.alloc_counter),
+                ty: "char".to_string(),
+                is_heap: true,
+                is_freed: false,
+                alloc_line: vm.get_current_line(),
+                alloc_by: "strerror".to_string(),
+                kind: "heap".to_string(),
+            });
+        }
+    }
+    if !vm.write_memory(addr, msg.as_bytes()) {
+        // 与 strdup 同口径：缓冲写入失败（理论上不可达——地址刚从分配器取出）
+        // 不得静默返回半初始化缓冲
+        vm.trap("strerror: 输出缓冲写入失败", &SourceLoc::default());
+        return;
+    }
     vm.push(addr as u64);
 }
 

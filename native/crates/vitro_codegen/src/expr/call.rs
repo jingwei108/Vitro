@@ -175,11 +175,14 @@ pub(crate) fn gen_call(gen: &mut BytecodeGen, expr: &mut Expr) {
                     if is_variadic_callee {
                         // 变参函数：按 VM 变参循环顺序 push（低地址在前），
                         // 因此先压入高 32 位，再压入低 32 位。
-                        let temp0 = gen.get_temp_slot(0);
-                        let _temp1 = gen.get_temp_slot(1);
-                        gen.emit(OpCode::StoreLocalD, temp0, &loc);
-                        gen.emit(OpCode::LoadLocal, temp0 + 4, &loc);
-                        gen.emit(OpCode::LoadLocal, temp0, &loc);
+                        // U3#2：8 字节位模式中转必须走 8 字节专用槽——此前用
+                        // 4 字节 slot0 + 占位 slot1 止血，两槽分配顺序由各自首次
+                        // 使用决定、不保证相邻，StoreLocalD/Q 跨槽写可踩相邻
+                        // 局部变量（3 起槽位 bug 同病灶，U3#1 分配器手术的先遣）。
+                        let temp64 = gen.get_temp_slot_64();
+                        gen.emit(OpCode::StoreLocalD, temp64, &loc);
+                        gen.emit(OpCode::LoadLocal, temp64 + 4, &loc);
+                        gen.emit(OpCode::LoadLocal, temp64, &loc);
                     } else {
                         gen.emit(OpCode::SplitD, 0, &loc);
                     }
@@ -188,11 +191,10 @@ pub(crate) fn gen_call(gen: &mut BytecodeGen, expr: &mut Expr) {
                 gen.gen_expr(arg);
                 if gen.func_index.contains_key(name) {
                     if is_variadic_callee {
-                        let temp0 = gen.get_temp_slot(0);
-                        let _temp1 = gen.get_temp_slot(1);
-                        gen.emit(OpCode::StoreLocalQ, temp0, &loc);
-                        gen.emit(OpCode::LoadLocal, temp0 + 4, &loc);
-                        gen.emit(OpCode::LoadLocal, temp0, &loc);
+                        let temp64 = gen.get_temp_slot_64();
+                        gen.emit(OpCode::StoreLocalQ, temp64, &loc);
+                        gen.emit(OpCode::LoadLocal, temp64 + 4, &loc);
+                        gen.emit(OpCode::LoadLocal, temp64, &loc);
                     } else {
                         gen.emit(OpCode::SplitQ, 0, &loc);
                     }
@@ -361,11 +363,10 @@ pub(crate) fn gen_call_ptr(gen: &mut BytecodeGen, expr: &mut Expr) {
                     if is_variadic_callee {
                         // 变参函数：按 VM 变参循环顺序 push（低地址在前），
                         // 因此先压入高 32 位，再压入低 32 位。
-                        let temp0 = gen.get_temp_slot(0);
-                        let _temp1 = gen.get_temp_slot(1);
-                        gen.emit(OpCode::StoreLocalD, temp0, &loc);
-                        gen.emit(OpCode::LoadLocal, temp0 + 4, &loc);
-                        gen.emit(OpCode::LoadLocal, temp0, &loc);
+                        let temp64 = gen.get_temp_slot_64();
+                        gen.emit(OpCode::StoreLocalD, temp64, &loc);
+                        gen.emit(OpCode::LoadLocal, temp64 + 4, &loc);
+                        gen.emit(OpCode::LoadLocal, temp64, &loc);
                     } else {
                         gen.emit(OpCode::SplitD, 0, &loc);
                     }
@@ -374,11 +375,10 @@ pub(crate) fn gen_call_ptr(gen: &mut BytecodeGen, expr: &mut Expr) {
                 gen.gen_expr(arg);
                 if is_user_call {
                     if is_variadic_callee {
-                        let temp0 = gen.get_temp_slot(0);
-                        let _temp1 = gen.get_temp_slot(1);
-                        gen.emit(OpCode::StoreLocalQ, temp0, &loc);
-                        gen.emit(OpCode::LoadLocal, temp0 + 4, &loc);
-                        gen.emit(OpCode::LoadLocal, temp0, &loc);
+                        let temp64 = gen.get_temp_slot_64();
+                        gen.emit(OpCode::StoreLocalQ, temp64, &loc);
+                        gen.emit(OpCode::LoadLocal, temp64 + 4, &loc);
+                        gen.emit(OpCode::LoadLocal, temp64, &loc);
                     } else {
                         gen.emit(OpCode::SplitQ, 0, &loc);
                     }

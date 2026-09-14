@@ -41,9 +41,17 @@ typedef struct VitroSession VitroSession;
 /// ABI 版本串（语义化版本，如 "1.3.0"）。[rust-alloc]
 VITRO_API char* vitro_abi_version(void);
 
+/// ABI 版本串写入调用方缓冲（与上者语义等价，零所有权转移，ABI 2.1.0）。
+VITRO_API int vitro_abi_version_into(char* buf, int max_len);
+
 /// 引擎版本串：crate 版本 + 构建期 git hash（如 "0.1.0 (5955cb9)"）。
 /// 消费方据此做产物新鲜度自检。[rust-alloc]
 VITRO_API char* vitro_engine_version(void);
+
+/// 引擎版本串写入调用方缓冲（与上者语义等价，零所有权转移，ABI 2.1.0）。
+/// 写入至多 max_len-1 字节 + NUL；返回写入字节数（不含 NUL，失败/截断返回
+/// 实际写入数）。跨语言 FFI 消费方优先用本形态（无需 free、无指针扫描假设）。
+VITRO_API int vitro_engine_version_into(char* buf, int max_len);
 
 /// 引擎能力清单 JSON（语言锚点/预处理器能力/内存模型/schema 版本与 v0.2
 /// 台账/行为契约，机器可读）。[rust-alloc]
@@ -171,6 +179,10 @@ VITRO_API int vitro_compile_all(VitroSession* s);
 /// Note: The returned pointer may become invalid after the next compile call.
 VITRO_API const char* vitro_get_compile_errors(VitroSession* s);
 
+/// 编译错误文本写入调用方缓冲（与上者语义等价，零所有权转移，ABI 2.1.0）。
+/// 返回写入字节数（不含 NUL；无错误返回 0）。
+VITRO_API int vitro_get_compile_errors_into(VitroSession* s, char* buf, int max_len);
+
 /// Byte length (excluding NUL) of the compile-errors JSON that
 /// vitro_get_compile_errors would return; 0 when no errors. Companion of
 /// vitro_get_compile_errors for exact-length buffer reads (ABI 1.2.0).
@@ -197,6 +209,11 @@ VITRO_API char* vitro_run_json(VitroSession* s);
 /// Get runtime error message. Returns nullptr if no error.
 /// Note: The returned pointer may become invalid after the next run/step call.
 VITRO_API const char* vitro_get_runtime_error(VitroSession* s);
+
+/// 运行时错误写入调用方缓冲（与上者语义等价，零所有权转移，ABI 2.1.0）。
+/// 写入至多 max_len-1 字节 + NUL；返回写入字节数（不含 NUL；无错误/失败
+/// 返回 0）。跨语言 FFI 消费方优先用本形态。
+VITRO_API int vitro_get_runtime_error_into(VitroSession* s, char* buf, int max_len);
 
 // ========== 步进调试（统一模式） ==========
 

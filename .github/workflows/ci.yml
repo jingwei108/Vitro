@@ -62,6 +62,12 @@ jobs:
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
         working-directory: native
 
+      # U2#13（2026-09-14）：go vet 入 CI——此前无此步骤，scripts 侧 3 处
+      # unsafe.Pointer 误用（FFI 返回指针的 uintptr→Pointer 逆向转换）从未
+      # 被暴露；现随 buf 写入式 API（ABI 2.1.0）根治后设为常驻门禁。
+      - name: Go vet (scripts)
+        run: go vet ./scripts/...
+
       # Clang Golden 缓存（方案 A）：结果是确定性的（同一源码 + 同一 clang 版本
       # ⇒ 同一结果），跨 CI 运行复用可把 Shadow 从分钟级降到秒级。
       # key 含 clang 版本 —— 版本一变缓存自动失效，这就是"防版本漂移"的第一道闸；
@@ -106,7 +112,7 @@ jobs:
 
       - name: C++ Shadow Verification
         # D5 语言迁移第一站（2026-09-12）：Go 版与 Python 版双轨对账一致后切换。
-        # Python 版保留为对照基准；go vet 豁免口径见 scripts/shadow_verify_cpp.go 头注。
+        # Python 版保留为对照基准；go vet 已是常驻门禁（见 Go vet 步骤）。
         run: go run ./scripts/shadow_verify_cpp
         shell: bash
 

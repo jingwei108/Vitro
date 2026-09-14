@@ -556,6 +556,10 @@ impl VirtualFileSystem {
             None => return -1,
         };
 
+        // U2#13：负偏移（含 SEEK_CUR/END 计算出的负目标）统一**返回 -1 且不移动
+        // 游标**（glibc EINVAL 语义）。此前二进制分支 `offset as i64 as usize`
+        // 负数绕回为天文数字游标（后续读写即越界写），文本 SEEK_SET 同病，
+        // 文本 SEEK_CUR/END 则把负目标钳 0 静默成功——三种形状都与 C 不符。
         let new_cursor = if desc.is_text_mode {
             let mut data = vec![0u8; meta.size];
             if meta.size > 0 && !vm.read_memory_to(meta.heap_addr, &mut data) {
@@ -564,24 +568,42 @@ impl VirtualFileSystem {
             let physical_size = meta.size;
             match whence {
                 // SEEK_SET：offset 为逻辑位置，转换为物理位置
-                0 => logical_to_physical(&data, offset as usize),
+                0 => {
+                    if offset < 0 {
+                        return -1;
+                    }
+                    logical_to_physical(&data, offset as usize)
+                }
                 // SEEK_CUR：offset 为逻辑偏移，基于当前逻辑位置转换
                 1 => {
                     let logical_cursor = physical_to_logical(&data, desc.cursor);
-                    let target_logical = (logical_cursor as i64 + offset as i64).max(0) as usize;
-                    logical_to_physical(&data, target_logical)
+                    let target_logical = logical_cursor as i64 + offset as i64;
+                    if target_logical < 0 {
+                        return -1;
+                    }
+                    logical_to_physical(&data, target_logical as usize)
                 }
                 // SEEK_END：Windows CRT 行为：offset 基于物理文件末尾
-                2 => (physical_size as i64 + offset as i64).max(0) as usize,
+                2 => {
+                    let target = physical_size as i64 + offset as i64;
+                    if target < 0 {
+                        return -1;
+                    }
+                    target as usize
+                }
                 _ => return -1,
             }
         } else {
-            (match whence {
+            let target = match whence {
                 0 => offset as i64,
                 1 => desc.cursor as i64 + offset as i64,
                 2 => meta.size as i64 + offset as i64,
                 _ => return -1,
-            }) as usize
+            };
+            if target < 0 {
+                return -1;
+            }
+            target as usize
         };
 
         desc.cursor = new_cursor;

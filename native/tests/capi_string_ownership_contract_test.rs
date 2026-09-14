@@ -94,3 +94,73 @@ fn json_outputs_survive_free_and_next_call() {
 fn free_string_is_null_safe() {
     unsafe { vitro_native::capi::vitro_free_string(std::ptr::null_mut()) }
 }
+
+/// U2#13（2026-09-14）：buf 写入式出口（ABI 2.1.0）与既有指针出口的**语义
+/// 等价**契约——跨语言 FFI 消费方（Go scripts）全部迁移到 buf 形态后，两形态
+/// 必须永远返回相同内容（buf 版是零所有权转移的第三类出口：调用方缓冲拷贝）。
+#[test]
+fn buf_style_exits_match_pointer_exits() {
+    unsafe {
+        // ① abi_version：buf 版 == rust-alloc 版
+        let owned = take_and_free(vitro_native::capi::vitro_abi_version());
+        let mut buf = [0 as std::ffi::c_char; 64];
+        let n = vitro_native::capi::vitro_abi_version_into(buf.as_mut_ptr(), 64);
+        assert!(n > 0, "abi_version_into 应写入非空内容");
+        let s = CStr::from_ptr(buf.as_ptr()).to_string_lossy().into_owned();
+        assert_eq!(s, owned, "abi_version 两形态内容必须一致");
+        assert_eq!(n as usize, owned.len(), "返回字节数应等于实际长度（不含 NUL）");
+
+        // ② engine_version
+        let owned = take_and_free(vitro_native::capi::vitro_engine_version());
+        let mut buf = [0 as std::ffi::c_char; 64];
+        let n = vitro_native::capi::vitro_engine_version_into(buf.as_mut_ptr(), 64);
+        assert!(n > 0);
+        let s = CStr::from_ptr(buf.as_ptr()).to_string_lossy().into_owned();
+        assert_eq!(s, owned, "engine_version 两形态内容必须一致");
+
+        // ③ 空缓冲/非法参数防御：返回 0 且不崩
+        assert_eq!(vitro_native::capi::vitro_engine_version_into(std::ptr::null_mut(), 0), 0);
+        assert_eq!(
+            vitro_native::capi::vitro_engine_version_into(buf.as_mut_ptr(), -1),
+            0,
+            "负 max_len 必须安全返回 0"
+        );
+    }
+}
+
+/// runtime_error / compile_errors 的 buf 版与租借版等价（会话出口）。
+#[test]
+fn buf_style_session_exits_match_pointer_exits() {
+    unsafe {
+        let s = vitro_native::capi::vitro_session_create();
+        assert!(!s.is_null());
+
+        // 编译一个含错误的源（产生 compile error）
+        let src = CString::new("int main() { return x; }").unwrap();
+        let name = CString::new("e.c").unwrap();
+        let _ = vitro_native::capi::vitro_compile_unit(s, name.as_ptr(), src.as_ptr());
+        let _ = vitro_native::capi::vitro_compile_all(s);
+
+        // compile_errors：租借版与 buf 版内容一致
+        let p = vitro_native::capi::vitro_get_compile_errors(s);
+        let borrowed = if p.is_null() {
+            String::new()
+        } else {
+            CStr::from_ptr(p).to_string_lossy().into_owned()
+        };
+        let mut buf = vec![0 as std::ffi::c_char; 1 << 16];
+        let n = vitro_native::capi::vitro_get_compile_errors_into(s, buf.as_mut_ptr(), buf.len() as i32);
+        let via_buf = CStr::from_ptr(buf.as_ptr()).to_string_lossy().into_owned();
+        assert!(!via_buf.is_empty(), "含错误源应产出错误文本");
+        assert_eq!(via_buf, borrowed, "compile_errors 两形态内容必须一致");
+        assert_eq!(n as usize, borrowed.len());
+
+        // runtime_error：未运行时两形态都为空
+        let mut rbuf = [0 as std::ffi::c_char; 256];
+        let rn = vitro_native::capi::vitro_get_runtime_error_into(s, rbuf.as_mut_ptr(), 256);
+        assert_eq!(rn, 0, "无运行错误应返回 0");
+        assert!(vitro_native::capi::vitro_get_runtime_error(s).is_null());
+
+        vitro_native::capi::vitro_session_destroy(s);
+    }
+}

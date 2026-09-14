@@ -138,3 +138,60 @@ fn test_bytecode_gen_source_map() {
     let output = generate("int main() { return 0; }");
     assert!(!output.source_map.is_empty(), "Should have source map entries");
 }
+
+/// U3#2 红锚（2026-09-14）：变参调用的 double/long long 实参必须经**8 字节
+/// 专用槽**中转（StoreLocalD/Q 写 8 字节）。修复前用 `get_temp_slot(0)`（4 字节
+/// 槽）+ 占位 slot1 止血——slot0 与 slot1 分配顺序由首次使用决定，不保证相邻，
+/// 跨槽写可踩相邻局部变量/其他槽（3 起槽位 bug 同病灶）。
+/// 结构判据：同函数内 4 字节槽用户（struct 按值传参的地址临时 StoreLocal）
+/// 与变参 8 字节中转（StoreLocalD）**不得共享 offset**——修复前两者都指向
+/// slot0，必然相等（红）；修复后变参走 8 字节专用槽，必然不同（绿）。
+#[test]
+fn test_u3_variadic_64bit_args_use_dedicated_slot() {
+    let src = r#"
+#include <stdarg.h>
+struct S { int a, b; };
+int take(struct S s) { return s.a; }
+double dv(int n, ...) {
+    va_list ap;
+    va_start(ap, n);
+    double s = 0;
+    for (int i = 0; i < n; i++) { s = s + va_arg(ap, double); }
+    va_end(ap);
+    return s;
+}
+int take2(struct S s) { return s.b; }
+int main() {
+    struct S v = {1, 2};
+    struct S w;
+    w = v;                  // 4 字节槽用户：struct 赋值 src 地址临时 StoreLocal [slot0]
+    int a = take2(w);
+    double r = dv(1, 1.5);  // 变参 8 字节中转 StoreLocalD（修复前也用 slot0）
+    return a + (int)r;
+}
+"#;
+    let output = generate(src);
+    let main_meta = &output.func_table["main"];
+    let mut local4_targets: Vec<i32> = Vec::new();
+    let mut d_targets: Vec<i32> = Vec::new();
+    for i in main_meta.ip..output.code.len() {
+        let instr = &output.code[i];
+        match instr.op {
+            OpCode::StoreLocal => local4_targets.push(instr.operand),
+            OpCode::StoreLocalD => d_targets.push(instr.operand),
+            OpCode::Ret => break,
+            _ => {}
+        }
+    }
+    assert!(!d_targets.is_empty(), "变参 double 实参应有 StoreLocalD——测试前提");
+    assert!(
+        !local4_targets.is_empty(),
+        "struct 按值传参应有地址临时 StoreLocal——测试前提"
+    );
+    for &t in &d_targets {
+        assert!(
+            !local4_targets.contains(&t),
+            "StoreLocalD 目标 {t} 与 4 字节槽用户共享 offset（修复前同指 slot0，8 字节跨槽写病灶）"
+        );
+    }
+}

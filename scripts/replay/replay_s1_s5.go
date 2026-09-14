@@ -19,6 +19,8 @@
 package main
 
 import (
+	"runtime"
+	"unsafe"
 	"vitro/scripts/internal/capi"
 
 	"bufio"
@@ -64,7 +66,7 @@ func marr(v any) []any {
 // abiVersionAtLeast 解析 "major.minor.patch" 版本串并断言**下限**（semver）：
 // major 更高即满足；major 相同时比 minor；解析失败 → false。
 // R2（2026-09-14）：旧实现 "major 不同即 false" 把更高的 ABI 2.0.0 误拒
-//（2.0.0 ≥ 1.1.0 本应通过——项目更名批升 2.0.0 当天即被本断言误拦）。
+// （2.0.0 ≥ 1.1.0 本应通过——项目更名批升 2.0.0 当天即被本断言误拦）。
 // 埋雷锚：selftest 的版本比较注入组（低于下限/垃圾串必红）。
 func abiVersionAtLeast(v string, minMajor, minMinor int) bool {
 	var major, minor, patch int
@@ -948,22 +950,25 @@ func head3(ss []string) []string {
 	return ss
 }
 
-// readEngineVersion 读 vitro_engine_version 返回的 rust-alloc 字符串并按契约释放。
-// uintptr→Pointer 转换集中于本函数（vet -unsafeptr=false 豁免，同 gosmoke 裁定）。
+// readEngineVersion 读引擎版本串（buf 写入式 ABI 2.1.0：正向指针 + 零所有权
+// 转移——U2#13 收口，uintptr→unsafe.Pointer 的 vet unsafeptr 命中随此消除）。
 func readEngineVersion(path string) string {
 	dll := syscall.NewLazyDLL(path)
-	procVer := dll.NewProc("vitro_engine_version")
-	procFree := dll.NewProc("vitro_free_string")
+	procVer := dll.NewProc("vitro_engine_version_into")
 	if procVer.Find() != nil {
-		capi.Fatal("DLL 缺少 vitro_engine_version: %s", path)
+		capi.Fatal("DLL 缺少 vitro_engine_version_into: %s", path)
 	}
-	raw, _, _ := procVer.Call()
-	if raw == 0 {
+	buf := make([]byte, 64)
+	r, _, _ := procVer.Call(uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf)))
+	runtime.KeepAlive(buf)
+	n := int(int32(r))
+	if n <= 0 {
 		return ""
 	}
-	s := capi.PtrToGoString(raw)
-	procFree.Call(raw)
-	return s
+	if n >= len(buf) {
+		n = len(buf) - 1
+	}
+	return string(buf[:n])
 }
 
 // ---------------------------------------------------------------- 前置门禁

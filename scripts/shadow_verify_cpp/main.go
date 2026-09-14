@@ -531,8 +531,7 @@ func runWithVitro(d *capi.DLL, source string) runResult {
 	runRet, _, _ := d.Run.Call(handle)
 	// E-P1-5：直接读纯程序 stdout 通道（引擎附注走 note 通道），禁止文本清洗。
 	stdoutStr := strings.TrimSpace(capi.ReadChannel(handle, d.ProgOutLen, d.ProgOut))
-	errPtr, _, _ := d.RuntimeError.Call(handle)
-	runtimeErr := capi.PtrToGoString(errPtr)
+	runtimeErr := d.RuntimeErr(handle)
 
 	return runResult{Compiler: "vitro", CompileSuccess: true,
 		RunSuccess: int32(runRet) == 0 && runtimeErr == "",

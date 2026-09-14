@@ -274,6 +274,9 @@ pub fn setup_vm(vm: &mut VitroVM, session: &Session) {
     // 因此只需注册固定索引即可同时满足内部调用和外部调用。
     for (name, meta) in &libc.func_table {
         if let Some(idx) = bytecode_libc_index(name) {
+            // register_function 返回 false（超 MAX_FUNCTIONS=65536）在此被有意忽略：教学程序
+            // 远低于上限；越限时不扩表，对该索引的调用走"未注册函数"既有诊断路径
+            //（与 host 层超限即 trap 的口径不同——这里是编译器侧防御，静默跳过足够）。
             vm.register_function(
                 idx as u32,
                 FuncMeta {

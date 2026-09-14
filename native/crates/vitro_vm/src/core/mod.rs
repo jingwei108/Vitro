@@ -20,7 +20,7 @@ pub use crate::jit_trace::{JitStats, TraceRecorder, JIT_THRESHOLD};
 pub use crate::opcode::OpCode;
 pub use executor::debug::VIS_EVENT_QUEUE_LIMIT;
 pub use vitro_runtime::VisEventData;
-pub use state::{FuncMeta, VMSymbol};
+pub use state::{FuncMeta, VMSymbol, MAX_FUNCTIONS};
 pub use std::sync::Arc;
 
 pub mod executor;

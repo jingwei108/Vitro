@@ -101,30 +101,8 @@ func CBytes(s string) []byte {
 	return b
 }
 
-// PtrToGoString 读取 NUL 结尾 UTF-8 C 字符串（只读扫描，4KB→1MB 变长窗口）。
-//
-// ⚠️ 已声明的假设（PR 评审裁定记录，2026-09-13）：unsafe.Slice(ptr, win) 声明的
-// 可读窗口可能大于实际分配——NUL 不在当前窗口内时翻倍重扫，严格说是越界读。
-// 实用风险低且已有收口：编译错误（最长的串）改走 CompileErrorsExact 定长读取
-// （ABI 1.2.0 length API）；本函数剩余调用方只有 engine_version / runtime_error
-// 这类短而有界的串（NUL 在首个 4KB 窗口内命中，窗口不翻倍即无越界）。
-// 若未来要彻底消除：引擎为相应出口补 length API 后改定长读取（同
-// CompileErrorsExact 模式），或 VirtualQuery 逐页探测（成本不匹配收益）。
-func PtrToGoString(ptr uintptr) string {
-	if ptr == 0 {
-		return ""
-	}
-	for win := 4096; win <= 1<<20; win *= 2 {
-		s := unsafe.Slice((*byte)(unsafe.Pointer(ptr)), win)
-		for i, b := range s {
-			if b == 0 {
-				return string(s[:i])
-			}
-		}
-	}
-	Fatal("C 字符串超过 1MB 扫描上限（指针 0x%x），拒绝静默截断", ptr)
-	return ""
-}
+// PtrToGoString 已随 U2#13 移除：全部调用方改走 buf 写入式 API
+// （EngineVersionString / RuntimeErr），消除 uintptr→unsafe.Pointer 与扫描窗口假设。
 
 // ReadChannel 读取带 length API 的输出通道：length<=0 → ""，否则取 NUL 结尾缓冲。
 func ReadChannel(h uintptr, lenProc, copyProc *syscall.LazyProc) string {
@@ -171,24 +149,25 @@ var requiredSymbols = []string{
 
 // DLL 引擎 C ABI 的绑定集合（各驱动共用；字段名与旧驱动内联版一一对应）。
 type DLL struct {
-	DLL                 *syscall.LazyDLL
-	SessionCreate       *syscall.LazyProc
-	SessionDestroy      *syscall.LazyProc
-	Compile             *syscall.LazyProc
-	CompileUnit         *syscall.LazyProc
-	CompileAll          *syscall.LazyProc
-	Run                 *syscall.LazyProc
-	SetInputMode        *syscall.LazyProc
-	SetInput            *syscall.LazyProc
-	CompileErrors       *syscall.LazyProc
-	CompileErrorsLength *syscall.LazyProc
-	RuntimeError        *syscall.LazyProc
-	ProgOutLen          *syscall.LazyProc
-	ProgOut             *syscall.LazyProc
-	NotesLen            *syscall.LazyProc
-	Notes               *syscall.LazyProc
-	EngineVersion       *syscall.LazyProc // 可选：缺失时跳过产物新鲜度校验
-	FreeString          *syscall.LazyProc
+	DLL               *syscall.LazyDLL
+	SessionCreate     *syscall.LazyProc
+	SessionDestroy    *syscall.LazyProc
+	Compile           *syscall.LazyProc
+	CompileUnit       *syscall.LazyProc
+	CompileAll        *syscall.LazyProc
+	Run               *syscall.LazyProc
+	SetInputMode      *syscall.LazyProc
+	SetInput          *syscall.LazyProc
+	CompileErrorsInto *syscall.LazyProc
+	RuntimeErrorInto  *syscall.LazyProc
+	ProgOutLen        *syscall.LazyProc
+	ProgOut           *syscall.LazyProc
+	NotesLen          *syscall.LazyProc
+	Notes             *syscall.LazyProc
+	// 可选：缺失时跳过产物新鲜度校验（U2#13 后 buf 写入式为唯一读取路径，
+	// 指针式 EngineVersion/CompileErrors/CompileErrorsLength/RuntimeError/
+	// FreeString 绑定已随 PtrToGoString 退役删除）
+	EngineVersionInto *syscall.LazyProc
 }
 
 // Load 加载并绑定引擎 DLL。
@@ -221,16 +200,15 @@ func Load(path string) *DLL {
 	d.Run = bind("vitro_run")
 	d.SetInputMode = bind("vitro_set_input_mode")
 	d.SetInput = bind("vitro_set_input")
-	d.CompileErrors = bind("vitro_get_compile_errors")
-	d.CompileErrorsLength = bind("vitro_get_compile_errors_length")
-	d.RuntimeError = bind("vitro_get_runtime_error")
+	d.CompileErrorsInto = bind("vitro_get_compile_errors_into")
+	d.RuntimeErrorInto = bind("vitro_get_runtime_error_into")
 	d.ProgOutLen = bind("vitro_get_program_output_length")
 	d.ProgOut = bind("vitro_get_program_output")
 	d.NotesLen = bind("vitro_get_engine_notes_length")
 	d.Notes = bind("vitro_get_engine_notes")
-	if d.DLL.NewProc("vitro_engine_version").Find() == nil && d.DLL.NewProc("vitro_free_string").Find() == nil {
-		d.EngineVersion = d.DLL.NewProc("vitro_engine_version")
-		d.FreeString = d.DLL.NewProc("vitro_free_string")
+	// 新鲜度校验走 buf 写入式（ABI 2.1.0）；老产物缺失该符号时跳过，ABI 校验兜底
+	if p := d.DLL.NewProc("vitro_engine_version_into"); p.Find() == nil {
+		d.EngineVersionInto = p
 	}
 	d.EnsureFreshArtifacts()
 	return d
@@ -238,18 +216,14 @@ func Load(path string) *DLL {
 
 // EnsureFreshArtifacts：DLL 版本串必须含当前 HEAD 短哈希，否则 fail fast（exit 2）。
 func (d *DLL) EnsureFreshArtifacts() {
-	if d.EngineVersion == nil {
+	if d.EngineVersionInto == nil {
 		return
 	}
 	head := GitShortHead()
 	if head == "" {
 		return // git 不可用（导出源码、无 .git）：跳过，ABI 校验兜底
 	}
-	raw, _, _ := d.EngineVersion.Call()
-	version := PtrToGoString(raw)
-	if raw != 0 {
-		d.FreeString.Call(raw)
-	}
+	version := d.EngineVersionString()
 	if !strings.Contains(version, head) {
 		Fatal("引擎产物不是当前提交构建的：vitro_engine_version()=%q 不含 HEAD %s。\n请先 cd native && cargo build --release —— 否则会在陈旧二进制上得到假绿。",
 			version, head)
@@ -261,28 +235,57 @@ func (d *DLL) EnsureFreshArtifacts() {
 // 引擎保证错误串不含内嵌 NUL（CString::new 失败即返回 null），因此 NUL
 // 必然落在第 n 字节，读取范围恰为 CString 分配大小（len+1）。
 func (d *DLL) CompileErrorsExact(h uintptr) string {
-	r, _, _ := d.CompileErrorsLength.Call(h)
+	r, _, _ := d.CompileErrorsInto.Call(h, uintptr(unsafe.Pointer(&errBuf[0])), uintptr(len(errBuf)))
+	runtime.KeepAlive(errBuf)
 	n := int(int32(r))
 	if n <= 0 {
 		return ""
 	}
-	p, _, _ := d.CompileErrors.Call(h)
-	if p == 0 {
-		Fatal("引擎契约破坏：vitro_get_compile_errors_length=%d 但 vitro_get_compile_errors 返回 NULL", n)
+	if n >= len(errBuf) {
+		Fatal("编译错误超过 %d 字节缓冲（ABI 2.1.0 buf 写入式读取），请扩容 errBuf", len(errBuf))
 	}
-	buf := unsafe.Slice((*byte)(unsafe.Pointer(p)), n+1)
-	return string(buf[:n])
+	return string(errBuf[:n])
 }
+
+// errBuf 是 CompileErrorsExact 的读取缓冲（编译错误串上限；包级复用避免每次分配）。
+// 单线程使用（DLL 互斥是仓库口径）；跨 goroutine 并发读取前必须改为调用方传参。
+var errBuf = make([]byte, 1<<20)
 
 // RunProgramStdout 纯程序 stdout 通道（E-P1-5；调用方自行 TrimSpace / Normalize）。
 func (d *DLL) RunProgramStdout(h uintptr) string {
 	return ReadChannel(h, d.ProgOutLen, d.ProgOut)
 }
 
-// RuntimeErr 读运行时错误（短而有界的 trap 串，走 PtrToGoString，见其假设声明）。
+// RuntimeErr 读运行时错误（buf 写入式，ABI 2.1.0）：调用方缓冲 + 正向指针
+// （&buf[0]），无 uintptr→unsafe.Pointer 逆向转换、无所有权转移——U2#13
+// 收口 PtrToGoString 扫描窗口假设与 vet unsafeptr 命中。
 func (d *DLL) RuntimeErr(h uintptr) string {
-	p, _, _ := d.RuntimeError.Call(h)
-	return PtrToGoString(p)
+	buf := make([]byte, 4096)
+	r, _, _ := d.RuntimeErrorInto.Call(h, uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf)))
+	runtime.KeepAlive(buf)
+	n := int(int32(r))
+	if n <= 0 {
+		return ""
+	}
+	return string(buf[:n])
+}
+
+// EngineVersionString 引擎版本串（buf 写入式，ABI 2.1.0；无 DLL 时空串）。
+func (d *DLL) EngineVersionString() string {
+	if d.EngineVersionInto == nil {
+		return ""
+	}
+	buf := make([]byte, 64)
+	r, _, _ := d.EngineVersionInto.Call(uintptr(unsafe.Pointer(&buf[0])), uintptr(len(buf)))
+	runtime.KeepAlive(buf)
+	n := int(int32(r))
+	if n <= 0 {
+		return ""
+	}
+	if n >= len(buf) {
+		n = len(buf) - 1
+	}
+	return string(buf[:n])
 }
 
 // 时间辅助：驱动侧耗时统计共用。

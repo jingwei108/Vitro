@@ -6,7 +6,7 @@
 
 > **定位转型（2026-09-11）**：Vitro 从"跨平台 C 语言 IDE"转型为**教学 C/C++ 子集参考执行引擎（白箱）**——本仓库只做后端（MIT 许可），前端切割给社区，原生移动端放弃。完整决策依据与路线见 [`A-定位与路线/后端定位与白箱计划.md`](A-定位与路线/后端定位与白箱计划.md)。
 >
-> **项目更名（2026-09-14）**：Cide → **Vitro**（*in vitro*，"在玻璃之中"——白箱观察 + Clang 基线诚实对照）。crate / C ABI（**2.0.0**）/ CLI / DLL 全量 `vitro_*`；`docs/archive/` 与历史标签内路径（`CideFlutter`）保留原名。见 [`项目更名记录.md`](docs/current/01-定位与路线/项目更名记录.md)。
+> **项目更名（2026-09-14）**：Cide → **Vitro**（*in vitro*，"在玻璃之中"——白箱观察 + Clang 基线诚实对照）。crate / C ABI（**2.1.0**）/ CLI / DLL 全量 `vitro_*`；`docs/archive/` 与历史标签内路径（`CideFlutter`）保留原名。见 [`项目更名记录.md`](docs/current/01-定位与路线/项目更名记录.md)。
 >
 > **前端切割已执行（2026-09-11）**：`CideFlutter/`、FRB 桥接（`native/src/api/` + `frb_generated`）、web 部署 workflow 与全部 Flutter 构建脚本已从仓库移除；切割前最后完整状态由标签 `before-frontend-split` 保留（`git checkout before-frontend-split -- CideFlutter` 可取回）。
 
