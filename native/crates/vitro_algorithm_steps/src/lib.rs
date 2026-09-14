@@ -90,7 +90,7 @@ pub fn infer_algorithm_step(
     match algorithm.name.as_str() {
         "bubble_sort" => sorting::infer_bubble_sort(&source_line, &vars, &algorithm),
         "selection_sort" => sorting::infer_selection_sort(&source_line, &vars, &algorithm),
-        "insertion_sort" => sorting::infer_insertion_sort(&source_line, &vars, &algorithm),
+        "insertion_sort" => sorting::infer_insertion_sort(&source_line, &vars, &algorithm, env),
         "quick_sort" => sorting::infer_quick_sort(&source_line, &vars, &algorithm, func_name, env),
         "merge_sort" => sorting::infer_merge_sort(&source_line, &vars, &algorithm, func_name, env),
         "binary_search" => search::infer_binary_search(&source_line, &vars, &algorithm),

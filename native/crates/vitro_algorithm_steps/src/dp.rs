@@ -41,7 +41,7 @@ pub(crate) fn infer_dp(source_line: &str, vars: &VarMap, algorithm: &AlgorithmMa
                 .unwrap_or_default()
         };
         if i_head && !dp_loop_body_is_init(&body_line) {
-            return Some(build_step(algorithm, "outer_loop", &format!("遍历子问题 i={}", i)));
+            return Some(build_step(algorithm, "outer_loop", &format!("遍历{} i={}", dp_outer_subject(&line_lower, env), i)));
         }
         // §6-2（v4 清单，2026-09-14）：j 分支补同款初始化体排除——多行双层
         // 初始化循环（dpKnapsack L14 / dpLCS L11 / matrixChain L6 的内层 j，
@@ -50,7 +50,7 @@ pub(crate) fn infer_dp(source_line: &str, vars: &VarMap, algorithm: &AlgorithmMa
         if (line_lower.contains("int j") || line_lower.contains(" j <") || line_lower.contains("(j <"))
             && !dp_loop_body_is_init(&body_line)
         {
-            return Some(build_step(algorithm, "inner_loop", &format!("遍历子问题维度 j={}", w)));
+            return Some(build_step(algorithm, "inner_loop", &format!("遍历{} j={}", dp_inner_subject(&line_lower, env), w)));
         }
     }
 
@@ -81,6 +81,31 @@ fn dp_loop_body_is_init(line_lower: &str) -> bool {
         return !rhs.is_empty() && rhs.chars().all(|c| c.is_ascii_digit());
     }
     false
+}
+
+/// §6-3（v4 清单 #43/#51）：外层循环主语——i 不总是"子问题"下标：
+/// 币种循环（dpCoinChange：`for (i < coinCount)`）与物品循环（背包：行或
+/// lookahead 含 `wt[`/`weight[`）。检测到特征词才具名，否则保持泛化
+/// "子问题"（dpFib/dpLIS/dpLCS/matrixChain 的 i 确是子问题下标）。
+fn dp_outer_subject(line_lower: &str, env: &crate::InferEnv<'_>) -> &'static str {
+    let ctx = format!("{} {}", line_lower, env.lookahead.to_lowercase());
+    if ctx.contains("coin") {
+        "币种"
+    } else if ctx.contains("wt[") || ctx.contains("weight[") {
+        "物品"
+    } else {
+        "子问题"
+    }
+}
+
+/// §6-3：内层循环主语——dpCoinChange 的 j 索引金额（`for (j = coins[i]; j <= amount)`）。
+fn dp_inner_subject(line_lower: &str, env: &crate::InferEnv<'_>) -> &'static str {
+    let ctx = format!("{} {}", line_lower, env.lookahead.to_lowercase());
+    if ctx.contains("coin") {
+        "金额"
+    } else {
+        "子问题维度"
+    }
 }
 
 #[cfg(test)]

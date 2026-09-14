@@ -523,10 +523,18 @@
   {
    "algorithm": "string_match_kmp",
    "display_name": "KMP 模式匹配",
-   "phase": "build_next",
-   "desc": "调用构建 next 数组",
+   "phase": "build_nextval",
+   "desc": "调用构建 nextval 数组",
    "code_line": 35,
    "src": "getNextVal(T, nextval);"
+  },
+  {
+   "algorithm": "string_match_kmp",
+   "display_name": "KMP 模式匹配",
+   "phase": "build_next",
+   "desc": "调用构建 next 数组",
+   "code_line": 21,
+   "src": "getNext(T, next);"
   },
   {
    "algorithm": "string_match_kmp",
@@ -635,8 +643,16 @@
   {
    "algorithm": "string_match_kmp",
    "display_name": "KMP 模式匹配",
-   "phase": "build_next",
-   "desc": "构建 next 数组，next[2]=-1",
+   "phase": "build_nextval",
+   "desc": "构建 nextval 数组，nextval[-1]",
+   "code_line": 23,
+   "src": "nextval[0] = -1;"
+  },
+  {
+   "algorithm": "string_match_kmp",
+   "display_name": "KMP 模式匹配",
+   "phase": "build_nextval",
+   "desc": "构建 nextval 数组，nextval[2]",
    "code_line": 28,
    "src": "nextval[j] = next[j];"
   },
@@ -644,7 +660,31 @@
    "algorithm": "string_match_kmp",
    "display_name": "KMP 模式匹配",
    "phase": "build_next",
+   "desc": "构建 next 数组，next[2]=-1",
+   "code_line": 25,
+   "src": "if (T[j] == T[next[j]])"
+  },
+  {
+   "algorithm": "string_match_kmp",
+   "display_name": "KMP 模式匹配",
+   "phase": "build_nextval",
+   "desc": "构建 nextval 数组，nextval[3]",
+   "code_line": 26,
+   "src": "nextval[j] = nextval[next[j]];"
+  },
+  {
+   "algorithm": "string_match_kmp",
+   "display_name": "KMP 模式匹配",
+   "phase": "build_next",
    "desc": "构建 next 数组，next[3]=-1",
+   "code_line": 25,
+   "src": "if (T[j] == T[next[j]])"
+  },
+  {
+   "algorithm": "string_match_kmp",
+   "display_name": "KMP 模式匹配",
+   "phase": "build_nextval",
+   "desc": "构建 nextval 数组，nextval[4]",
    "code_line": 26,
    "src": "nextval[j] = nextval[next[j]];"
   },
@@ -653,6 +693,14 @@
    "display_name": "KMP 模式匹配",
    "phase": "build_next",
    "desc": "构建 next 数组，next[4]=-1",
+   "code_line": 25,
+   "src": "if (T[j] == T[next[j]])"
+  },
+  {
+   "algorithm": "string_match_kmp",
+   "display_name": "KMP 模式匹配",
+   "phase": "build_nextval",
+   "desc": "构建 nextval 数组，nextval[5]",
    "code_line": 26,
    "src": "nextval[j] = nextval[next[j]];"
   },
@@ -661,14 +709,30 @@
    "display_name": "KMP 模式匹配",
    "phase": "build_next",
    "desc": "构建 next 数组，next[5]=-1",
-   "code_line": 26,
-   "src": "nextval[j] = nextval[next[j]];"
+   "code_line": 25,
+   "src": "if (T[j] == T[next[j]])"
+  },
+  {
+   "algorithm": "string_match_kmp",
+   "display_name": "KMP 模式匹配",
+   "phase": "build_nextval",
+   "desc": "构建 nextval 数组，nextval[6]",
+   "code_line": 28,
+   "src": "nextval[j] = next[j];"
   },
   {
    "algorithm": "string_match_kmp",
    "display_name": "KMP 模式匹配",
    "phase": "build_next",
    "desc": "构建 next 数组，next[6]=-1",
+   "code_line": 25,
+   "src": "if (T[j] == T[next[j]])"
+  },
+  {
+   "algorithm": "string_match_kmp",
+   "display_name": "KMP 模式匹配",
+   "phase": "build_nextval",
+   "desc": "构建 nextval 数组，nextval[7]",
    "code_line": 28,
    "src": "nextval[j] = next[j];"
   },
@@ -677,14 +741,14 @@
    "display_name": "KMP 模式匹配",
    "phase": "build_next",
    "desc": "构建 next 数组，next[7]=-1",
-   "code_line": 28,
-   "src": "nextval[j] = next[j];"
+   "code_line": 25,
+   "src": "if (T[j] == T[next[j]])"
   },
   {
    "algorithm": "string_match_kmp",
    "display_name": "KMP 模式匹配",
-   "phase": "build_next",
-   "desc": "构建 next 数组，next[8]=-1",
+   "phase": "build_nextval",
+   "desc": "构建 nextval 数组，nextval[8]",
    "code_line": 26,
    "src": "nextval[j] = nextval[next[j]];"
   },
@@ -692,7 +756,15 @@
    "algorithm": "string_match_kmp",
    "display_name": "KMP 模式匹配",
    "phase": "build_next",
-   "desc": "构建 next 数组，next[9]=-1",
+   "desc": "构建 next 数组，next[8]=-1",
+   "code_line": 25,
+   "src": "if (T[j] == T[next[j]])"
+  },
+  {
+   "algorithm": "string_match_kmp",
+   "display_name": "KMP 模式匹配",
+   "phase": "build_nextval",
+   "desc": "构建 nextval 数组，nextval[9]",
    "code_line": 26,
    "src": "nextval[j] = nextval[next[j]];"
   }
@@ -884,7 +956,7 @@
    "algorithm": "dp",
    "display_name": "动态规划",
    "phase": "outer_loop",
-   "desc": "遍历子问题 i=0",
+   "desc": "遍历币种 i=0",
    "code_line": 9,
    "src": "for (int i = 0; i < coinCount; i++) {"
   },
@@ -892,7 +964,7 @@
    "algorithm": "dp",
    "display_name": "动态规划",
    "phase": "inner_loop",
-   "desc": "遍历子问题维度 j=1",
+   "desc": "遍历金额 j=1",
    "code_line": 10,
    "src": "for (int j = coins[i]; j <= amount; j++) {"
   },
@@ -908,7 +980,7 @@
    "algorithm": "dp",
    "display_name": "动态规划",
    "phase": "inner_loop",
-   "desc": "遍历子问题维度 j=2",
+   "desc": "遍历金额 j=2",
    "code_line": 10,
    "src": "for (int j = coins[i]; j <= amount; j++) {"
   },
@@ -916,7 +988,7 @@
    "algorithm": "dp",
    "display_name": "动态规划",
    "phase": "inner_loop",
-   "desc": "遍历子问题维度 j=3",
+   "desc": "遍历金额 j=3",
    "code_line": 10,
    "src": "for (int j = coins[i]; j <= amount; j++) {"
   },
@@ -924,7 +996,7 @@
    "algorithm": "dp",
    "display_name": "动态规划",
    "phase": "inner_loop",
-   "desc": "遍历子问题维度 j=4",
+   "desc": "遍历金额 j=4",
    "code_line": 10,
    "src": "for (int j = coins[i]; j <= amount; j++) {"
   },
@@ -932,7 +1004,7 @@
    "algorithm": "dp",
    "display_name": "动态规划",
    "phase": "inner_loop",
-   "desc": "遍历子问题维度 j=5",
+   "desc": "遍历金额 j=5",
    "code_line": 10,
    "src": "for (int j = coins[i]; j <= amount; j++) {"
   },
@@ -940,7 +1012,7 @@
    "algorithm": "dp",
    "display_name": "动态规划",
    "phase": "inner_loop",
-   "desc": "遍历子问题维度 j=6",
+   "desc": "遍历金额 j=6",
    "code_line": 10,
    "src": "for (int j = coins[i]; j <= amount; j++) {"
   },
@@ -948,7 +1020,7 @@
    "algorithm": "dp",
    "display_name": "动态规划",
    "phase": "inner_loop",
-   "desc": "遍历子问题维度 j=7",
+   "desc": "遍历金额 j=7",
    "code_line": 10,
    "src": "for (int j = coins[i]; j <= amount; j++) {"
   },
@@ -956,7 +1028,7 @@
    "algorithm": "dp",
    "display_name": "动态规划",
    "phase": "inner_loop",
-   "desc": "遍历子问题维度 j=8",
+   "desc": "遍历金额 j=8",
    "code_line": 10,
    "src": "for (int j = coins[i]; j <= amount; j++) {"
   },
@@ -964,7 +1036,7 @@
    "algorithm": "dp",
    "display_name": "动态规划",
    "phase": "inner_loop",
-   "desc": "遍历子问题维度 j=9",
+   "desc": "遍历金额 j=9",
    "code_line": 10,
    "src": "for (int j = coins[i]; j <= amount; j++) {"
   },
@@ -972,7 +1044,7 @@
    "algorithm": "dp",
    "display_name": "动态规划",
    "phase": "inner_loop",
-   "desc": "遍历子问题维度 j=10",
+   "desc": "遍历金额 j=10",
    "code_line": 10,
    "src": "for (int j = coins[i]; j <= amount; j++) {"
   },
@@ -980,7 +1052,7 @@
    "algorithm": "dp",
    "display_name": "动态规划",
    "phase": "inner_loop",
-   "desc": "遍历子问题维度 j=11",
+   "desc": "遍历金额 j=11",
    "code_line": 10,
    "src": "for (int j = coins[i]; j <= amount; j++) {"
   },
@@ -988,7 +1060,7 @@
    "algorithm": "dp",
    "display_name": "动态规划",
    "phase": "outer_loop",
-   "desc": "遍历子问题 i=1",
+   "desc": "遍历币种 i=1",
    "code_line": 9,
    "src": "for (int i = 0; i < coinCount; i++) {"
   },
@@ -996,7 +1068,7 @@
    "algorithm": "dp",
    "display_name": "动态规划",
    "phase": "outer_loop",
-   "desc": "遍历子问题 i=2",
+   "desc": "遍历币种 i=2",
    "code_line": 9,
    "src": "for (int i = 0; i < coinCount; i++) {"
   },
@@ -1104,7 +1176,7 @@
    "algorithm": "dp",
    "display_name": "动态规划",
    "phase": "outer_loop",
-   "desc": "遍历子问题 i=1",
+   "desc": "遍历物品 i=1",
    "code_line": 18,
    "src": "for (int i = 1; i <= n; i++) {"
   },
@@ -1120,7 +1192,7 @@
    "algorithm": "dp",
    "display_name": "动态规划",
    "phase": "outer_loop",
-   "desc": "遍历子问题 i=2",
+   "desc": "遍历物品 i=2",
    "code_line": 18,
    "src": "for (int i = 1; i <= n; i++) {"
   }
@@ -1482,7 +1554,7 @@
    "algorithm": "hanoi",
    "display_name": "汉诺塔",
    "phase": "finish",
-   "desc": "汉诺塔移动完成",
+   "desc": "该层递归结束，返回上一层",
    "code_line": 6,
    "src": "return;"
   },
@@ -1586,7 +1658,7 @@
    "algorithm": "insertion_sort",
    "display_name": "插入排序",
    "phase": "insert",
-   "desc": "将 key=11 插入",
+   "desc": "将 key=11 插入到正确位置 0",
    "code_line": 11,
    "src": "arr[j + 1] = key;"
   },
@@ -1634,7 +1706,7 @@
    "algorithm": "insertion_sort",
    "display_name": "插入排序",
    "phase": "insert",
-   "desc": "将 key=5 插入",
+   "desc": "将 key=5 插入到正确位置 0",
    "code_line": 11,
    "src": "arr[j + 1] = key;"
   },
@@ -1878,7 +1950,7 @@
    "algorithm": "quick_sort",
    "display_name": "快速排序",
    "phase": "partition_init",
-   "desc": "分区：选取枢轴 pivot=0",
+   "desc": "分区完成，枢轴落位下标 pivot=0",
    "code_line": 5,
    "src": "int pivot = partition(arr, low, high);"
   },
@@ -1902,7 +1974,7 @@
    "algorithm": "quick_sort",
    "display_name": "快速排序",
    "phase": "partition_init",
-   "desc": "分区：选取枢轴 pivot=4",
+   "desc": "分区完成，枢轴落位下标 pivot=4",
    "code_line": 5,
    "src": "int pivot = partition(arr, low, high);"
   },
@@ -1918,7 +1990,7 @@
    "algorithm": "quick_sort",
    "display_name": "快速排序",
    "phase": "partition_init",
-   "desc": "分区：选取枢轴 pivot=3",
+   "desc": "分区完成，枢轴落位下标 pivot=3",
    "code_line": 5,
    "src": "int pivot = partition(arr, low, high);"
   },
@@ -1934,7 +2006,7 @@
    "algorithm": "quick_sort",
    "display_name": "快速排序",
    "phase": "partition_init",
-   "desc": "分区：选取枢轴 pivot=2",
+   "desc": "分区完成，枢轴落位下标 pivot=2",
    "code_line": 5,
    "src": "int pivot = partition(arr, low, high);"
   },
@@ -2419,10 +2491,18 @@
   {
    "algorithm": "topological_sort",
    "display_name": "拓扑排序",
-   "phase": "output",
-   "desc": "输出顶点 0",
+   "phase": "dequeue",
+   "desc": "取出队头顶点",
    "code_line": 17,
    "src": "int u = queue[front++];"
+  },
+  {
+   "algorithm": "topological_sort",
+   "display_name": "拓扑排序",
+   "phase": "output",
+   "desc": "输出顶点 0",
+   "code_line": 18,
+   "src": "printf(\"%d \", u);"
   },
   {
    "algorithm": "topological_sort",
@@ -2437,40 +2517,40 @@
    "display_name": "拓扑排序",
    "phase": "output",
    "desc": "输出顶点 1",
-   "code_line": 17,
-   "src": "int u = queue[front++];"
+   "code_line": 18,
+   "src": "printf(\"%d \", u);"
   },
   {
    "algorithm": "topological_sort",
    "display_name": "拓扑排序",
    "phase": "output",
    "desc": "输出顶点 2",
-   "code_line": 17,
-   "src": "int u = queue[front++];"
+   "code_line": 18,
+   "src": "printf(\"%d \", u);"
   },
   {
    "algorithm": "topological_sort",
    "display_name": "拓扑排序",
    "phase": "output",
    "desc": "输出顶点 4",
-   "code_line": 17,
-   "src": "int u = queue[front++];"
+   "code_line": 18,
+   "src": "printf(\"%d \", u);"
   },
   {
    "algorithm": "topological_sort",
    "display_name": "拓扑排序",
    "phase": "output",
    "desc": "输出顶点 3",
-   "code_line": 17,
-   "src": "int u = queue[front++];"
+   "code_line": 18,
+   "src": "printf(\"%d \", u);"
   },
   {
    "algorithm": "topological_sort",
    "display_name": "拓扑排序",
    "phase": "output",
    "desc": "输出顶点 5",
-   "code_line": 17,
-   "src": "int u = queue[front++];"
+   "code_line": 18,
+   "src": "printf(\"%d \", u);"
   }
  ]
 }

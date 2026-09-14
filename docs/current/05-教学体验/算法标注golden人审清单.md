@@ -1,5 +1,16 @@
 # 算法标注 golden 人审清单（防线 6 · U1#1 ①，**v4 2026-09-14**）
 
+> **§6 代码侧第二批落地（2026-09-14 同日）——五项文案/挂载点修复，人审 ✗
+> 键全数处置**：#3 dp 子族具名（币种/物品循环，`dp_outer_subject`/
+> `dp_inner_subject` 特征词检测）；#4 insertion 位置 0 降级消除（`prev_vars`
+> 行入口 j，四变体文案统一）；#5 hanoi/finish 按 func_name 区分递归层返回
+> + topo/output 挂真 printf 行（出队独立新词条 `dequeue`）；#6
+> quick/partition_init 文案改"分区完成，枢轴落位下标"（phase 名另行裁定）；
+> #7 KMP 新词条 `build_nextval` 分离 nextval 段。**golden 基线：37 模板 /
+> 310 条 / 113 键**（300→310 = nextval 变体分离等）。§6 至此除 #8（历史
+> 登记复核项）与 #9（已修）外全部落地；⛔ 8 键的归属表达（golden 已带
+> algorithm 字段）待人审按算法分行复判后降级。
+>
 > **§6 代码侧首批落地（2026-09-14 同日，红→绿）**：① §6-1 golden 增
 > `algorithm`/`display_name` 字段（三审 P0-2 裁定 (b) 落地——§1.2 的 8 个 ⛔
 > 键由此获得归属证据，算法标签漂移可检）；② §6-9 终态末帧重放根治

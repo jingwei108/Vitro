@@ -157,6 +157,7 @@ pub(crate) fn infer_insertion_sort(
     source_line: &str,
     vars: &VarMap,
     algorithm: &AlgorithmMatch,
+    env: &crate::InferEnv<'_>,
 ) -> Option<AlgorithmStepSnapshot> {
     let line_lower = source_line.to_lowercase();
     let i = vars.get_int("i").unwrap_or(-1);
@@ -195,13 +196,21 @@ pub(crate) fn infer_insertion_sort(
         && source_line.contains('=')
         && !source_line.contains("= arr")
     {
-        // j 在内层 while 退出后可能已不可得（作用域收回）——取不到时
-        // 文案不带位置数字，避免"位置 ?"（用户审阅 P1-60 家族）。
-        if j >= 0 {
+        // j 在内层 while 退出后可能已不可得（作用域收回）——先试行入口快照
+        // prev_vars 的 j（while 退出后行入口值即最终位置 - 1；§6-4/v4 #77：
+        // 插到位置 0 的帧曾降级成无位置文案，与有位置版同键两态互相矛盾）。
+        // 两处都取不到才降级，降级文案不带位置数字（避免"位置 ?"）。
+        let j_entry = env
+            .prev_vars
+            .iter()
+            .find(|v| v.name == "j")
+            .and_then(|v| v.value.trim().parse::<i32>().ok());
+        let j_eff = if j >= 0 { Some(j) } else { j_entry };
+        if let Some(jj) = j_eff {
             return Some(build_step(
                 algorithm,
                 "insert",
-                &format!("将 key={} 插入到正确位置 {}", key, j + 1),
+                &format!("将 key={} 插入到正确位置 {}", key, jj + 1),
             ));
         }
         return Some(build_step(algorithm, "insert", &format!("将 key={} 插入", key)));
@@ -268,10 +277,13 @@ pub(crate) fn infer_quick_sort(
 
     if line_lower.contains("pivot") && line_lower.contains('=') && !line_lower.starts_with("for ") {
         let p_str = if pivot >= 0 { pivot.to_string() } else { "?".to_string() };
+        // §6-6（v4 #93）：变量 pivot 的值是 partition 的**返回值**（分区后
+        // 枢轴落位下标），不是选取的枢轴值——原文案"选取枢轴"教错。
+        // phase 名不动（对外词汇面，改动另行裁定），语义由文案修正。
         return Some(build_step(
             algorithm,
             "partition_init",
-            &format!("分区：选取枢轴 pivot={}", p_str),
+            &format!("分区完成，枢轴落位下标 pivot={}", p_str),
         ));
     }
 

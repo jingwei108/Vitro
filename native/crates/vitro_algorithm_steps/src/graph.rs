@@ -203,8 +203,15 @@ pub(crate) fn infer_topological_sort(
         return Some(build_step(algorithm, "enqueue", "入度为 0 的顶点入队"));
     }
 
-    if line_lower.contains("queue[front++]") || (line_lower.contains("front") && line_lower.contains("u")) {
+    // §6-5（v4 #112）：output 挂**真输出行**（printf）——原判据命中 L17 出队行
+    //（`int u = queue[front++];`），文案"输出顶点 0"与所挂语句不符（真输出在
+    // L18 printf）。出队行独立为 dequeue（词汇只增）。
+    if line_lower.contains("printf") {
         return Some(build_step(algorithm, "output", &format!("输出顶点 {}", u)));
+    }
+
+    if line_lower.contains("queue[front++]") {
+        return Some(build_step(algorithm, "dequeue", "取出队头顶点"));
     }
 
     if line_lower.contains("indegree") && line_lower.contains("--") {

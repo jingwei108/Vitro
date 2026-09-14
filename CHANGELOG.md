@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (防线 6)：v4 清单 §6 代码侧第二批——文案/挂载点五项修复（人审 ✗ 键全数处置，golden 300→310）
+
+- **#3 dp 子族具名**：外层/内层循环主语按特征词具名——币种循环
+  （dpCoinChange：`for (i < coinCount)`）→"遍历币种 i"/"遍历金额 j"；
+  物品循环（背包：lookahead 含 `wt[`）→"遍历物品 i"；无特征词保持泛化
+  "子问题"（dpFib/dpLIS/dpLCS/matrixChain 的 i 确是子问题下标）。
+  人审 ✗：#43（"遍历子问题 i=0"对币种循环不成立且丢信息）；
+- **#4 insertion 位置 0 降级消除**：j 在 while 退出后作用域收回时，改用
+  **行入口快照 `prev_vars` 的 j**（while 退出后行入口值即最终位置-1）——
+  插到位置 0 的帧曾降级成"将 key=11 插入"（无位置），与有位置版同键两态
+  互相矛盾（人审 ✗ #77）。修复后四条变体全部带位置且文案统一
+  （"将 key=11 插入到正确位置 0" 等）；
+- **#5 hanoi/topo 挂载点**：hanoi 体内的 return（含基准分支 L6）改文案
+  "该层递归结束，返回上一层"（func_name==main 才报"汉诺塔移动完成"）——
+  原文案挂在 L6 基准 return 上与语句不符（人审 ✗ #68）；
+  topologicalSort/output 改挂**真输出行**（printf，L18），出队行独立为新
+  词条 `dequeue`（"取出队头顶点"）——原判据命中 L17 出队行（人审 ✗ #112）；
+- **#6 quick/partition_init 语义修正**：变量 pivot 的值是 partition 返回值
+  （分区后枢轴**落位下标**），原文案"选取枢轴 pivot=0"教错——改
+  "分区完成，枢轴落位下标 pivot=0"（phase 名不动：对外词汇面改动另行
+  裁定，人审 ✗ #93）；
+- **#7 KMP next/nextval 分段**：新增词条 `build_nextval`（词汇只增）——
+  nextval 构建行/调用行不再混进"构建 next 数组"（computeNextVal 模板 22
+  条挂错，人审 ✗ #35）；分支置于 next 之前（`nextval[next[j]]` 行同时含
+  "next["）。
+- golden 基线随批更新：**37 模板 / 310 条 / 113 键**（300→310：nextval
+  变体分离 +9、insertion 位置版 +1 等）。新词条 `build_nextval` /
+  `dequeue`（topological_sort）为 phase 词汇新增（algorithm_step.phase
+  非冻结词汇表，golden 白名单不查 phase 词集）。
+
+验收：cargo 70 套件全绿；golden CI 绿（漂移 54 处 → 重提取更新 → 复绿）；
+shadow C 675 零非预期差异；serve 冒烟 57/57；replay 61/61；clippy 零警告。
+
 ### Fixed (防线 6)：v4 清单 §6 代码侧首批——golden 增算法归属 + 终态末帧重放根治 + dp 初始化内层排除（全部红→绿）
 
 依据用户完成的三审处置与人审判定（`算法标注golden审阅意见三审20260914.md` +

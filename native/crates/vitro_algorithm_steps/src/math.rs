@@ -127,7 +127,13 @@ pub(crate) fn infer_hanoi(
     }
 
     if line_lower.starts_with("return") {
-        return Some(build_step(algorithm, "finish", "汉诺塔移动完成"));
+        // §6-5（v4 #68）：hanoi 体内的 return（含基准分支 L6）是**该层递归
+        // 结束**，不是整体完成——原文案"汉诺塔移动完成"与所挂语句不符
+        //（真正完成在 main 末尾的 return）。
+        if func_name == "main" {
+            return Some(build_step(algorithm, "finish", "汉诺塔移动完成"));
+        }
+        return Some(build_step(algorithm, "finish", "该层递归结束，返回上一层"));
     }
 
     None

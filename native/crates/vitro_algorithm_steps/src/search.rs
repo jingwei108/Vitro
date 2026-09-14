@@ -154,6 +154,20 @@ pub(crate) fn infer_string_match_kmp(
     let j = vars.get_int_any(&["j"]).unwrap_or(-1);
     let k = vars.get_int_any(&["k"]).unwrap_or(-1);
 
+    // §6-7（v4 #35）：next 与 nextval 是两张表（nextval 是 next 的加速修正表），
+    // 原判据把 nextval 构建行/调用行都标成"构建 next 数组"（computeNextVal
+    // 模板 22 条挂错，人审 ✗）。词汇只增：新增 build_nextval。必须放在
+    // next 分支之前（`nextval[next[j]]` 这类行同时含 "next["）。
+    if line_lower.contains("nextval[") && line_lower.contains('=') {
+        return Some(build_step(
+            algorithm,
+            "build_nextval",
+            &format!("构建 nextval 数组，nextval[{}]", j),
+        ));
+    }
+    if line_lower.contains("getnextval") {
+        return Some(build_step(algorithm, "build_nextval", "调用构建 nextval 数组"));
+    }
     if line_lower.contains("getnext") || (line_lower.contains("next[") && line_lower.contains('=')) {
         // U1#1 P1-19/96（用户审阅）：main 里的 getNext(T, next) 调用行命中
         // contains("getnext")，数值取的是外层作用域 j/k（巧合非构建帧）。
