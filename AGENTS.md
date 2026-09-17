@@ -142,7 +142,7 @@ Vitro 采用**五条分层协作的测试防线**，核心哲学：*测试不是
 将同一 C 源码同时交给 **Clang** 与 **Vitro** 编译执行，对比 stdout 输出是否完全一致。Golden 只能来自 Clang，不能来自 Vitro 自己。
 
 - **门禁**：自 2026-09-06 起为 CI 硬门禁——Clang 预检缺失时 fail fast（exit 2）；存在非预期差异（compile_gap / runtime_gap / output_gap）时 exit 1；match / known_issue / vitro_better 视为通过。`KNOWN_FAILURE_CASES` 与 E2E 防线的 `KNOWN_TEMPLATE_FAILURES` 常量对齐（双向监控：任一防线转绿需同步移除）。
-- **覆盖**：321 个 Baseline 用例 + 82 个模板生成用例 + 81 个 K&R 用例 + 138 个 LeetCode 题 + 15 个 gap 用例 + 3 个 JIT 专项用例（`jit_nested_counting_loop` / `_longlong` / `jit_single_hot_loop`，2026-09-13）（C Shadow Verification 合计 667 个用例：match 660、known_issue 3（`function_pointer_sizeof` / `sizeof_array_param`——指针 4 字节模型，已在 C语言子集规范 记载的架构差异 + `bTree_default` 模板 UB）、gap_extension 4（`file_*` ×3 VFS 扩展 + `keyword_compat`——gap 目录语义即"Vitro 扩展"，驱动专用分类，U0#1② 2026-09-13）；**vitro_better = 0**（J2 闭环：16 例逐例审计，12 补头转真 golden、4 归 gap）；`spfa_default` 模板队列溢出已修转 match；统计口径含 match + known_issue + gap_extension；2026-09-13 复测）；100 个 C++ 用例（C++ Shadow Verification，98 个一致 + 2 个已记录的 `clang_compile_fail`：`cpp_vitro_vec_class` / `cpp_vitro_list_class` 使用 Vitro 内置容器无法被 Clang++ 直接编译；2026-06-28 实测，2026-09-11 复测仍一致）
+- **覆盖**：359 个 Baseline 用例（含 3 个 JIT 专项：`jit_nested_counting_loop` / `_longlong` / `jit_single_hot_loop`）+ 82 个模板生成用例 + 81 个 K&R 用例 + 138 个 LeetCode 题 + 15 个 gap 用例（C Shadow Verification 合计 675 个用例：match 668、known_issue 3（`function_pointer_sizeof` / `sizeof_array_param`——指针 4 字节模型，已在 C语言子集规范 记载的架构差异 + `bTree_default` 模板 UB）、gap_extension 4（`file_*` ×3 VFS 扩展 + `keyword_compat`——gap 目录语义即"Vitro 扩展"，驱动专用分类，U0#1② 2026-09-13）；**vitro_better = 0**（J2 闭环：16 例逐例审计，12 补头转真 golden、4 归 gap）；`spfa_default` 模板队列溢出已修转 match；统计口径含 match + known_issue + gap_extension；2026-09-15 复测）；99 个 C++ 用例（C++ Shadow Verification，95 个一致 + 4 个已记录的 `clang_compile_fail`：`cpp_vitro_vec_class` / `cpp_vitro_list_class` 使用 Vitro 内置容器无法被 Clang++ 直接编译，`cpp_u3_class_instantiate_in_template` / `cpp_u3_vec_class_twice` 为 U3 类类型模板实参用例；2026-06-28 首测，2026-09-15 复测）
 - **标准输入（2026-09-11 新增能力）**：用例可自带同名 `.in` 文件，Clang 与 Vitro 喂**同一份字节**（缓存 key 纳入真实 stdin）。此前防线一律批量运行且不喂 stdin —— K&R 目录里 29 个 `.in` 从未被使用，两侧"都无输入"造成的**虚假 match**；启用后立即暴露"输入注入丢换行"缺陷（`getchar()` 读不到 `'\n'`，19 例 `output_gap`），已随 `RuntimeState::split_stdin` 统一修复
 - **输出口径（E-P1-5，2026-09-11）**：比对读的是引擎的**纯程序 stdout 通道**（capi `vitro_get_program_output*`，ABI 1.1.0）——引擎附注（"程序运行完成，返回值：N"、内存泄漏报告、教学警告）与 stderr 各有独立通道。**驱动侧不得再对输出做正则清洗**：此前十余处清洗规则语义互不一致，且在教学程序自己打印同类文本时会误删真实输出（假阳性 `output_gap`），现全部废除。读取入口统一在驱动内置的结构化通道封装（共享包 `scripts/internal/capi` 的 `ReadChannel`/`PtrToGoString`；原 Python 伴生模块 `vitro_output.py` 已随主驱动退役）；DLL 缺新符号时 fail fast，不退回旧清洗。回归用例 `baseline/engine_note_lookalike.c` 固化该口径
 - **驱动**：`go run ./scripts/shadow_verify`（C 侧主驱动，2026-09-13 起 D5 语言迁移**最后一站**：与 Python 版双轨对账全维度一致后接管 CI，`shadow_verify.py` 退役删除。形态：两段流水线——Clang 侧并发（`--jobs N`，0=自动 min(CPU,16)），Vitro 侧互斥串行（DLL 非线程安全实证）；实测冷启动全量重算 663 用例 ~26s、缓存热跑 ~5s。`--refresh-clang` 强制全量重算（CI 夜间防漂移）；`--rebuild` 在 release DLL 比引擎源码旧时自动重建；Clang 结果缓存为 Go 自有 schema（`go1`），与历史 Python 缓存同目录共存、key 空间不相交；瞬态环境异常（超时/启动失败/0xC0000005 映像崩溃）自动重试且**不落缓存**）、`go run ./scripts/shadow_verify_cpp`（C++ 侧驱动，2026-09-12 起 D5 第一站：Clang 并发 16 路，**24.75s → 5.2s**；工作目录自管 `.shadow_cpp_tmp/`，已 gitignore）
@@ -153,8 +153,8 @@ Vitro 采用**五条分层协作的测试防线**，核心哲学：*测试不是
 
 收集真实教学/竞赛代码作为端到端回归用例，验证"真实世界代码能不能跑"。
 
-- **Baseline**：`native/tests/cases/baseline/`（321 个，全绿；2026-09-06 新增 `codegen_soundness_regression.c` 固化第三批 soundness 修复；2026-09-11 新增 `engine_note_lookalike.c` 固化 E-P1-5 输出通道口径、`scanf_return_value.c` / `scanf_literal_match.c` / `scanf_literal_mismatch.c` 固化 scanf 返回值与普通字符指令）
-- **K&R**：《C程序设计语言》课后习题（69 个，69 绿，0 已知失败）
+- **Baseline**：`native/tests/cases/baseline/`（359 个，全绿；2026-09-06 新增 `codegen_soundness_regression.c` 固化第三批 soundness 修复；2026-09-11 新增 `engine_note_lookalike.c` 固化 E-P1-5 输出通道口径、`scanf_return_value.c` / `scanf_literal_match.c` / `scanf_literal_mismatch.c` 固化 scanf 返回值与普通字符指令）
+- **K&R**：《C程序设计语言》课后习题（81 个，81 绿，0 已知失败）
 - **Template Generated**：算法模板批量生成（82 个，80 绿，2 已知失败：`bTree_default` / `spfa_default`；G12 对账 2026-09-12：`infixEvaluation_default` 已修复并从失败口径移除）
 - **LeetCode**：已全面实施阶段 4 + 阶段 5，当前 138 道题全部通过，详见 `native/tests/LEETCODE_FAILURES.md`
 - **报告**：`native/tests/TEST_REPORT.md`、`KR_FAILURES.md`、`E2E_FAILURES.md`、`LEETCODE_FAILURES.md`
@@ -251,9 +251,10 @@ go run ./scripts/facts                  # 交互式逐条同步（y/n/a/d/q）
 go run ./scripts/facts --yes sync       # 自动应用无警告条目（分解式/实测行跳过，人工维护）
 go run ./scripts/facts report           # 只生成报告
 go run ./scripts/facts --run check      # 补跑 replay/serve_smoke 刷新真值后再判
+go run ./scripts/facts --run --cargo-log native/cargo_test_ci.log check  # CI 接线形态（cargo 真值从 tee 日志解析，不重跑）
 ```
 
-要点：真值采集"不猜不兜底"（取不到记 unavailable 附 how_to_get）；真值超龄（`--max-age` 默认 168h）无条件红（`--allow-stale` 仅限本地调试，CI 不得使用）；新增对账规则时 Lo/Hi 区间须覆盖当前真值（越界后规则静默失配——埋雷方法学见 `07-质量与裁定/脚本埋雷验证记录.md` facts 节）。
+要点：真值采集"不猜不兜底"（取不到记 unavailable 附 how_to_get）；真值超龄（`--max-age` 默认 168h）无条件红（`--allow-stale` 仅限本地调试，CI 不得使用）；新增对账规则时 Lo/Hi 区间须覆盖当前真值（越界后规则静默失配——埋雷方法学见 `07-质量与裁定/脚本埋雷验证记录.md` facts 节）。**常量对账（M13 细化，2026-09-18 落地）**：`abi_version` 事实键以 `first_batch.rs` 的 `VITRO_ABI_VERSION` 为唯一真值，CURRENT 文档中陈述"当前现值"的 `x.y.z` 必须等于真值，历史事件句（迁移箭头 `→` / 首批 / 曾 / 当时 / 追加 / 条目 等）豁免；**漂移一律人工修**（自动替换会把"更名时 2.0.0"这类事件句篡改成假历史）。**CI 已接线（M15）**：ci.yml 的 cargo test 步骤 tee 日志，facts 步骤 `--cargo-log` 解析真值、shadow 真值读当轮产物——CI 每轮真值新鲜，本地日常跑 `facts check` 不带 flag 即可。
 
 既有 Python 脚本的处置：
 

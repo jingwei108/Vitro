@@ -44,13 +44,13 @@ vitro 引擎核心（Rust workspace，禁止平台 API 耦合）
 
 > **注意**：模板 JIT 不是传统机器码 JIT。由于核心 crate 启用 `#![forbid(unsafe_code)]`，无法动态生成机器码，因此把热点循环的字节码 trace 编译为预编译 Rust 函数指针序列（超级指令），跳过解释器 dispatch 开销，不匹配时回退标准解释执行。
 
-## 当前状态（2026-09-11 实测）
+## 当前状态（2026-09-15 实测）
 
-- **C 教学子集**：C Shadow Verification **671 个用例**（完全匹配 664 + known_issue 3 + gap_extension 4，无非预期差异；vitro_better 已清零）
-- **C++ 教学子集**：C++ Shadow Verification **97 个用例**（95 一致 + 2 个已记录的 `clang_compile_fail`）；C++ E2E 回归 81 个用例
-- **真实程序回归**：K&R 69 题全绿；LeetCode 138 题全部通过；Baseline 用例全部通过
+- **C 教学子集**：C Shadow Verification **675 个用例**（完全匹配 668 + known_issue 3 + gap_extension 4，无非预期差异；vitro_better 已清零）
+- **C++ 教学子集**：C++ Shadow Verification **99 个用例**（95 一致 + 4 个已记录的 `clang_compile_fail`：`cpp_vitro_vec_class` / `cpp_vitro_list_class` / `cpp_u3_class_instantiate_in_template` / `cpp_u3_vec_class_twice`）；C++ E2E 回归 83 个用例
+- **真实程序回归**：K&R 81 题全绿；LeetCode 138 题全部通过；Baseline 用例全部通过
 - **全量测试**：`cargo test --workspace --all-features` → **845 passed / 0 failed**（60 个测试套件）；clippy 0 warning
-- **capi 第一批**：13 个新入口全部落地（`vitro_abi_version` 首批 `1.1.0`，当前 `1.2.0`），StepPayload schema v0.1 发布
+- **capi 第一批**：13 个新入口全部落地（`vitro_abi_version` 首批 `1.1.0`，现 `2.1.0`），StepPayload schema v0.1 发布
 - **wasm32 出口**：零修改构建 3.75MB `.wasm`，Node 下 C API 全链路（compile → run → output）+ E3070 教学诊断通过
 - **时间旅行**：VM 快照 / 检查点 / Seek / 异常回退全链路可用（`vitro_cli unified`、`serve` 的 `step.*`/`seek`）
 

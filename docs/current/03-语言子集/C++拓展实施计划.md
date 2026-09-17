@@ -1601,8 +1601,8 @@ native/runtime_libc/vitro/
 ### 15.5 验证结果
 
 - **Dogfooding 测试**：28 个全部通过（`cargo test --test cpp_dogfooding_test`）
-- **C++ E2E 测试**：81 个全部通过（`cargo test --test vitro_e2e cpp`）
-- **C++ Shadow Verification**：97 个用例（95 一致 + 2 个已记录 `clang_compile_fail`），0 gap（原 3 个 gap 已消除）
+- **C++ E2E 测试**（2026-06-13 as-of，M6 交付时点）：81 个全部通过（`cargo test --test vitro_e2e cpp`）
+- **C++ Shadow Verification**（2026-06-13 as-of，M6 交付时点）：97 个用例（95 一致 + 2 个已记录 `clang_compile_fail`），0 gap（原 3 个 gap 已消除）
 - **Parser/TypeChecker/BytecodeGen CPP 单元测试**：33 + 28 + 40 = 101 个全部通过
 - **clippy**：0 警告
 

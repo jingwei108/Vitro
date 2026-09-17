@@ -200,6 +200,62 @@ type FactAudit struct {
 	Manual []Hit
 }
 
+// ─── 常量对账（M13 细化，2026-09-18）─────────────────────────────────────────
+//
+// 背景（§7A 复核 M13 实证）：ABI 版本代码升至 2.1.0 后，多份 CURRENT 文档
+// 仍写 1.2.0 / 2.0.0——数字对账规则只抓区间整数，抓不住 "x.y.z" 版本串。
+// 判据（与 §7A 登记一致）：**陈述"当前现值"的句子对账，记录"版本号历史
+// 事件"的句子豁免**——两者可同篇共存（如 项目更名记录.md）。
+//
+// 机械化为三条：
+//   1. 行提及 vitro_abi_version 或 "ABI 版本" 且含 x.y.z 版本串 → 参与判定；
+//   2. 行级豁免（历史事件）：既有冻结判据（日期/as-of 词）+ 迁移箭头（→/->
+//      即 "1.3.0 → 2.0.0" 事件句）+ 历史标记词（首批/曾/当时/追加/条目…）；
+//   3. 非豁免行的**全部**版本串必须等于真值——旧版本号要么待在箭头迁移句/
+//      历史标记句里，要么是当前现值，不允许裸旧版本号以现在时出现。
+//
+// 漂移处置一律人工（不进 sync 自动替换）：现值句自动替换成新值会把
+// "更名时返回 2.0.0" 这类事件句篡改成假历史；改写句子形态（补时点标记）
+// 是语义决策，机器没有依据替人做。
+
+type ConstRule struct {
+	Key     string
+	Label   string
+	Context *regexp.Regexp
+	Exempt  *regexp.Regexp
+	Unit    string
+}
+
+func constRules() []ConstRule {
+	return []ConstRule{{
+		Key:     "abi_version",
+		Label:   "ABI 版本（vitro_abi_version）",
+		Context: regexp.MustCompile(`vitro_abi_version|ABI`),
+		Exempt: regexp.MustCompile(`→|->|首批|历史|曾|当时|彼时|追加|条目|已升|` +
+			`旧版|更名时|彼时|迁移自|升级自`),
+		Unit: "版本",
+	}}
+}
+
+var reVersion = regexp.MustCompile(`\d+\.\d+\.\d+`)
+
+type ConstHit struct {
+	Key    string
+	File   string
+	LineNo int
+	Found  []string
+	Text   string
+}
+
+type ConstAudit struct {
+	Rule     ConstRule
+	Truth    string
+	HasTruth bool
+	Matched  int
+	Drift    []ConstHit
+	Frozen   []ConstHit
+}
+
 type AuditResult struct {
 	Audits   []FactAudit
 	TruthOf  map[string]int
@@ -213,6 +269,67 @@ type AuditResult struct {
 	// 留在文档里会让读者按图索骥扑空（spec 曾实测：shadow_verify.py 等
 	// 三个退役路径在冻结文档里躺了数日无人发现）。
 	Broken []BrokenRef
+	// 常量对账（版本号等字符串真值），与数字对账平行；DriftN 已并入其
+	// 漂移计数，check 同样一票红。
+	Consts []ConstAudit
+}
+
+// auditConst 常量对账：只扫 CURRENT 层文档（AS-OF 文件的版本号是有意的
+// 时点记载——裁定/登记文档引用"当时代码是什么版本"正是复核的证据链）。
+func auditConst(root string, doc FactsDoc) []ConstAudit {
+	rs := constRules()
+	files := scanFiles(root)
+	var out []ConstAudit
+	for _, r := range rs {
+		f, ok := doc.Facts[r.Key]
+		a := ConstAudit{Rule: r}
+		if ok && f.SValue != "" {
+			a.Truth = f.SValue
+			a.HasTruth = true
+		}
+		for _, rel := range files {
+			if classifyFile(rel) != "CURRENT" {
+				continue
+			}
+			lines, err := splitLinesKeep(filepath.Join(root, filepath.FromSlash(rel)))
+			if err != nil {
+				continue
+			}
+			for i, raw := range lines {
+				line := strings.TrimSuffix(raw, "\r")
+				if !r.Context.MatchString(line) {
+					continue
+				}
+				vers := reVersion.FindAllString(line, -1)
+				if len(vers) == 0 {
+					continue
+				}
+				h := ConstHit{Key: r.Key, File: rel, LineNo: i + 1, Found: vers,
+					Text: strings.TrimSpace(line)}
+				if !a.HasTruth {
+					continue // 真值不可得：待采集，不判（unavail 由台账自报）
+				}
+				ok := true
+				for _, v := range vers {
+					if v != a.Truth {
+						ok = false
+						break
+					}
+				}
+				if ok {
+					a.Matched++
+					continue
+				}
+				if classifyLine(line) || r.Exempt.MatchString(line) {
+					a.Frozen = append(a.Frozen, h)
+				} else {
+					a.Drift = append(a.Drift, h)
+				}
+			}
+		}
+		out = append(out, a)
+	}
+	return out
 }
 
 func auditDocs(root string, doc FactsDoc) AuditResult {
@@ -329,6 +446,12 @@ func auditDocs(root string, doc FactsDoc) AuditResult {
 	// 按文件 + 行号排序，便于人工顺序核对
 	sort.SliceStable(res.Audits, func(i, j int) bool { return order[i] < order[j] })
 	res.Broken = scanBrokenRefs(root, files)
+	// 常量对账（版本号）：与数字对账平行的第二轴，漂移并入 DriftN 一票红。
+	res.Consts = auditConst(root, doc)
+	for _, c := range res.Consts {
+		res.DriftN += len(c.Drift)
+		res.FrozenN += len(c.Frozen)
+	}
 	return res
 }
 
@@ -555,6 +678,27 @@ func renderReport(root string, doc FactsDoc, res AuditResult, verbose bool) stri
 				if h.Warn != "" {
 					b.WriteString("  > ⚠ " + h.Warn + "\n")
 				}
+			}
+			b.WriteString("\n")
+		}
+	}
+
+	if len(res.Consts) > 0 {
+		b.WriteString("## 常量对账（版本号等字符串真值）\n\n")
+		b.WriteString("判据：陈述\"当前现值\"的句子必须等于源码真值；记录\"历史事件\"的句子" +
+			"（迁移箭头 → / 首批 / 曾 / 当时 等）豁免。**漂移一律人工修**——自动替换会把" +
+			"事件句篡改成假历史，改写句子形态（补时点标记）是语义决策。\n\n")
+		for _, c := range res.Consts {
+			truth := c.Truth
+			if !c.HasTruth {
+				truth = "—"
+			}
+			b.WriteString(fmt.Sprintf("### %s — 真值 **%s**（一致 %d / 漂移 %d / 冻结 %d）\n\n",
+				c.Rule.Label, truth, c.Matched, len(c.Drift), len(c.Frozen)))
+			for _, h := range c.Drift {
+				b.WriteString(fmt.Sprintf("- `%s:%d` 出现 %s\n", h.File, h.LineNo,
+					strings.Join(h.Found, "、")))
+				b.WriteString("  > " + h.Text + "\n")
 			}
 			b.WriteString("\n")
 		}

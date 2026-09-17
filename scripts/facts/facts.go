@@ -24,7 +24,10 @@ import (
 // ─── 数据结构 ────────────────────────────────────────────────────────────────
 
 type Fact struct {
-	Value      *int   `json:"value"`
+	Value *int `json:"value"`
+	// SValue 字符串常量真值（如 ABI 版本 "2.1.0"）。Value/SValue 恰一者非零值；
+	// 对账层按 Key 区分数字规则与常量规则。
+	SValue     string `json:"svalue,omitempty"`
 	Unit       string `json:"unit"`
 	Source     string `json:"source"`
 	Provenance string `json:"provenance"`
@@ -111,22 +114,33 @@ func relOf(root, p string) string {
 // ─── 采集器：影子防线（读产物，零副作用）────────────────────────────────────
 
 func collectShadowC(root string, facts map[string]Fact) {
+	// 两个产物名并存：本地默认写 shadow_data_latest.json；CI 用 --json
+	// 指定 shadow_data.json（M15 接线后 CI 每轮采集，两者都认，缺一不兜底）。
 	rel := "native/tests/shadow_verification/reports/shadow_data_latest.json"
-	p := filepath.Join(root, "native/tests/shadow_verification/reports/shadow_data_latest.json")
 	how := "cd native && cargo build --release && go run ./scripts/shadow_verify"
 
 	var d struct {
 		Timestamp string         `json:"timestamp"`
 		Summary   map[string]int `json:"summary"`
 	}
-	if err := readJSON(p, &d); err != nil || d.Summary == nil {
+	var asOf string
+	found := false
+	for _, name := range []string{"shadow_data_latest.json", "shadow_data.json"} {
+		p := filepath.Join(root, "native/tests/shadow_verification/reports", name)
+		if err := readJSON(p, &d); err == nil && d.Summary != nil {
+			rel = "native/tests/shadow_verification/reports/" + name
+			asOf = d.Timestamp
+			if asOf == "" {
+				asOf = mtimeISO(p)
+			}
+			found = true
+			break
+		}
+	}
+	if !found {
 		facts["shadow_c_cases"] = unavail("用例", rel, how, "产物缺失或格式不符")
 		facts["shadow_c_match"] = unavail("用例", rel, how, "产物缺失或格式不符")
 		return
-	}
-	asOf := d.Timestamp
-	if asOf == "" {
-		asOf = mtimeISO(p)
 	}
 	total, hasTotal := d.Summary["total"]
 	match, hasMatch := d.Summary["match"]
@@ -263,6 +277,31 @@ func collectCaseDirs(root string, facts map[string]Fact) {
 	}
 }
 
+// ─── 采集器：常量真值（读源码，零副作用）────────────────────────────────────
+
+var reAbiConst = regexp.MustCompile(`VITRO_ABI_VERSION\s*:\s*&str\s*=\s*"(\d+\.\d+\.\d+)"`)
+
+// collectAbiVersion 采集 C ABI 版本真值。唯一来源是
+// native/src/capi/first_batch.rs 的 VITRO_ABI_VERSION 常量——文档里的
+// 版本号一律不是真相（M13 实证：代码 2.1.0 时仍有多份文档写 1.2.0/2.0.0）。
+func collectAbiVersion(root string, facts map[string]Fact) {
+	rel := "native/src/capi/first_batch.rs"
+	p := filepath.Join(root, "native", "src", "capi", "first_batch.rs")
+	how := "读 " + rel + " 的 VITRO_ABI_VERSION 常量"
+	b, err := os.ReadFile(p)
+	if err != nil {
+		facts["abi_version"] = unavail("版本", rel, how, "文件缺失")
+		return
+	}
+	m := reAbiConst.FindSubmatch(b)
+	if m == nil {
+		facts["abi_version"] = unavail("版本", rel, how, "未解析到 VITRO_ABI_VERSION 常量（形态变更？）")
+		return
+	}
+	facts["abi_version"] = Fact{SValue: string(m[1]), Unit: "版本", Source: rel,
+		Provenance: "read_const", AsOf: mtimeISO(p), Status: "ok"}
+}
+
 // ─── 采集器：需执行类（--run / --run-slow 才启用）───────────────────────────
 
 func runCmd(root string, timeout time.Duration, args ...string) (string, int, bool) {
@@ -353,20 +392,39 @@ func collectCargoTest(root string, facts map[string]Fact) {
 		facts["cargo_test_passed"] = unavail("用例", "cargo test", how, "超时或 cargo 不可用")
 		return
 	}
+	collectCargoTestFromOutput(out, code, "cargo test", "run", facts)
+}
+
+// collectCargoTestFromLog 从 CI 已落盘的 cargo test 输出解析真值（M15 接线：
+// CI 里 cargo test 步骤 tee 日志后，facts 无需重跑 30 分钟的测试即可取得
+// 新鲜真值）。日志缺失时记 unavailable，不兜底。
+func collectCargoTestFromLog(root, logPath string, facts map[string]Fact) {
+	how := "cargo test --workspace --all-features 2>&1 | tee " + logPath + "（CI 已执行）"
+	b, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(logPath)))
+	if err != nil {
+		facts["cargo_test_passed"] = unavail("用例", logPath, how, "日志缺失")
+		facts["cargo_test_suites"] = unavail("个", logPath, how, "日志缺失")
+		return
+	}
+	collectCargoTestFromOutput(string(b), 0, logPath, "parse_ci_log", facts)
+}
+
+func collectCargoTestFromOutput(out string, code int, source, provenance string, facts map[string]Fact) {
 	passed := 0
 	for _, m := range regexp.MustCompile(`test result: ok\.\s+(\d+) passed`).FindAllStringSubmatch(out, -1) {
 		n, _ := strconv.Atoi(m[1])
 		passed += n
 	}
 	if passed > 0 {
-		f := okFact(passed, "用例", "cargo test", "run", nowISO())
+		f := okFact(passed, "用例", source, provenance, nowISO())
 		f.Note = fmt.Sprintf("exit=%d", code)
 		facts["cargo_test_passed"] = f
 	} else {
-		facts["cargo_test_passed"] = unavail("用例", "cargo test", how, "未解析到 test result 行")
+		facts["cargo_test_passed"] = unavail("用例", source, "cargo test --workspace --all-features",
+			"未解析到 test result 行")
 	}
 	if n := len(regexp.MustCompile(`Running .*target[\\/]debug[\\/]deps[\\/]`).FindAllString(out, -1)); n > 0 {
-		facts["cargo_test_suites"] = okFact(n, "个", "cargo test", "run", nowISO())
+		facts["cargo_test_suites"] = okFact(n, "个", source, provenance, nowISO())
 	}
 }
 
@@ -379,12 +437,13 @@ var runKeys = []string{
 	"cargo_test_passed", "cargo_test_suites",
 }
 
-func collectAll(root string, run, runSlow bool, prev *FactsDoc) FactsDoc {
+func collectAll(root string, run, runSlow bool, cargoLog string, prev *FactsDoc) FactsDoc {
 	facts := map[string]Fact{}
 	collectShadowC(root, facts)
 	collectShadowCpp(root, facts)
 	collectFailureLedgers(root, facts)
 	collectCaseDirs(root, facts)
+	collectAbiVersion(root, facts)
 
 	if run {
 		collectReplay(root, facts)
@@ -395,11 +454,15 @@ func collectAll(root string, run, runSlow bool, prev *FactsDoc) FactsDoc {
 		facts["serve_smoke_assertions"] = unavail("项", "scripts/serve_smoke.py", "--run",
 			"需 --run 才执行")
 	}
-	if runSlow {
+	switch {
+	case cargoLog != "":
+		// CI 接线路径：日志由 cargo test 步骤 tee 落盘，此处只解析不重跑。
+		collectCargoTestFromLog(root, cargoLog, facts)
+	case runSlow:
 		collectCargoTest(root, facts)
-	} else {
-		facts["cargo_test_passed"] = unavail("用例", "cargo test", "--run-slow",
-			"需 --run-slow 才执行（很慢）")
+	default:
+		facts["cargo_test_passed"] = unavail("用例", "cargo test", "--run-slow 或 --cargo-log",
+			"需 --run-slow 才执行（很慢）；CI 传 --cargo-log 解析已落盘日志")
 	}
 
 	// 沿用上次采集（仅当本轮没拿到真值）

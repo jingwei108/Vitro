@@ -42,6 +42,7 @@ func main() {
 	forceYes := fs.Bool("force", false, "连同带警告条目也自动应用（慎用：会改断分解式/伪造测量）")
 	allowStale := fs.Bool("allow-stale", false, "check 容忍真值超龄（本地调试逃生门，CI 不得使用）")
 	maxAge := fs.Duration("max-age", 168*time.Hour, "真值新鲜度预算（超龄降级为待采集且 check 变红）")
+	cargoLog := fs.String("cargo-log", "", "从已落盘的 cargo test 日志解析真值（CI 接线：不重跑 30 分钟测试）")
 	_ = fs.Parse(os.Args[1:])
 
 	// Go flag 在第一个位置参数处停止解析：`facts sync --yes` 的 --yes 会被当作
@@ -79,7 +80,7 @@ func main() {
 			prev = &d
 		}
 	}
-	doc := collectAll(root, *doRun, *doRunSlow, prev)
+	doc := collectAll(root, *doRun, *doRunSlow, *cargoLog, prev)
 	// 先写盘**原始采集值**，再做超龄降级（降级只作用于内存中本轮判定的 doc）。
 	// 若把 value:null 写回 facts.json，replay/serve_smoke 这类靠 prev-fallback
 	// 沿用的真值会不可逆丢失——超龄一次就必须 --run 重采（曾实测踩坑）。
@@ -129,11 +130,25 @@ func main() {
 	case "report":
 		return
 	case "sync":
-		if res.DriftN == 0 {
-			fmt.Println("所有 CURRENT 数字与真值一致，无需同步。")
-			return
+		// DriftN 已并入常量漂移数（见 auditDocs），交互同步只管数字部分。
+		constDriftN := 0
+		for _, c := range res.Consts {
+			constDriftN += len(c.Drift)
 		}
-		interactiveSync(root, res, *autoYes, *forceYes)
+		if res.DriftN-constDriftN > 0 {
+			interactiveSync(root, res, *autoYes, *forceYes)
+		} else {
+			fmt.Println("所有 CURRENT 数字与真值一致，无需同步。")
+		}
+		// 常量漂移不进自动替换（会把"更名时返回 2.0.0"这类事件句篡改成
+		// 假历史），只指路：改写句子形态是语义决策，人来做。
+		for _, c := range res.Consts {
+			if len(c.Drift) == 0 {
+				continue
+			}
+			fmt.Printf("⚠ 常量漂移 %d 处（%s，真值 %s）需人工修——见 reports/doc_fact_drift.md\n",
+				len(c.Drift), c.Rule.Label, c.Truth)
+		}
 	default:
 		fatal("未知子命令: " + cmd + "（可用: sync / check / report / facts）")
 	}
@@ -152,6 +167,14 @@ func summarize(res AuditResult, doc FactsDoc) {
 			first := a.Drift[0]
 			fmt.Printf("  [漂移] %s: 真值 %d，%d 处不一致（如 %s:%d = %d）\n",
 				a.Rule.Label, *a.Truth, len(a.Drift), first.File, first.LineNo, first.Value())
+		}
+	}
+	for _, c := range res.Consts {
+		if len(c.Drift) > 0 {
+			first := c.Drift[0]
+			fmt.Printf("  [漂移·常量] %s: 真值 %s，%d 处不一致（如 %s:%d = %s）——人工修，不自动替换\n",
+				c.Rule.Label, c.Truth, len(c.Drift), first.File, first.LineNo,
+				strings.Join(first.Found, "、"))
 		}
 	}
 	for _, a := range res.Audits {

@@ -42,7 +42,12 @@ jobs:
         shell: bash
 
       - name: Run Rust tests
-        run: cargo test --workspace --all-features
+        # M15（2026-09-18）：tee 日志落盘——facts 对账从日志解析 passed/套件真值，
+        # CI 内无需为文档对账重跑 30 分钟测试。pipefail 保证 tee 不吞失败退出码。
+        shell: bash
+        run: |
+          set -o pipefail
+          cargo test --workspace --all-features 2>&1 | tee cargo_test_ci.log
         working-directory: native
 
       # cargo test 已覆盖全部单元/集成测试（含 Phase A/B/C/E/Dogfooding），
@@ -137,6 +142,16 @@ jobs:
       - name: replay S1-S5 protocol assertions (frame-sequence invariant)
         run: go run ./scripts/replay
         shell: bash
+
+      # M15 + M13 细化（2026-09-18）：文档事实对账门禁接线。此前 facts check
+      # 自称 CI 门禁但 ci.yml 无此步骤（§7A 复核 M15 实锤）——文档数字与机器
+      # 真值漂移、跨文档 ABI 版本漂移均无门禁可拦。置于 replay 之后：shadow
+      # 产物（shadow_data.json / cpp_shadow_report.json）与本 workflow 当轮新鲜；
+      # --run 重放 replay/serve_smoke 秒级刷新其真值；cargo 真值从上方 tee 的
+      # 日志解析，不重跑。真值超龄即红（无 --allow-stale），坏引用同红。
+      - name: Facts doc-truth audit (CURRENT docs must equal machine truth)
+        shell: bash
+        run: go run ./scripts/facts --run --cargo-log native/cargo_test_ci.log check
 
       # G2（R4）：出口 2 守护——wasm32 构建 + Node 冒烟（ABI 导出 + capi 全链路，
       # 纯 stdout 通道断言；wasm-bindgen 占位导入以 Proxy 桩通过）
