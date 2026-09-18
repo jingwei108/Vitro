@@ -32,6 +32,21 @@ pub fn severity_name(severity: i32) -> &'static str {
     }
 }
 
+/// P3（2026-09-18）：severity 数值 → 显示前缀（E/W/H，info 级用 I）。
+/// serve 帧 / CLI 的诊断码前缀**从 severity 单源派生**——与 `severity`
+/// 字段同源故永不矛盾；静态码表（error_catalog）用
+/// `vitro_shared::error_codes::code_prefix`（码段位白名单）。
+/// 此前硬编码 `"E{}"`，W/H 级码被伪造为 E 前缀（`code=E3053` +
+/// `severity=warning` 自相矛盾）。
+pub fn severity_prefix(severity: i32) -> &'static str {
+    match severity {
+        0 => "E",
+        1 => "W",
+        2 => "H",
+        _ => "I",
+    }
+}
+
 /// 编译当前会话的编译单元，返回诊断 JSON。
 ///
 /// `{"ok":bool,"diagnostics":[{code,error_code,severity,line,column,end_line,end_column,message,fix_suggestion,filename}]}`
@@ -47,7 +62,7 @@ pub fn compile(session: &mut Session) -> Value {
         .iter()
         .map(|d| {
             json!({
-                "code": format!("E{}", d.error_code),
+                "code": format!("{}{}", severity_prefix(d.severity), d.error_code),
                 "error_code": d.error_code,
                 "severity": severity_name(d.severity),
                 "line": d.line,

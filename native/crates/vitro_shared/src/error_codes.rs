@@ -155,3 +155,78 @@ pub enum ErrorCode {
     E4105_CppShallowCopyDoubleFree = 4105,
     E4106_CppReferenceToTemporary = 4106,
 }
+
+/// P3（2026-09-18）：码值 → 静态显示前缀（E/W/H）。
+/// 前缀是变体名首字母的段位语义；W/H 数值区间与 E 交织（E3060 与
+/// W3064 相邻），无法按数值段判定——显式白名单。此前四处显示点
+/// 硬编码 `"E{}"`，W/H 级码被伪造为 E 前缀（`[警告] … (E3053)`、
+/// serve 帧 `code=E3053`+`severity=warning` 自相矛盾）。
+/// **新增 W/H 码必须同步白名单**，护栏见 `code_prefix_test`（全枚举
+/// 抽样断言 + 白名单与变体名前缀一致性）。
+pub fn code_prefix(code: i32) -> &'static str {
+    const WARN: &[i32] = &[1018, 1019, 3050, 3051, 3052, 3053, 3054, 3055, 3056, 3064, 3067];
+    const HINT: &[i32] = &[3057];
+    if WARN.contains(&code) {
+        "W"
+    } else if HINT.contains(&code) {
+        "H"
+    } else {
+        "E"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use super::ErrorCode::*;
+
+    /// P3 红→绿锚：W/H 级码的静态前缀。修复前显示点硬编码 "E{}"，
+    /// `[警告] … (E3053)` 与 serve 帧 `code=E3053`+`severity=warning`
+    /// 自相矛盾——本断言锁定白名单按段位输出。
+    #[test]
+    fn test_code_prefix_warn_and_hint() {
+        assert_eq!(code_prefix(W3053_ImplicitScalarConversion as i32), "W");
+        assert_eq!(code_prefix(W1018_MacroShadowing as i32), "W");
+        assert_eq!(code_prefix(W3067_PointerTypeMismatch as i32), "W");
+        assert_eq!(code_prefix(H3057_ImplicitConversionHint as i32), "H");
+    }
+
+    /// E 级码（含 C++ 4xxx 段）与未知码默认 E 前缀。
+    #[test]
+    fn test_code_prefix_error_and_unknown() {
+        assert_eq!(code_prefix(E1006_UnsupportedFeature as i32), "E");
+        assert_eq!(code_prefix(E3060_UseAfterFree as i32), "E");
+        assert_eq!(code_prefix(E4022_TemplateRecursionDepthExceeded as i32), "E");
+        assert_eq!(code_prefix(0), "E");
+        assert_eq!(code_prefix(9999), "E");
+    }
+
+    /// 白名单完备性锚：枚举中每个 W_/H_ 变体都必须命中对应前缀——
+    /// 新增 W/H 码漏登记白名单时此测试红（伪造前缀复发前先红）。
+    /// 变体清单手工维护，与枚举同步（漏列变体本身由下方计数锚兜底）。
+    #[test]
+    fn test_code_prefix_whitelist_covers_all_w_h_variants() {
+        let warn_variants: &[ErrorCode] = &[
+            ErrorCode::W1018_MacroShadowing,
+            ErrorCode::W1019_MacroArgSideEffect,
+            ErrorCode::W3050_AssignInCondition,
+            ErrorCode::W3051_ArrayBoundOffByOne,
+            ErrorCode::W3052_ArrayToPointerDecay,
+            ErrorCode::W3053_ImplicitScalarConversion,
+            ErrorCode::W3054_IntToPointerCast,
+            ErrorCode::W3055_VoidPointerCast,
+            ErrorCode::W3056_UnsignedToInt,
+            ErrorCode::W3064_DoublePointerCast,
+            ErrorCode::W3067_PointerTypeMismatch,
+        ];
+        let hint_variants: &[ErrorCode] = &[ErrorCode::H3057_ImplicitConversionHint];
+        assert_eq!(warn_variants.len(), 11, "W 变体计数锚：枚举新增 W 码时同步此清单");
+        assert_eq!(hint_variants.len(), 1, "H 变体计数锚：枚举新增 H 码时同步此清单");
+        for v in warn_variants {
+            assert_eq!(code_prefix(*v as i32), "W", "码 {} 应为 W 前缀", *v as i32);
+        }
+        for v in hint_variants {
+            assert_eq!(code_prefix(*v as i32), "H", "码 {} 应为 H 前缀", *v as i32);
+        }
+    }
+}

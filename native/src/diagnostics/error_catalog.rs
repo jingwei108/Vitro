@@ -532,10 +532,14 @@ pub fn export_json() -> String {
             out.push(',');
         }
         let causes: Vec<String> = info.common_causes.iter().map(|c| format!("\"{}\"", json_escape(c))).collect();
+        // P3（2026-09-18）：code_str 前缀按码段位白名单派生——W/H 级码
+        // 此前被硬编码 `"E{}"` 伪造为 E 前缀；运行时诊断帧（serve/CLI）
+        // 按 severity 单源派生，见 session_api::severity_prefix。
         out.push_str(&format!(
-            "{{\"code\":{},\"code_str\":\"E{}\",\"lang\":\"{}\",\"category\":\"{}\",\
+            "{{\"code\":{},\"code_str\":\"{}{}\",\"lang\":\"{}\",\"category\":\"{}\",\
              \"emoji\":\"{}\",\"title\":\"{}\",\"explanation\":\"{}\",\"common_causes\":[{}]}}",
             info.code,
+            vitro_shared::error_codes::code_prefix(info.code),
             info.code,
             lang_of_code(info.code),
             category_of_code(info.code),

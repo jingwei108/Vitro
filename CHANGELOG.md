@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (P3 诊断 E 前缀伪造批，2026-09-18)
+
+- **W/H 级错误码被打 E 前缀（4 处伪造点）**：`[警告] … (E3053)`、
+  serve 同帧 `code=E3053`+`severity=warning` 自相矛盾。修复为双单源：
+  - `vitro_shared::error_codes::code_prefix`（新增）：码值 → 静态前缀的
+    段位白名单（W×11/H×1，W/H 数值区间与 E 交织无法按段判定）；静态
+    码表（error_catalog `code_str`）走此源——77 条卡片现为 W×7/H×1/E×69
+  - `session_api::severity_prefix`（新增）：severity 数值 → 运行时前缀
+    （0→E/1→W/2→H）；serve 帧 `code` 与 CLI compile/export 三处显示点
+    走此源——前缀与 `severity` 字段同源派生，永不矛盾
+- 红→绿锚：`code_prefix_test` ×3（W/H 前缀、E/未知默认、**白名单完备性
+  计数锚**——新增 W/H 码漏登记白名单时先红）；现象红复验 `char c = 300`
+  CLI 输出 `(E3053)` → 修复后 `(W3053)`；serve 帧实测
+  `code=W3053`+`severity=warning` 自洽；`typeck_e3053_regression_test`
+  同批核对 4/4 过（数值断言不受前缀影响）
+- E3 诊断帧锚点（S1 侧 B 级锚）的硬前提就位：修复前两侧一致地错，无法
+  建锚
+
 ### Fixed (P2 全局/静态字符串指针静默错值，2026-09-18)
 
 - **`char *p = "hi"` 全局/静态初始化静默错值**：printf("%s", p) 输出 `[]`

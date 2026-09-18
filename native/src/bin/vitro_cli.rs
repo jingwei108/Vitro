@@ -91,7 +91,7 @@ fn compile_file(session: &mut Session, path: &str, source: &str) -> bool {
                 2 => "提示",
                 _ => "信息",
             };
-            println!("[{}] {}:{}  {} (E{})", severity, d.line, d.column, d.message, d.error_code);
+            println!("[{}] {}:{}  {} ({}{})", severity, d.line, d.column, d.message, session_api::severity_prefix(d.severity), d.error_code);
             if !d.fix_suggestion.is_empty() {
                 println!("    建议: {}", d.fix_suggestion);
             }
@@ -292,7 +292,7 @@ fn cmd_export(source_paths: &[String], output_path: &str, is_builtin_libc: bool)
             .compile
             .diagnostics
             .iter()
-            .map(|d| format!("{}:{}: {} (E{})", d.filename, d.line, d.message, d.error_code))
+            .map(|d| format!("{}:{}: {} ({}{})", d.filename, d.line, d.message, session_api::severity_prefix(d.severity), d.error_code))
             .collect();
         if !diags.is_empty() {
             eprintln!("诊断:\n{}", diags.join("\n"));
