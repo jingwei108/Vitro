@@ -593,6 +593,11 @@ fn serve_handle(session: &mut Session, line: &str) -> (serde_json::Value, bool) 
         //（misconception/learning_path/knowledge_graph/completion/intent/auto_fix；
         // data_flow 待 CFG 管线接线）。S8 差分锚的字段面以本方法为单源。
         "diagnostics_probe" => (serve_ok(id, session_api::diagnostics_probe(session, &params)), false),
+        // P7（2026-09-19）：AST/符号表 dump——E1 B 级锚的 Rust 侧出口。
+        // emitter 纪律：本侧 serde 派生为唯一 emitter，MoonBit 侧须显式
+        // emitter 同构（禁 ToJson 直拼）；两侧同经 scripts/canonicalize 归一。
+        "ast.dump" => (serve_ok(id, session_api::ast_dump(session, &params)), false),
+        "symbols.dump" => (serve_ok(id, session_api::symbols_dump(session, &params)), false),
         // 错误码表机器可读导出（下游需求清单 B1）：静态元数据，无状态。
         "error_catalog" => {
             let raw = session_api::error_catalog_json();

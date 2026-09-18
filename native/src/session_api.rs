@@ -84,6 +84,78 @@ pub fn compile(session: &mut Session) -> Value {
     })
 }
 
+/// P7（2026-09-19）：AST dump 出口——E1 B 级锚的 Rust 侧唯一出口。
+/// 此前全仓 `dump_ast` 零命中、AST 27 处 serde 派生但无出口（typeck 与
+/// parser 双报告独立确认）。**emitter 纪律**：Rust 侧 emitter =
+/// `serde_json::to_value(ProgramNode)`（serde 派生，本侧唯一）——MoonBit
+/// 侧必须实现显式 emitter 输出同构 JSON，禁 ToJson 直拼（总计划 §B 结构化
+/// 锚：禁一侧 serde 一侧 ToJson）；两侧输出同经 Go canonicalizer
+/// （scripts/canonicalize：键排序/转义统一/缩进固定）归一后逐字节比对。
+/// session 不保留 AST（与 U1 intents 同因），此处重解析。
+pub fn ast_dump(session: &mut Session, params: &Value) -> Value {
+    let Some(source) = params.get("source").and_then(|v| v.as_str()) else {
+        return error_json("ast.dump 需要 params.source");
+    };
+    let mut lexer = vitro_lexer::Lexer::new(source);
+    let (tokens, lex_errors) = lexer.tokenize();
+    if !lex_errors.is_empty() {
+        // 诊断进 session（复用管线），AST 无从谈起
+        let units = vec![crate::session::CompileUnit {
+            filename: params.get("filename").and_then(|v| v.as_str()).unwrap_or("main.c").to_string(),
+            source: source.to_string(),
+        }];
+        let _ = run_multi_file_pipeline(session, units, false);
+        return error_json("词法错误，无法产出 AST");
+    }
+    let (program, parse_errors) = vitro_parser::Parser::new(tokens).parse();
+    match program {
+        Some(p) => match serde_json::to_value(&p) {
+            Ok(v) => json!({ "ok": true, "parse_error_count": parse_errors.len(), "ast": v }),
+            Err(e) => error_json(format!("AST 序列化失败: {e}")),
+        },
+        None => {
+            let units = vec![crate::session::CompileUnit {
+                filename: params.get("filename").and_then(|v| v.as_str()).unwrap_or("main.c").to_string(),
+                source: source.to_string(),
+            }];
+            let _ = run_multi_file_pipeline(session, units, false);
+            error_json(format!("语法错误（{} 条），无法产出 AST", parse_errors.len()))
+        }
+    }
+}
+
+/// P7（2026-09-19）：符号表 dump 出口——codegen 产物 `session.compile.symbols`
+///（全局 + 局部符号的统一表：name/addr/is_local/ty/decl_line 等）。E1 锚的
+/// 符号表面对拍用；emitter 纪律同 ast_dump。
+pub fn symbols_dump(session: &mut Session, params: &Value) -> Value {
+    let Some(source) = params.get("source").and_then(|v| v.as_str()) else {
+        return error_json("symbols.dump 需要 params.source");
+    };
+    let units = vec![crate::session::CompileUnit {
+        filename: params.get("filename").and_then(|v| v.as_str()).unwrap_or("main.c").to_string(),
+        source: source.to_string(),
+    }];
+    let compiled = run_multi_file_pipeline(session, units, false).is_ok();
+    let symbols: Vec<Value> = session
+        .compile
+        .symbols
+        .iter()
+        .map(|s| {
+            json!({
+                "name": s.name,
+                "addr": s.addr,
+                "is_local": s.is_local,
+                "decl_line": s.decl_line,
+            })
+        })
+        .collect();
+    json!({
+        "ok": compiled,
+        "symbols": symbols,
+        "count": symbols.len(),
+    })
+}
+
 /// U1（2026-09-19）：认知链最小导出。knowledge_graph / misconception /
 /// learning_path / completion / intent / auto_fix 六个分析器此前外部生产
 /// 调用全为 0（serve/capi/CLI 零出口）——"趁 Rust 版仍在做差分扫描"的

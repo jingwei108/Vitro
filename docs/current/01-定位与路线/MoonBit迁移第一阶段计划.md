@@ -59,6 +59,8 @@
 
 ### P7 · AST/符号表 dump 出口新建（B 级锚点硬前提）
 
+- **✅ 已完成（2026-09-19）**：serve `ast.dump` / `symbols.dump`（session 不保留 AST，dump 内重解析；emitter 纪律落注释：Rust 侧 serde 派生唯一 emitter、MoonBit 侧禁 ToJson 直拼）+ Go canonicalizer `scripts/canonicalize`（键排序/数字保形/转义统一/缩进固定/fail loud/`--check` 锚定模式；J9 ×8）+ 管道锚 `ast_dump_test`（dump→canonicalize 幂等——E1 逐字节对拍的可信前提）。
+
 - **现状（亲证）**：全仓 `dump_ast` 零命中；AST 已有 27 处 serde 派生但无出口——typeck 与 parser 双报告独立确认。
 - **修法**：测试内加 dump 出口（不动生产代码语义）；Go canonicalizer（键排序/转义统一/缩进固定/fail loud）配套；**两侧显式 emitter 纪律**（禁一侧 serde 一侧 ToJson）。
 

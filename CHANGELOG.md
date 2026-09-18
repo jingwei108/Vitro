@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (P7 AST/符号表 dump 出口 + Go canonicalizer，2026-09-19)
+
+- **serve `ast.dump` / `symbols.dump`**：E1 B 级锚的 Rust 侧出口——此前
+  全仓 `dump_ast` 零命中、AST 27 处 serde 派生无出口（typeck/parser 双
+  报告确认）。session 不保留 AST（与 U1 intents 同因），dump 内重解析；
+  语法错误帧可归一（fail loud 语义稳定）。**emitter 纪律**落注释：Rust
+  侧 serde 派生为唯一 emitter，MoonBit 侧实现显式 emitter 同构输出、禁
+  ToJson 直拼（总计划 §B 结构化锚）
+- **Go canonicalizer** `scripts/canonicalize`：对象键字典序 / 数字保形
+  （json.Number 直通，1.0≠1）/ 字符串转义统一（HTML 转义关闭）/ 缩进
+  2 空格 / fail loud（非法 JSON 与多值拼接拒绝输出）/ `--check` 锚定
+  模式。J9 ×8（键排序 / 数字保形 / 转义 / 幂等 / 非法拒绝 / 多值拒绝 /
+  数组保序 / 自反）
+- **管道锚** `ast_dump_test`：dump 输出经 canonicalize 归一幂等——
+  E1 锚"两侧同经归一后逐字节比对"的可信前提
+
 ### Docs (P6 列号口径冻结，2026-09-19)
 
 - **口径档案** `docs/current/07-质量与裁定/列号口径冻结.md`：现状缺陷**不修**
