@@ -21,7 +21,7 @@
 
 **不换（行为资产，与重构计划同一张清单）**：
 - 编译管线五段结构（Lexer → Parser → TypeChecker → CodeGen → VM）
-- 字节码格式与 675 个 Shadow golden（C# 侧只允许按既有规则**追加** opcode，本计划追加 3 个）
+- 字节码格式与 676 个 Shadow golden（C# 侧只允许按既有规则**追加** opcode，本计划追加 3 个）
 - 出口协议（capi ABI / serve 协议 / StepPayload schema——只增不改语义）
 - VM 1MB 线性内存模型与教学检测语义（UAF/Double-Free/泄漏报告）
 

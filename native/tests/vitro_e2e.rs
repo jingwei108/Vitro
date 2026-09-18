@@ -206,12 +206,16 @@ fn test_vitro_e2e_baseline() {
     // 包含错误），e2e 的"必须可运行"契约不适用。
     // U1#11 新增三例（H-1/H-3）：include 找不到 / <> 引自定义头——Vitro 修复
     // 后报 E1021 编译失败，Clang 同样 fatal error（stdout 均空，Shadow 判 match）。
+    // P1 新增 j1：声明符链式后缀 1300 层——Vitro 报 E1006（MAX_DECLARATOR_SUFFIX
+    // 止血，修复前 release 栈溢出零诊断崩溃），Clang 同样编译失败
+    // （bracket nesting depth 限制）→ Shadow 判 match。
     const KNOWN_BASELINE_COMPILE_FAILURES: &[&str] = &[
         "e2_include_cycle",
         "e3_static_assert_fail",
         "e2_include_not_found_quote",
         "e2_include_not_found_angle",
         "e2_angle_local_header",
+        "j1_declarator_depth",
     ];
 
     let cases = load_cases(Path::new("tests/cases/baseline"));

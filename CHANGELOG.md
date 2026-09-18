@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (P1 声明符类型通道栈溢出止血批，2026-09-18)
+
+- **声明符链式数组后缀栈溢出（活的零诊断崩溃）**：`int a[1][1]...` 1300 层在
+  `interpret_declarator_node` 递归解释时 release 栈溢出崩溃（1200 层存活，
+  边界二进制相关）。三处根因全部收口：① `suffix_count` 死保险丝（全仓 3 处
+  只增不比）接上 `MAX_DECLARATOR_SUFFIX=1250` 比较，超限转 E1006 诊断并吞
+  剩余后缀干净收敛；② 抽象声明符路径（`sizeof(int[1]x1300)`）同样崩溃
+  （is_abstract 全免检）——后缀计数对抽象路径同样生效；③ 函数声明符互递归
+  （`int f(int f(...x1300))` 解析期爆栈，guard 每层 parse_declarator 新建
+  不累计）——`parse_param_list` 挂 enter_depth 与语句/表达式共享总量语义。
+  红→绿锚：`j1_declarator_depth.c`（30000 层，双侧编译失败判 match：clang
+  对 10000 层仍编译成功、30000 层 signal 失败两次复测稳定）；验收锚 1200
+  通过 / 1300 确定性诊断，1200 层用例不入防线（clang 可编译会造 vitro_better
+  假信号）
+- **类型深度预算（纵深防御）**：`MAX_AST_DEPTH=512` 只覆盖 Expr/Stmt，病态
+  深 Type 对它隐身（`int a[1]x1300` 语句深度仅 2、类型深 1301）。新增
+  `vitro_ast::depth::type_depth`（迭代式单源测量）+ `stmt_type_depth` +
+  parser 后置 `MAX_TYPE_DEPTH=1250` 预算（globals/structs/unions/classes/
+  funcs 全枚举声明点）；不并入 512——Expr 递归安全线不动，合法深层声明
+  （1200 层实测存活）独立余量。注：typedef 链经 interpret 维度扁平化进单
+  节点 `dims` vec，Type 树不深，1300 层 typedef 链编译成功为正确行为
+- **facts 数字对账就近绑定**：此前行内所有落 Lo/Hi 区间数字都归属每条命中
+  规则，"replay 61 / serve_smoke 57" 两真值键共行互落对方区间必然互斥判红
+  （MoonBit迁移总计划.md:81 既有误报）。改为数字归属（双向）距离最近的规则
+  关键词、平局取右（"cargo test 70 套件"后置单位胜）；J9 证红锚 ×6
+  （near_bind_test.go：跨键双绿 / 近邻写错仍红 / 数字前置抓回 / 键位平局
+  取右 / 最近键独占）
+
 ### Added (ABI 2.0.0 → 2.1.0)：四个 buf 写入式 C ABI 出口（零所有权转移）
 
 `vitro_abi_version_into` / `vitro_engine_version_into` / `vitro_get_runtime_error_into` /

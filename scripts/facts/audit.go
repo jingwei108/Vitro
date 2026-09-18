@@ -360,7 +360,56 @@ func auditDocs(root string, doc FactsDoc) AuditResult {
 			frozen := classifyLine(line) || tier == "AS-OF"
 			spans := numberSpans(line)
 
-			// 这一行对每个事实各命中哪些候选数字
+			// 这一行对每个事实各命中哪些候选数字。
+			// P1 批（2026-09-18）：数字**就近绑定**——每个候选数字只归属
+			// （双向）距离最近的规则关键词，平局取左。此前行内所有落区间
+			// 数字都归属每条命中规则："replay 61 / serve_smoke 57"（两个
+			// 真值键共行、数字互落对方 Lo/Hi 区间）必然互斥判红。就近绑定
+			// 消除跨键误报，同时保住两种既有写法的判定：
+			//   - "关键词 数字"（Shadow 676 用例）——左侧最近即本键；
+			//   - "数字 关键词"（675 个 Shadow golden / cargo test 70 套件）——
+			//     右侧最近即本键，不会被左侧更近的其他键挤占。
+			// 近邻写错的数字（如 "Shadow 600 用例"）仍按最近关键词判红
+			// （见 near_bind_test.go 的 J9 证红锚）。
+			type kwPos struct {
+				pos int // 关键词起点（字节）
+				end int // 关键词终点（字节）
+				key string
+			}
+			var kws []kwPos
+			for _, r := range rs {
+				if !r.Context.MatchString(line) {
+					continue
+				}
+				if r.Exclude != nil && r.Exclude.MatchString(line) {
+					continue
+				}
+				for _, loc := range r.Context.FindAllStringIndex(line, -1) {
+					kws = append(kws, kwPos{pos: loc[0], end: loc[1], key: r.Key})
+				}
+			}
+			sort.Slice(kws, func(i, j int) bool { return kws[i].pos < kws[j].pos })
+			// nearestKeyOf：数字 span 与哪个关键词（双向）最近。左距 = 数字
+			// 起点减关键词终点；右距 = 关键词起点减数字终点。平局取右：
+			// "cargo test 70 套件" 的 70 左右等距，后置的"套件"才是它的
+			// 计量单位（前置的 "cargo test" 是行首状语）。
+			nearestKeyOf := func(s numSpan) string {
+				best, bestDist := "", -1
+				for _, k := range kws {
+					if k.end <= s.start {
+						d := s.start - k.end
+						if bestDist < 0 || d < bestDist {
+							best, bestDist = k.key, d
+						}
+					} else {
+						d := k.pos - s.end
+						if bestDist < 0 || d <= bestDist {
+							best, bestDist = k.key, d
+						}
+					}
+				}
+				return best
+			}
 			byRule := map[string][]numSpan{}
 			for _, r := range rs {
 				if !r.Context.MatchString(line) {
@@ -371,6 +420,9 @@ func auditDocs(root string, doc FactsDoc) AuditResult {
 				}
 				var c []numSpan
 				for _, s := range spans {
+					if nearestKeyOf(s) != r.Key {
+						continue
+					}
 					if s.value >= r.Lo && s.value <= r.Hi {
 						c = append(c, s)
 					}

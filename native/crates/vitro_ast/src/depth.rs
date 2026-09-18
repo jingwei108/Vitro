@@ -9,6 +9,7 @@
 
 use super::expr::Expr;
 use super::stmt::Stmt;
+use super::types::Type;
 
 /// 栈元素：表达式或语句节点引用。
 enum Node<'a> {
@@ -193,4 +194,88 @@ fn push_stmt_children<'a>(s: &'a Stmt, d: usize, stack: &mut Vec<(Node<'a>, usiz
             }
         }
     }
+}
+
+// =========================================================================
+// 类型深度（P1，2026-09-18）
+// =========================================================================
+
+/// 类型树最大嵌套深度（叶子标量为 1；`int[1][1]...[1]` 的 n 层后缀深度 n+1）。
+///
+/// 病态深 Type（链式数组后缀 / typedef 链）对 Expr/Stmt 深度预算隐身：
+/// `int a[1]x1300` 的 VarDecl 深度只有 2，而它的类型深 1301——
+/// `base_element_type` / `compute_type_size`（vitro_ast）等递归遍历点
+/// 会随之栈溢出。显式栈测量，独立预算（见 parser `MAX_TYPE_DEPTH`），
+/// 不并入 `MAX_AST_DEPTH=512`：合法深层声明（实测 release 1200 层存活）
+/// 的余量与 Expr 安全线解耦。
+pub fn type_depth(t: &Type) -> usize {
+    let mut stack: Vec<(&Type, usize)> = vec![(t, 1)];
+    let mut max = 0usize;
+    while let Some((ty, d)) = stack.pop() {
+        if d > max {
+            max = d;
+        }
+        let dd = d + 1;
+        match ty {
+            Type::Pointer { pointee, .. }
+            | Type::Array { element: pointee, .. }
+            | Type::Reference { base: pointee, .. }
+            | Type::RValueRef { base: pointee, .. } => {
+                stack.push((pointee, dd));
+            }
+            Type::Function { return_type, param_types, .. } => {
+                stack.push((return_type, dd));
+                for p in param_types {
+                    stack.push((p, dd));
+                }
+            }
+            _ => {}
+        }
+    }
+    max
+}
+
+/// 语句树内所有声明类型的最大深度（遍历嵌套语句找 VarDecl，取其
+/// var_type / extra_vars 类型的 `type_depth` 最大值；不钻 Expr——
+/// 表达式内出现的类型只引用已在声明点过检的类型）。
+pub fn stmt_type_depth(s: &Stmt) -> usize {
+    let mut stack: Vec<&Stmt> = vec![s];
+    let mut max = 0usize;
+    while let Some(stmt) = stack.pop() {
+        match stmt {
+            Stmt::VarDecl { var_type, extra_vars, .. } => {
+                max = max.max(type_depth(var_type));
+                for (ty, _, _) in extra_vars {
+                    max = max.max(type_depth(ty));
+                }
+            }
+            Stmt::Block { stmts, .. } => stack.extend(stmts.iter()),
+            Stmt::If { then_stmt, else_stmt, .. } => {
+                stack.push(then_stmt);
+                if let Some(e) = else_stmt {
+                    stack.push(e);
+                }
+            }
+            Stmt::While { body, .. } | Stmt::DoWhile { body, .. } | Stmt::Label { stmt: body, .. } => {
+                stack.push(body);
+            }
+            Stmt::For { init, body, .. } => {
+                if let Some(i) = init {
+                    stack.push(i);
+                }
+                stack.push(body);
+            }
+            Stmt::Switch { body, .. } => stack.push(body),
+            Stmt::Case { stmt, .. } => stack.push(stmt),
+            Stmt::RangeFor { body, .. } => stack.push(body),
+            Stmt::Try { body, catches, .. } => {
+                stack.push(body);
+                for c in catches {
+                    stack.push(&c.body);
+                }
+            }
+            _ => {}
+        }
+    }
+    max
 }

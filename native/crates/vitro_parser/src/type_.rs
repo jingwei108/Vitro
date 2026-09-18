@@ -376,12 +376,19 @@ impl Parser {
             (Some(name_tok.text), DeclaratorNode::Base)
         };
 
-        // 收集后缀（它们绑定更紧）
+        // 收集后缀（它们绑定更紧）。
+        // P1（2026-09-18）：suffix_count 此前只增不比（死保险丝），链式
+        // `a[1][1]...` 1300 层在 interpret_declarator_node 递归解释时栈溢出
+        // （release 亲证：1200 层存活、1300 层崩溃）；抽象声明符路径
+        // （`sizeof(int[1]x1300)`）同样崩溃——两路都计数、都拦。
         let mut suffixes = Vec::new();
         loop {
             if self.match_token(TokenType::LBracket) {
-                if !is_abstract {
-                    guard.suffix_count += 1;
+                guard.suffix_count += 1;
+                if guard.suffix_count > MAX_DECLARATOR_SUFFIX {
+                    self.declarator_suffix_overflow(MAX_DECLARATOR_SUFFIX, allow_function_suffix, TokenType::LBracket);
+                    suffixes.clear();
+                    break;
                 }
                 let size_expr = if self.check(TokenType::RBracket) {
                     None
@@ -392,8 +399,11 @@ impl Parser {
                 self.consume(TokenType::RBracket, "预期 ']'");
                 suffixes.push(DeclaratorSuffix::Array(size_expr));
             } else if allow_function_suffix && self.match_token(TokenType::LParen) {
-                if !is_abstract {
-                    guard.suffix_count += 1;
+                guard.suffix_count += 1;
+                if guard.suffix_count > MAX_DECLARATOR_SUFFIX {
+                    self.declarator_suffix_overflow(MAX_DECLARATOR_SUFFIX, allow_function_suffix, TokenType::LParen);
+                    suffixes.clear();
+                    break;
                 }
                 let (params, is_variadic) = self.parse_param_list();
                 self.consume(TokenType::RParen, "预期 ')'");
@@ -438,6 +448,49 @@ impl Parser {
         }
 
         (node, name)
+    }
+    /// P1（2026-09-18）：声明符后缀超限——报 E1006 并吞掉剩余连续后缀
+    /// （`[expr]` / `(params)`），让外层解析在分号/逗号处干净收敛。
+    /// 已收集的后缀链由调用方丢弃：interpret 递归解释它同样会溢出。
+    /// `opened` 是超限时刻已被外层 match 消费的左括号——先补齐当前
+    /// 后缀的右半，再吞完整后缀。`(params)` 仅在 allow_function_suffix
+    /// 时吞——否则 `(` 是 `Type name(args)` 构造初始化语法，不属于本声明符。
+    fn declarator_suffix_overflow(&mut self, limit: i32, allow_function_suffix: bool, opened: TokenType) {
+        self.errors.push(ParseError {
+            message: format!("声明符数组/函数后缀层级过深（超过 {} 层），已停止解析该声明符", limit),
+            line: self.current().line,
+            column: self.current().column,
+            code: ErrorCode::E1006_UnsupportedFeature as i32,
+        });
+        let closing = if opened == TokenType::LParen {
+            let _ = self.parse_param_list();
+            TokenType::RParen
+        } else {
+            if !self.check(TokenType::RBracket) {
+                let _ = self.parse_assign();
+            }
+            TokenType::RBracket
+        };
+        if !self.match_token(closing) {
+            return; // 右半吞失败（如 EOF）：放弃对齐，交给外层报语法错
+        }
+        loop {
+            if self.match_token(TokenType::LBracket) {
+                if !self.check(TokenType::RBracket) {
+                    let _ = self.parse_assign();
+                }
+                if !self.match_token(TokenType::RBracket) {
+                    break;
+                }
+            } else if allow_function_suffix && self.match_token(TokenType::LParen) {
+                let _ = self.parse_param_list();
+                if !self.match_token(TokenType::RParen) {
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
     }
     pub(crate) fn array_dim_info(size_expr: &Option<Box<Expr>>) -> (i32, bool, Option<Box<Expr>>) {
         match size_expr {
@@ -608,6 +661,18 @@ impl Parser {
         }
     }
     pub(crate) fn parse_param_list(&mut self) -> (Vec<Param>, bool) {
+        // P1（2026-09-18）：函数声明符互递归（param_list → declarator →
+        // 函数后缀 → param_list）此前无深度保护——`int f(int f(...x1300))`
+        // 解析期栈溢出（guard 每层 parse_declarator 新建，计数不累计）。
+        // 挂 enter_depth，与语句/表达式共享总量语义（MAX_PARSE_DEPTH）。
+        if !self.enter_depth("函数声明符") {
+            return (Vec::new(), false);
+        }
+        let result = self.parse_param_list_inner();
+        self.leave_depth();
+        result
+    }
+    fn parse_param_list_inner(&mut self) -> (Vec<Param>, bool) {
         let mut params = Vec::new();
         let mut is_variadic = false;
         if self.check(TokenType::RParen) {

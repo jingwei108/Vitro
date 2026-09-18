@@ -102,6 +102,21 @@ pub(crate) const MAX_PARSE_DEPTH: i32 = 256;
 /// 512 层远低于 1MB 线程栈）。
 pub(crate) const MAX_AST_DEPTH: usize = 512;
 
+/// 声明符后缀（数组/函数）层级上限（P1，2026-09-18）：单个声明符的
+/// 链式后缀数（`a[1][1]...`）。实测 release 1200 层存活、1300 层
+/// interpret_declarator_node 递归栈溢出，取崩溃边界之下、合法深层之上。
+/// 抽象声明符（`sizeof(int[1]x1300)`）同拦——该路径此前全免检，同样崩溃。
+pub(crate) const MAX_DECLARATOR_SUFFIX: i32 = 1250;
+
+/// 类型树深度预算（P1，2026-09-18）：MAX_AST_DEPTH 只覆盖 Expr/Stmt，
+/// 深 Type 对它隐身（`int a[1]x1300` 的语句深度仅 2，类型深 1301）——
+/// base_element_type / compute_type_size 等递归遍历点会随之栈溢出。
+/// 与 MAX_DECLARATOR_SUFFIX 同值冗余：后者拦 parse 期收集，这里后置
+/// 兜底 typedef 链等不经后缀收集的深 Type 构造路径。**不并入 512**：
+/// Expr 递归安全线（typeck/Drop，实测 5000 项链崩溃）维持不动，而
+/// 合法深层声明（1200 层实测存活）需要独立余量。
+pub(crate) const MAX_TYPE_DEPTH: usize = 1250;
+
 /// 全程序最大 AST 深度（函数体 / 全局初始化式取最大）；无内容返回 None。
 fn program_max_depth(prog: &ProgramNode) -> Option<usize> {
     let mut max = 0usize;
@@ -116,6 +131,68 @@ fn program_max_depth(prog: &ProgramNode) -> Option<usize> {
         }
     }
     if max == 0 { None } else { Some(max) }
+}
+
+/// 全程序最大类型深度（P1）：globals / structs / unions / classes /
+/// funcs（签名 + 函数体内 VarDecl）。深 Type 的源头都在声明点——
+/// 表达式内出现的类型只引用已在声明点过检的类型，不需下钻 Expr。
+fn program_max_type_depth(prog: &ProgramNode) -> usize {
+    fn acc(t: &Type, max: &mut usize) {
+        let d = vitro_ast::depth::type_depth(t);
+        if d > *max { *max = d; }
+    }
+    fn acc_body(b: &Option<Stmt>, max: &mut usize) {
+        if let Some(b) = b {
+            let d = vitro_ast::depth::stmt_type_depth(b);
+            if d > *max { *max = d; }
+        }
+    }
+    let mut max = 0usize;
+    for g in &prog.globals {
+        acc(&g.ty, &mut max);
+    }
+    for sd in prog.structs.iter().chain(prog.unions.iter()) {
+        for f in &sd.fields {
+            acc(&f.ty, &mut max);
+        }
+    }
+    // 嵌套类用显式工作栈遍历（测量器自身不递归，同 depth.rs 纪律）
+    let mut class_stack: Vec<&ClassDecl> = prog.classes.iter().collect();
+    while let Some(c) = class_stack.pop() {
+        for m in &c.members {
+            match m {
+                ClassMember::Field { ty, .. } => acc(ty, &mut max),
+                ClassMember::Method { ret, params, body, .. } => {
+                    acc(ret, &mut max);
+                    for p in params {
+                        acc(&p.ty, &mut max);
+                    }
+                    acc_body(body, &mut max);
+                }
+                ClassMember::Constructor { params, body, .. } => {
+                    for p in params {
+                        acc(&p.ty, &mut max);
+                    }
+                    acc_body(body, &mut max);
+                }
+                ClassMember::Destructor { body, .. } => acc_body(body, &mut max),
+                ClassMember::NestedClass { decl, .. } => class_stack.push(decl),
+                ClassMember::NestedStruct { decl, .. } => {
+                    for f in &decl.fields {
+                        acc(&f.ty, &mut max);
+                    }
+                }
+            }
+        }
+    }
+    for f in &prog.funcs {
+        acc(&f.return_type, &mut max);
+        for p in &f.params {
+            acc(&p.ty, &mut max);
+        }
+        acc_body(&f.body, &mut max);
+    }
+    max
 }
 
 impl Parser {
@@ -212,6 +289,23 @@ impl Parser {
                 std::mem::forget(prog);
                 return (None, self.errors);
             }
+        }
+        // P1（2026-09-18）：类型深度预算——深 Type 对上面的 Expr/Stmt 预算
+        // 隐身（病态 `int a[1]x1300` 的语句深度仅 2）。同 mem::forget 语义：
+        // 递归 Drop 深类型链同样会溢出。
+        let tmax = program_max_type_depth(&prog);
+        if tmax > MAX_TYPE_DEPTH {
+            self.errors.push(ParseError {
+                message: format!(
+                    "类型嵌套深度 {} 超过预算 {}：过深的类型链（数组后缀/typedef 链）会使后续处理栈溢出",
+                    tmax, MAX_TYPE_DEPTH
+                ),
+                line: 1,
+                column: 1,
+                code: ErrorCode::E1006_UnsupportedFeature as i32,
+            });
+            std::mem::forget(prog);
+            return (None, self.errors);
         }
         (Some(prog), self.errors)
     }
