@@ -74,6 +74,7 @@
 | [`current/06-出口与协议/CAPI评审回复与实现状态.md`](current/06-出口与协议/CAPI评审回复与实现状态.md) | capi 签名评审定稿（外部消费者诉求逐条回应 + 第一批 13 入口实现台账）（原 `VITRO_CAPI_REVIEW_RESPONSE.md`） |
 | [`current/06-出口与协议/下游需求处置回执.md`](current/06-出口与协议/下游需求处置回执.md) | 下游需求清单处置与窗口表态（A/B/C/D 逐项回执；第二批 capi 窗口、三段式内存地图、会话语义）（原 `VITRO_DOWNSTREAM_REQUESTS_RESPONSE.md`） |
 | [`current/06-出口与协议/堆有界隔离决议.md`](current/06-出口与协议/堆有界隔离决议.md) | 堆内存决议：bump 分配 + 有界隔离（三道墙；已拍板已实施，U2 不可破坏项）（原 `VITRO_HEAP_QUARANTINE_DECISION.md`） |
+| [`current/06-出口与协议/wasm多实例并发模型与U2拍板.md`](current/06-出口与协议/wasm多实例并发模型与U2拍板.md) | 宿主并发模型裁定：N 线程 × N 实例构造性隔离（三宿主形态 + 1实例=1线程=1会话铁律）+ U2 拍板（19 声明冻结现状、第二批 capi 裁不做、下游改道 wasm/serve）（2026-09-19） |
 
 #### 质量、裁定与工作记录
 

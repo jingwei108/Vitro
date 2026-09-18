@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Docs (wasm 多实例并发模型裁定 + U2 拍板，2026-09-19)
+
+- **新文档** `docs/current/06-出口与协议/wasm多实例并发模型与U2拍板.md`：宿主
+  并发模型定为 N 线程 × N 独立实例（隔离是 wasm 实例模型的构造性质，不依赖
+  引擎线程安全改造）；三宿主形态（浏览器 Worker / Node worker_threads /
+  .NET Wasmtime 多 Store——铁律在 Wasmtime 是类型系统强制）；核心精化：
+  **隔离来自 core wasm 实例模型而非 wasm-gc 特有——当前 wasm32 出口已具备
+  全部性质，下游对接不必等终局**。实证交叉：capi"DLL 并发堆损坏"是构造性
+  反例（形态缺陷非 bug）；引擎状态逐项核对全在实例内（VFS/rand/无 time），
+  跨实例同输入同输出可复现；边界诚实记录（宿主 import 面的输出会话绑定 +
+  N 实例并发尚无实测记录——拍板生效前补锚，已列待办）
+- **U2 拍板**（第一阶段计划 §2 U2 状态更新）：第一批 19 声明冻结现状（维护
+  至 Rust oracle 退役）；第二批 capi（memory/breakpoints 语言中立化导出）
+  裁不做——下游并发改道 wasm 多实例、交互以 serve 协议为终态载体；通知
+  义务待用户向 SharpTutor 正式发出（原降级线升级为改道，Wasmtime 集成
+  成本换并发能力增强）
+
 ### Fixed (P5 golden 完整性与 fail-loud，2026-09-18)
 
 - **缺 golden 必红**：`run_case_with_compiler` 此前无 golden 时静默跳过比对
