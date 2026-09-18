@@ -359,6 +359,14 @@ impl BytecodeGen {
                         } else if g.ty.is_struct()
                             || g.ty.is_class()
                             || (g.ty.is_array() && elements.iter().any(|e| matches!(&e.value, Expr::InitList { .. })))
+                            // P2（2026-09-18）：含字符串字面量元素的数组（如
+                            // `char *arr[2] = {"a","b"}`）同走递归展开——其标量
+                            // 分支对 StringLiteral 走 pending_string_inits 取址；
+                            // 原元素级路径 literal_init_bits / flatten_init_list
+                            // 对字面量取不到值，元素被写成 0（NULL 指针），
+                            // printf("%s") 静默输出空（clang [ab][cd]）。
+                            || (g.ty.is_array()
+                                && elements.iter().any(|e| matches!(&e.value, Expr::StringLiteral { .. })))
                         {
                             // Struct or nested array init: use recursive expansion
                             self.flatten_global_init(&g.ty, init, offset as u32);
@@ -390,9 +398,24 @@ impl BytecodeGen {
                         }
                     }
                     Expr::StringLiteral { value, .. } => {
-                        for i in 0..sz as usize {
-                            let byte = if i < value.len() { value.as_bytes()[i] as i32 } else { 0 };
-                            self.globals_init_32.push((offset as u32 + i as u32, byte));
+                        // P2（2026-09-18）：此前无条件按 sz 逐字节写字面量内容——
+                        // 目标是 `char *p`（sz=4 指针）时指针槽被写成 'h','i',0,0，
+                        // printf("%s", p) 静默输出 []（clang [hi]；全局 / 文件级
+                        // static / 局部 static 三形态亲证同病）。char 数组目标保持
+                        // 字节直写；其余走 pending_string_inits 取址路径（Pass 1
+                        // 结束后回填：字符串数据入全局区、槽写地址——与
+                        // flatten_global_init 标量分支同一机制）。
+                        let is_char_array = matches!(
+                            &g.ty,
+                            Type::Array { element, .. } if element.kind() == TypeKind::Char
+                        );
+                        if is_char_array {
+                            for i in 0..sz as usize {
+                                let byte = if i < value.len() { value.as_bytes()[i] as i32 } else { 0 };
+                                self.globals_init_32.push((offset as u32 + i as u32, byte));
+                            }
+                        } else {
+                            self.pending_string_inits.push((offset as u32, value.clone()));
                         }
                     }
                     Expr::Literal { .. } | Expr::LongLiteral { .. } | Expr::FloatLiteral { .. } => {

@@ -152,9 +152,32 @@ impl BytecodeGen {
                 }
             }
             Expr::StringLiteral { value, .. } => {
-                for i in 0..self.type_size(vty) as usize {
-                    let byte = if i < value.len() { value.as_bytes()[i] as i32 } else { 0 };
-                    self.globals_init_32.push((global_offset as u32 + i as u32, byte));
+                // P2（2026-09-18）：与全局路径同构——此前无条件按 type_size 逐
+                // 字节写字面量内容，`static char *p = "hi"` 的指针槽被写成
+                // 'h','i',0,0（printf("%s") 静默输出 []，clang [hi]）。char 数组
+                // 目标保持字节直写；指针目标立即取址分配——本函数在 Pass 3 执行，
+                // pending_string_inits 已在 Pass 2 前回填，须与
+                // emit_static_scalar_array_init 的元素级处理同型（直接 bump +
+                // string_data + 槽写地址）。
+                let is_char_array = matches!(
+                    vty,
+                    Type::Array { element, .. } if element.kind() == TypeKind::Char
+                );
+                if is_char_array {
+                    for i in 0..self.type_size(vty) as usize {
+                        let byte = if i < value.len() { value.as_bytes()[i] as i32 } else { 0 };
+                        self.globals_init_32.push((global_offset as u32 + i as u32, byte));
+                    }
+                } else {
+                    let aligned = ((value.len() + 1) as u32 + 3) & !3;
+                    let Some(str_offset) =
+                        self.bump_global_offset(aligned as i32, "静态初始化字符串", loc)
+                    else {
+                        return;
+                    };
+                    let str_addr = GLOBAL_START + str_offset as u32;
+                    self.string_data.push((str_addr, value.clone()));
+                    self.globals_init_32.push((global_offset as u32, str_addr as i32));
                 }
             }
             Expr::Literal { .. } | Expr::LongLiteral { .. } | Expr::FloatLiteral { .. } => {

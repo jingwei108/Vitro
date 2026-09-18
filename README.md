@@ -18,7 +18,7 @@
 vitro 引擎核心（Rust workspace，禁止平台 API 耦合）
 │
 ├─ 出口 1：native cdylib / C ABI（native/src/capi/，ABI 版本化 vitro_abi_version()）
-│    第一消费者：vitro_cli、scripts/shadow_verify.go（capi 直调，676 个用例的生产验证）
+│    第一消费者：vitro_cli、scripts/shadow_verify.go（capi 直调，678 个用例的生产验证）
 │    外部消费者：第三方教学 IDE（.NET P/Invoke 子进程等）、任意语言 FFI
 │
 ├─ 出口 2：wasm32-unknown-unknown（.wasm + 薄 JS/TS 绑定）
@@ -46,7 +46,7 @@ vitro 引擎核心（Rust workspace，禁止平台 API 耦合）
 
 ## 当前状态（2026-09-15 实测）
 
-- **C 教学子集**：C Shadow Verification **676 个用例**（完全匹配 669 + known_issue 3 + gap_extension 4，无非预期差异；vitro_better 已清零）
+- **C 教学子集**：C Shadow Verification **678 个用例**（完全匹配 671 + known_issue 3 + gap_extension 4，无非预期差异；vitro_better 已清零）
 - **C++ 教学子集**：C++ Shadow Verification **99 个用例**（95 一致 + 4 个已记录的 `clang_compile_fail`：`cpp_vitro_vec_class` / `cpp_vitro_list_class` / `cpp_u3_class_instantiate_in_template` / `cpp_u3_vec_class_twice`）；C++ E2E 回归 83 个用例
 - **真实程序回归**：K&R 81 题全绿；LeetCode 138 题全部通过；Baseline 用例全部通过
 - **全量测试**：`cargo test --workspace --all-features` → **845 passed / 0 failed**（60 个测试套件）；clippy 0 warning

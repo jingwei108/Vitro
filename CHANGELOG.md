@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (P2 全局/静态字符串指针静默错值，2026-09-18)
+
+- **`char *p = "hi"` 全局/静态初始化静默错值**：printf("%s", p) 输出 `[]`
+  （clang `[hi]`），全局 / 文件级 static / 局部 static 三形态同病，676 用例
+  零覆盖。根因在 codegen 静态求值路径三处（typeck check_assignable 本身正确，
+  亲读后裁定不做计划中的"typeck 对称化"——插隐式 Cast 会使 codegen 初始化
+  match 不再命中 StringLiteral 分支而落入静默丢弃，需连带 Cast 剥壳适配、
+  扩大回归面且无行为收益）：① 全局直接字面量初始化按 `sz`（=4 指针）逐
+  字节写字符串内容，指针槽变成 'h','i',0,0——加目标类型判据，char 数组保持
+  字节直写、其余走 `pending_string_inits` 取址回填（字符串数据入全局区、槽
+  写地址，与 flatten_global_init 既有机制同构）；② 全局指针数组
+  `char *arr[2] = {"a","b"}` 的 InitList 元素被 `literal_init_bits`/
+  `flatten_init_list` 取不到值写成 0（NULL）——含 StringLiteral 元素的数组
+  转发递归展开；③ static 局部直接字面量同 ①，但 Pass 3 时序晚于
+  pending_string_inits 回填点，须与 emit_static_scalar_array_init 元素级
+  处理同型（立即 bump + string_data + 槽写地址）。函数内赋值 / 局部（非
+  static）初始化路径本就正确（gen_string_literal 取址），回归保持。
+  红→绿锚：`baseline/global_string_pointer.c` / `static_string_pointer.c`
+  （stash 复验：修复前 `[][][]` / `[|]`，clang golden 实跑
+  `[hi][alice][bob]` / `[>> | <<]`）；static 指针数组 / char 数组既有
+  路径回归不变
+
 ### Fixed (P1 声明符类型通道栈溢出止血批，2026-09-18)
 
 - **声明符链式数组后缀栈溢出（活的零诊断崩溃）**：`int a[1][1]...` 1300 层在
