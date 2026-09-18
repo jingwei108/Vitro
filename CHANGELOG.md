@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (P4 字符串转义与字节通道收口，2026-09-18)
+
+- **string 侧 hex/八进制转义收口（与 char 侧 U1#7 同口径）**：
+  - hex 1~2 位：修复前恰收 2 位，`"\x4"` 单位转义被拆成字面 "x4"
+    （sizeof 3，clang 2）；第 3 位 hexdigit 报"超出范围"（clang error
+    口径，文案与 char 侧一致）
+  - 八进制 `\ooo`（1~3 位，值 ≤ 0xFF）：string/char 两侧此前均缺失
+    （仅字面 `\0`），`"A\012B"` 变 NUL+"12"（sizeof 6，clang 4）、
+    char `'\7'` 报"未知字符转义"；超范围对齐 clang error
+- **C 字符串字节通道（\xHH ≥ 0x80 落单字节）**：`\xff` 转义产物
+  （U+00FF）经 Rust String 再 `as_bytes()` 重编码为 2 字节 UTF-8
+  （0xC3 0xBF，clang 单字节 0xFF）。新增 `vitro_shared::cstring`
+  （`cstring_bytes`/`cstring_len`，唯一真相源）：码点 ≤ 0xFF 按 Latin-1
+  单字节、> 0xFF 保持 UTF-8——无歧义依据：UTF-8 源的多字节字符码点
+  必然 > 0xFF，U+0080..=U+00FF 只可能来自 \xHH 转义。接线 7 个消费点
+  （gen_string_literal / 全局与 static 字节直写 / pending 回填 aligned /
+  VM write_cstring / typeck sizeof 折叠与数组尺寸推断）。已知差异（诚实
+  记录）：源内直接书写的高位单字节字符按 Latin-1 单字节（clang UTF-8
+  execution charset 为 2 字节）
+- **全局 `char g[] = "str"` 尺寸推断符号表回写（stash 红线复验顺带抓出）**：
+  推断发生在 declare_var 之后，符号表停留在 dims=[-1] 快照，
+  sizeof(g) 恒 1（clang 4；局部路径靠"推断后再声明"避开同坑）。新增
+  `update_var_type` 推断后回写
+- 红→绿锚：`baseline/string_escape_octal_hex.c`（clang golden 实跑
+  `10 4 65 10 7 255 7 10 9 3 4 63`：1/2 位 hex、1/2/3 位八进制、
+  \xff 字节值、char 侧八进制、全局+局部数组）+ `cstring` 单测 ×4；
+  修复前同用例输出 sizeof 全错；边界形状 ×8（含 \x414/\777 双侧
+  编译失败、\7A/\8 宽容）逐一对齐 clang
+
 ### Fixed (P3 诊断 E 前缀伪造批，2026-09-18)
 
 - **W/H 级错误码被打 E 前缀（4 处伪造点）**：`[警告] … (E3053)`、

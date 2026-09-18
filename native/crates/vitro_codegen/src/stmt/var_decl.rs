@@ -164,12 +164,13 @@ impl BytecodeGen {
                     Type::Array { element, .. } if element.kind() == TypeKind::Char
                 );
                 if is_char_array {
+                    let bytes = vitro_shared::cstring_bytes(value);
                     for i in 0..self.type_size(vty) as usize {
-                        let byte = if i < value.len() { value.as_bytes()[i] as i32 } else { 0 };
+                        let byte = if i < bytes.len() { bytes[i] as i32 } else { 0 };
                         self.globals_init_32.push((global_offset as u32 + i as u32, byte));
                     }
                 } else {
-                    let aligned = ((value.len() + 1) as u32 + 3) & !3;
+                    let aligned = ((vitro_shared::cstring_len(value) + 1) as u32 + 3) & !3;
                     let Some(str_offset) =
                         self.bump_global_offset(aligned as i32, "静态初始化字符串", loc)
                     else {
@@ -241,7 +242,7 @@ impl BytecodeGen {
                 let addr = global_offset as u32 + (i as u32) * elem_size as u32;
                 match &elem.value {
                     Expr::StringLiteral { value, .. } => {
-                        let aligned = ((value.len() + 1) as u32 + 3) & !3;
+                        let aligned = ((vitro_shared::cstring_len(value) + 1) as u32 + 3) & !3;
                         let Some(str_offset) =
                             self.bump_global_offset(aligned as i32, "静态初始化字符串", _loc)
                         else {
@@ -400,11 +401,12 @@ impl BytecodeGen {
             self.emit(OpCode::Add, 0, loc);
             self.emit(OpCode::StoreLocal, base_temp, loc);
             let byte_count = vty.array_size() as usize;
+            let bytes = vitro_shared::cstring_bytes(value);
             for i in 0..byte_count {
                 self.emit(OpCode::LoadLocal, base_temp, loc);
                 self.emit(OpCode::PushConst, i as i32, loc);
                 self.emit(OpCode::Add, 0, loc);
-                let byte = if i < value.len() { value.as_bytes()[i] as i32 } else { 0 };
+                let byte = if i < bytes.len() { bytes[i] as i32 } else { 0 };
                 self.emit(OpCode::PushConst, byte, loc);
                 self.emit(OpCode::StoreMemByte, 0, loc);
             }

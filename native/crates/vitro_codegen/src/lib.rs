@@ -410,8 +410,9 @@ impl BytecodeGen {
                             Type::Array { element, .. } if element.kind() == TypeKind::Char
                         );
                         if is_char_array {
+                            let bytes = vitro_shared::cstring_bytes(value);
                             for i in 0..sz as usize {
-                                let byte = if i < value.len() { value.as_bytes()[i] as i32 } else { 0 };
+                                let byte = if i < bytes.len() { bytes[i] as i32 } else { 0 };
                                 self.globals_init_32.push((offset as u32 + i as u32, byte));
                             }
                         } else {
@@ -504,7 +505,7 @@ impl BytecodeGen {
         // 回填全局变量初始化中的字符串字面量地址
         let pending = std::mem::take(&mut self.pending_string_inits);
         for (base_offset, value) in pending {
-            let aligned = ((value.len() + 1) as u32 + 3) & !3;
+            let aligned = ((vitro_shared::cstring_len(&value) + 1) as u32 + 3) & !3;
             let Some(str_offset) =
                 self.bump_global_offset(aligned as i32, "全局初始化字符串", &SourceLoc::default())
             else {

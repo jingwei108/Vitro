@@ -368,7 +368,8 @@ impl TypeChecker {
                 );
                 return;
             }
-            let str_len = value.len() as i32;
+            // P4：C 语义字节长度（\xHH >= 0x80 转义单字节）
+            let str_len = vitro_shared::cstring_len(value) as i32;
             if arr_type.array_size() <= 0 {
                 if let Type::Array { array_size, .. } = arr_type {
                     *array_size = str_len + 1;

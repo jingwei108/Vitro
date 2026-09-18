@@ -325,6 +325,9 @@ impl TypeChecker {
             if let Some(ref mut init) = g.init {
                 if g.ty.is_array() {
                     self.check_array_initializer(&mut g.ty, init, &g.loc);
+                    // P4：`char g[] = "str"` 的尺寸推断发生在 declare_var 之后——
+                    // 回写符号表，否则 sizeof(g) 用推断前快照恒为 1
+                    self.update_var_type(&g.name, &g.ty);
                 } else if g.ty.is_struct() && matches!(init, Expr::InitList { .. }) {
                     self.check_struct_initializer(&g.ty, init, &g.loc);
                 } else {

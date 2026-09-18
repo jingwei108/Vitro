@@ -119,4 +119,17 @@ impl TypeChecker {
         }
         None
     }
+
+    /// P4（2026-09-18）：尺寸推断后回写符号类型——全局 `char g[] = "str"` 的
+    /// array_size 推断发生在 Pass 2.5 的 `declare_var` 之后，符号表停留在
+    /// 推断前的 dims=[-1] 快照，sizeof(g) 恒 1（局部路径靠"推断后再声明"
+    /// 避开同坑，见 decl.rs）。只更新类型不触发重定义检查。
+    pub(crate) fn update_var_type(&mut self, name: &str, ty: &Type) {
+        for scope in self.scopes.iter_mut().rev() {
+            if let Some(sym) = scope.get_mut(name) {
+                sym.ty = ty.clone();
+                return;
+            }
+        }
+    }
 }

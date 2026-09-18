@@ -11,9 +11,14 @@ impl VitroVM {
     ///
     /// 注意：边界检查 `a + bytes.len() < len` 已隐含为末尾的 null 终止符预留了 1 字节空间，
     /// 因此当 `addr + bytes.len() == MEM_SIZE` 时会正确拒绝写入，避免越界。
+    ///
+    /// P4（2026-09-18）：字节序列走 `vitro_shared::cstring_bytes`——
+    /// `\xHH ≥ 0x80` 转义产物（U+0080..=U+00FF）落 Latin-1 单字节，
+    /// 多字节源字符（码点 > 0xFF）保持 UTF-8。此前 `as_bytes()` 把
+    /// 高位转义重编码成 2 字节 UTF-8（`"\xff"` 落 0xC3 0xBF）。
     pub fn write_cstring(&mut self, addr: u32, s: &str) {
         let a = addr as usize;
-        let bytes = s.as_bytes();
+        let bytes = vitro_shared::cstring_bytes(s);
         let total = bytes.len() + 1;
         // 统一边界检查：NULL 区、上界、UAF。
         if !self.check_mem_access(addr, total as u32, &SourceLoc::default(), true) {
@@ -24,7 +29,7 @@ impl VitroVM {
             self.trap(&msg, &SourceLoc::default());
             return;
         }
-        self.memory[a..a + bytes.len()].copy_from_slice(bytes);
+        self.memory[a..a + bytes.len()].copy_from_slice(&bytes);
         self.memory[a + bytes.len()] = 0;
         self.mark_dirty_page(addr, total as u32);
     }

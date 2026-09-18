@@ -28,7 +28,8 @@ impl TypeChecker {
     }
 
     pub(crate) fn resolve_string_literal(&mut self, value: &str, ty: &mut Type) -> Type {
-        let array_size = value.len() as i32 + 1;
+        // P4：C 语义字节长度（\xHH >= 0x80 转义单字节；sizeof 折叠同源）
+        let array_size = vitro_shared::cstring_len(value) as i32 + 1;
         *ty = Type::Array {
             element: Box::new(Type::char()),
             array_size,
