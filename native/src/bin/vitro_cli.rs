@@ -589,6 +589,10 @@ fn serve_handle(session: &mut Session, line: &str) -> (serde_json::Value, bool) 
         ),
         // E2：机器可读能力清单（"版本宏当能力探测"三层配套之一）
         "capabilities" => (serve_ok(id, session_api::capabilities()), false),
+        // U1（2026-09-19）：认知链最小导出——六个零出口分析器的结构化 JSON
+        //（misconception/learning_path/knowledge_graph/completion/intent/auto_fix；
+        // data_flow 待 CFG 管线接线）。S8 差分锚的字段面以本方法为单源。
+        "diagnostics_probe" => (serve_ok(id, session_api::diagnostics_probe(session, &params)), false),
         // 错误码表机器可读导出（下游需求清单 B1）：静态元数据，无状态。
         "error_catalog" => {
             let raw = session_api::error_catalog_json();

@@ -84,6 +84,207 @@ pub fn compile(session: &mut Session) -> Value {
     })
 }
 
+/// U1（2026-09-19）：认知链最小导出。knowledge_graph / misconception /
+/// learning_path / completion / intent / auto_fix 六个分析器此前外部生产
+/// 调用全为 0（serve/capi/CLI 零出口）——"趁 Rust 版仍在做差分扫描"的
+/// 退路对它们不存在，不补导出则 S8 片无等价性证据。data_flow 需要 CFG
+/// 管线接线，本版未覆盖（诚实记录；S8 差分前补）。
+///
+/// 入参：`{"source": "…"`（必填，单文件编译单元）`, "records": [{ts, ok,
+/// codes, trap}]`（编译历史，misconception 输入，可选）`, "completion":
+/// {"line", "column", "prefix"}`（补全探测点，可选）`}`。
+/// 返回：`{ok, diagnostics, misconceptions, learning_paths, knowledge_graph,
+/// intents, completion, auto_fixes}`——各段结构即 S8 差分锚的字段面。
+pub fn diagnostics_probe(session: &mut Session, params: &Value) -> Value {
+    use crate::diagnostics::auto_fix;
+    use crate::diagnostics::{knowledge_graph, learning_path, misconception_patterns};
+    use crate::engine::completion;
+    use crate::compiler::intent;
+
+    let Some(source) = params.get("source").and_then(|v| v.as_str()) else {
+        return error_json("diagnostics_probe 需要 params.source");
+    };
+    let units = vec![crate::session::CompileUnit {
+        filename: params.get("filename").and_then(|v| v.as_str()).unwrap_or("main.c").to_string(),
+        source: source.to_string(),
+    }];
+    let _ = run_multi_file_pipeline(session, units, false);
+    let diags = session.compile.diagnostics.clone();
+
+    // 诊断段：码串（severity 前缀按 P3 单源）+ 修复结构标志
+    let diagnostics: Vec<Value> = diags
+        .iter()
+        .map(|d| {
+            json!({
+                "code": format!("{}{}", severity_prefix(d.severity), d.error_code),
+                "severity": severity_name(d.severity),
+                "line": d.line,
+                "column": d.column,
+                "fix_kind": d.fix_kind,
+            })
+        })
+        .collect();
+
+    // misconception / learning_path：外置编译历史驱动
+    let records: Vec<misconception_patterns::CompileRecord> = params
+        .get("records")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .map(|r| misconception_patterns::CompileRecord {
+                    timestamp_ms: r.get("ts").and_then(|v| v.as_i64()).unwrap_or(0),
+                    success: r.get("ok").and_then(|v| v.as_bool()).unwrap_or(false),
+                    error_codes: r
+                        .get("codes")
+                        .and_then(|v| v.as_array())
+                        .map(|a| a.iter().filter_map(|c| c.as_i64().map(|x| x as i32)).collect())
+                        .unwrap_or_default(),
+                    trap_message: r.get("trap").and_then(|v| v.as_str()).map(|s| s.to_string()),
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let detected = misconception_patterns::detect_misconceptions(records);
+    let misconceptions: Vec<Value> = detected
+        .iter()
+        .map(|m| {
+            json!({
+                "pattern_id": m.pattern_id,
+                "pattern_name": m.pattern_name,
+                "occurrence_count": m.occurrence_count,
+                "confidence": m.confidence,
+            })
+        })
+        .collect();
+    let paths = learning_path::recommend_learning_paths(detected);
+    let learning_paths: Vec<Value> = paths
+        .iter()
+        .map(|p| {
+            json!({
+                "target_misconception_id": p.target_misconception_id,
+                "target_misconception_name": p.target_misconception_name,
+                "estimated_time_minutes": p.estimated_time_minutes,
+                "steps": p.steps.iter().map(|s| json!({
+                    "step_type": s.step_type,
+                    "title": s.title,
+                    "target_id": s.target_id,
+                })).collect::<Vec<_>>(),
+            })
+        })
+        .collect();
+
+    // knowledge_graph：按本次诊断的错误码激活（去重升序），附全图规模
+    let mut error_codes: Vec<i32> = diags
+        .iter()
+        .filter(|d| d.severity == 0)
+        .map(|d| d.error_code)
+        .collect();
+    error_codes.sort_unstable();
+    error_codes.dedup();
+    let from_errors: Vec<Value> = error_codes
+        .iter()
+        .flat_map(|c| knowledge_graph::activate_from_error(*c))
+        .map(|a| {
+            json!({
+                "concept_id": a.node.id,
+                "title": a.node.title,
+                "activated_by": a.activated_by,
+                "neighbors": a.neighbors.iter().map(|n| json!({
+                    "concept_id": n.node.id,
+                    "relation": n.relation,
+                })).collect::<Vec<_>>(),
+            })
+        })
+        .collect();
+    let knowledge_graph_out = json!({
+        "from_errors": from_errors,
+        "concepts_total": knowledge_graph::get_all_concept_nodes().len(),
+        "edges_total": knowledge_graph::get_all_concept_edges().len(),
+    });
+
+    // intent：重解析拿 FuncDecl（session 不保留 AST），逐函数推断
+    let intents: Vec<Value> = (|| {
+        let mut lexer = vitro_lexer::Lexer::new(source);
+        let (tokens, lex_errors) = lexer.tokenize();
+        if !lex_errors.is_empty() {
+            return vec![];
+        }
+        // 错误恢复：补全场景的源码常不完整——parser 恢复出 ProgramNode 即
+        // 推断（parse_errors 非空但 program 为 Some 时仍可用，与 completion
+        // 的 build_snapshot_from_source 同一恢复语义）
+        let (program, _parse_errors) = vitro_parser::Parser::new(tokens).parse();
+        let Some(program) = program else {
+            return vec![];
+        };
+        program
+            .funcs
+            .iter()
+            .flat_map(|f| {
+                let fname = f.name.clone();
+                intent::infer_intent(f).into_iter().map(move |s| (fname.clone(), s))
+            })
+            .map(|(fname, s)| {
+                json!({
+                    "func": fname,
+                    "intent": s.intent.as_str(),
+                    "score": s.score,
+                    "reasons": s.reasons,
+                })
+            })
+            .collect()
+    })();
+
+    // completion：探测点（0-based line/column + prefix）
+    let completion: Vec<Value> = params
+        .get("completion")
+        .and_then(|c| {
+            let line = c.get("line")?.as_u64()? as usize;
+            let column = c.get("column")?.as_u64()? as usize;
+            let prefix = c.get("prefix").and_then(|v| v.as_str()).unwrap_or("");
+            Some((line, column, prefix.to_string()))
+        })
+        .map(|(line, column, prefix)| {
+            completion::get_completion_candidates(session, source, line, column, &prefix)
+                .iter()
+                .map(|c| {
+                    json!({
+                        "label": c.label,
+                        "kind": c.kind.as_str(),
+                        "insert_text": c.insert_text,
+                    })
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+
+    // auto_fix：对带结构化修复（fix_kind 1..=3）的诊断逐条应用
+    let auto_fixes: Vec<Value> = diags
+        .iter()
+        .filter(|d| (1..=3).contains(&d.fix_kind))
+        .filter_map(|d| {
+            auto_fix::apply_fix(source.to_string(), d.clone()).map(|fixed| {
+                json!({
+                    "line": d.line,
+                    "column": d.column,
+                    "fix_kind": d.fix_kind,
+                    "fixed_source": fixed,
+                })
+            })
+        })
+        .collect();
+
+    json!({
+        "ok": diags.iter().all(|d| d.severity != 0),
+        "diagnostics": diagnostics,
+        "misconceptions": misconceptions,
+        "learning_paths": learning_paths,
+        "knowledge_graph": knowledge_graph_out,
+        "intents": intents,
+        "completion": completion,
+        "auto_fixes": auto_fixes,
+    })
+}
+
 /// 全速运行并返回结果 JSON。
 ///
 /// `{"ok":bool,"status":"finished|trap|waiting_input|not_compiled","return_value":n,"trap":"...","waiting_input":bool,"steps_executed":n}`

@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (U1 认知链最小导出，2026-09-19)
+
+- **serve 新方法 `diagnostics_probe`**：knowledge_graph / misconception /
+  learning_path / completion / intent / auto_fix 六个分析器此前外部生产调用
+  全为 0（serve/capi/CLI 零出口，第一阶段计划 U1 亲证）——"趁 Rust 版仍在
+  做差分扫描"的退路对它们不存在。入参 `{source, records[], completion{}}`，
+  返回六段结构化 JSON（诊断码串按 P3 severity 前缀单源；misconception/
+  learning_path 由外置编译历史驱动；knowledge_graph 按错误码激活子图 +
+  全图规模；intent 重解析采用错误恢复语义——补全场景源码常不完整；
+  auto_fix 对 fix_kind 1..=3 逐条应用）。**data_flow 未覆盖**（需 CFG
+  管线接线，诚实记录，S8 差分前补）
+- **外置用例锚** `tests/cognitive_probe_cases.json` ×4 组（M02 指针生命
+  周期 / E3023→VarDecl 概念激活 / printf 补全+意图推断 / 缺分号自动修复）
+  + `cognitive_probe_test` 内容级断言（语料与断言外置 JSON 人审，字段面
+  即 S8 差分锚单源——MoonBit 侧对拍复用同一 JSON）
+
 ### Docs (wasm 多实例并发模型裁定 + U2 拍板，2026-09-19)
 
 - **新文档** `docs/current/06-出口与协议/wasm多实例并发模型与U2拍板.md`：宿主

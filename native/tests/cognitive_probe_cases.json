@@ -1,0 +1,62 @@
+{
+  "comment": "U1 认知链 probe 差分锚用例（2026-09-19）。serve `diagnostics_probe` 的字段面单源——S8 片 MoonBit 侧等价性证据的输入语料与断言。expect 为内容级断言（防退化锚），非逐字节 golden（差分锚在 S8 双实现对拍时建立）。",
+  "cases": [
+    {
+      "name": "misconception_pointer_lifecycle",
+      "desc": "两条 3060（UAF）编译历史触发 M02 指针生命周期混淆，并驱动 learning_path 推荐",
+      "params": {
+        "source": "int main(){ int* p = 0; return 0; }",
+        "records": [
+          {"ts": 1, "ok": false, "codes": [3060]},
+          {"ts": 2, "ok": false, "codes": [3060]}
+        ]
+      },
+      "expect": {
+        "ok": true,
+        "misconceptions_min": 1,
+        "misconception_ids_contain": "M02",
+        "learning_paths_min": 1
+      }
+    },
+    {
+      "name": "knowledge_graph_from_undeclared",
+      "desc": "未声明变量（E3023）激活知识图谱 VarDecl 概念节点",
+      "params": {
+        "source": "int main(){ y = 1; return 0; }"
+      },
+      "expect": {
+        "ok": false,
+        "diagnostics_codes_contain": "E3023",
+        "kg_from_errors_concepts_contain": "VarDecl",
+        "kg_concepts_total_min": 20
+      }
+    },
+    {
+      "name": "completion_and_intent",
+      "desc": "干净源码上 printf 前缀补全（含函数候选）+ 函数意图推断",
+      "params": {
+        "source": "#include <stdio.h>\nint main(){ prin\n return 0; }\n",
+        "completion": {"line": 2, "column": 12, "prefix": "prin"}
+      },
+      "expect": {
+        "ok": false,
+        "completion_labels_contain": "printf",
+        "intents_min": 1,
+        "intents_func_contain": "main"
+      }
+    },
+    {
+      "name": "auto_fix_missing_semicolon",
+      "desc": "缺分号（E2005，结构化 InsertText 修复）可被 apply_fix 自动应用",
+      "params": {
+        "source": "int main(){ int x = 1\n return 0; }\n"
+      },
+      "expect": {
+        "ok": false,
+        "diagnostics_codes_contain": "E2005",
+        "auto_fixes_min": 1,
+        "auto_fix_fixed_contains": ";"
+      }
+    }
+  ]
+}
