@@ -9,7 +9,7 @@
 
 ## Project Overview
 
-> **Repositioning (2026-09-11)**: Vitro has transitioned from a "cross-platform C IDE" into a **teaching C/C++ subset reference execution engine (white-box)** — this repository is backend-only (MIT license); the frontend is split out to the community and native mobile is dropped. See [`A-定位与路线/后端定位与白箱计划.md`](A-定位与路线/后端定位与白箱计划.md).
+> **Repositioning (2026-09-11)**: Vitro has transitioned from a "cross-platform C IDE" into a **teaching C/C++ subset reference execution engine (white-box)** — this repository is backend-only (MIT license); the frontend is split out to the community and native mobile is dropped. See [`docs/current/01-定位与路线/后端定位与白箱计划.md`](docs/current/01-定位与路线/后端定位与白箱计划.md).
 >
 > **Frontend split executed (2026-09-11)**: `CideFlutter/`, the FRB bridge (`native/src/api/` + `frb_generated`), the web deploy workflow and all Flutter build scripts have been removed. The last complete pre-split state is preserved by tag `before-frontend-split` (`git checkout before-frontend-split -- CideFlutter` to recover).
 
@@ -183,7 +183,7 @@ Use a **deterministic RNG** to generate random memory states and random standard
 
 ### Defense 5: CI Integration and Consistency Monitoring
 
-`.github/workflows/ci.yml` automatically runs all defenses above on every Push/PR, and executes `scripts/ci_three_tier_check.py` for consistency checks:
+`.github/workflows/ci.yml` automatically runs all defenses above on every Push/PR, and executes `scripts/ci_three_tier_check` (Go driver since 2026-09-18; the `.py` was retired the same day) for consistency checks:
 
 - If a test marked `KNOWN_FAILURE` in `*_FAILURES.md` now passes → **error prompting document update**
 - If a test fails but has no corresponding record in the document → **error prompting adding a record**
@@ -204,7 +204,7 @@ Use a **deterministic RNG** to generate random memory states and random standard
 
 ## C Teaching Subset Overview
 
-The C teaching subset supported by this project covers **Phase 1 ~ Phase 5+** capabilities (including comma operator, Designated Initializer, `offsetof`, VFS file I/O, etc.). Detailed spec: [`C-语言子集/C语言子集规范.md`](C-语言子集/C语言子集规范.md). Core support includes:
+The C teaching subset supported by this project covers **Phase 1 ~ Phase 5+** capabilities (including comma operator, Designated Initializer, `offsetof`, VFS file I/O, etc.). Detailed spec: [`docs/current/03-语言子集/C语言子集规范.md`](docs/current/03-语言子集/C语言子集规范.md). Core support includes:
 
 **Data types**: `int`, `char`, `float`, `double`, `unsigned`, `_Bool`/`bool`, `int*`, `char*`, `float*`, `double*`, `int[]`, `char[]`, `double[]`, `struct` (including return by value), `union`, `enum`, `typedef`
 
@@ -267,7 +267,7 @@ The following inconsistencies between Vitro and Clang were discovered during Lee
 - **Pointer compound assignment `+=` / `-=`** — **Supported (2026-06-28)**. `int* p; p += n;` and `p -= n;` are supported end-to-end with pointee-size scaling; `void* p; p += n;` uses 1-byte steps as a GCC/Clang extension. Function pointer arithmetic, pointer-pointer `+=` / `-=`, and other compound operators (`*=`, `/=`, etc.) remain errors. Regression cases added at `baseline/pointer_add_assign*.c`.
   - ⚠️ **Behavioral difference from Clang**: `void*` arithmetic is a GCC/Clang extension and is undefined in strict C; prefer concrete pointer types in teaching. The value returned by a compound assignment expression is an rvalue pointer in Vitro, differing from the C standard lvalue semantics, though this is rarely relied upon in teaching code.
 
-> Historical feature details and bug-fix records are in [`CHANGELOG.md`](CHANGELOG.md) and [`C-语言子集/C语言子集规范.md`](C-语言子集/C语言子集规范.md).
+> Historical feature details and bug-fix records are in [`CHANGELOG.md`](CHANGELOG.md) and [`docs/current/03-语言子集/C语言子集规范.md`](docs/current/03-语言子集/C语言子集规范.md).
 
 ## Build Commands
 
@@ -291,7 +291,7 @@ go run ./scripts/shadow_verify
 go run ./scripts/shadow_verify_cpp
 
 # serve protocol smoke
-cargo build --bin vitro_cli && python scripts/serve_smoke.py
+cargo build --bin vitro_cli && go run ./scripts/serve_smoke
 ```
 
 > Historical frontend builds (Flutter / Android / iOS) were removed with the frontend; scripts live under tag `before-frontend-split`.
@@ -363,4 +363,4 @@ vitro_cli unified long_sort.c --max-steps 500000
 vitro_cli export main.c libc_helper.c -o bundle.json --builtin-libc
 ```
 
-Full documentation: [`B-构建与上手/CLI使用手册.md`](B-构建与上手/CLI使用手册.md).
+Full documentation: [`docs/current/02-构建与上手/CLI使用手册.md`](docs/current/02-构建与上手/CLI使用手册.md).

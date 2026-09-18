@@ -53,6 +53,7 @@ native/tests/shadow_verification/reports/
 native/tests/shadow_verification/test.txt
 /test.txt
 /numbers.txt
+/lines.txt
 /out.txt
 !native/tests/shadow_verification/reports/SHADOW_VERIFICATION_REPORT_*.md
 !native/tests/shadow_verification/reports/.gitkeep

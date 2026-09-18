@@ -6,7 +6,7 @@
 **可核实指标（2026-09-11 实测）**: `native/tests/cases/cpp/` **78 个 `.cpp` 文件**；C++ Shadow Verification **100 个用例**（98 个与 Clang++ 一致 + 2 个已记录的 `clang_compile_fail`：`cpp_vitro_vec_class` / `cpp_vitro_list_class` 使用 Vitro 内置容器，无法被 Clang++ 直接编译）——口径以 `AGENTS.md` 防线 1 为准；C 侧模板生成用例 82 个（`native/tests/cases_template_generated/*.c`，按 `AGENTS.md` 防线 2 口径 78 绿 / 4 已知失败；`vitro_e2e.rs` 的 `KNOWN_TEMPLATE_FAILURES` 常量当前列 2 项：`bTree_default` / `spfa_default`——两者口径差异见 §对上述历史条目的更正第 3 点）。  
 **前置依赖**: `C语言子集规范.md` P0/P1 阶段完成、Phase 31~33 C++ Parser/TypeChecker/BytecodeGen 完成
 
-> **历史状态（v2.8 / 2026-06-13，原文保留）**: **M7 Beta Readiness 已就绪**：M6 + Stage 2b 已完成，`native/tests/cases/cpp/` 61 个 C++ E2E 用例全部通过，C++ Shadow Verification 83/83 一致、0 gap；全量 `cargo test` 719 passed、clippy 0 警告；`scripts/ci_three_tier_check.py` 误报已修复；同参数个数不同类型的构造函数重载已报告 `E4031` 而不是静默错误。已新增 5 个 C++ 教学模板（`cpp_hello` / `cpp_class_basic` / `cpp_vector_int` / `cpp_unique_ptr` / `cpp_range_for`）与学生版 `C++子集规范.md`。内置容器已全面迁移为 `runtime_libc/vitro/*.cpp` 标准模板实现。详见 `docs/archive/ARCHIVE_M7_BETA_READINESS.md`。**当前目标：启动内部试用并收集反馈。**
+> **历史状态（v2.8 / 2026-06-13，原文保留）**: **M7 Beta Readiness 已就绪**：M6 + Stage 2b 已完成，`native/tests/cases/cpp/` 61 个 C++ E2E 用例全部通过，C++ Shadow Verification 83/83 一致、0 gap；全量 `cargo test` 719 passed、clippy 0 警告；ci_three_tier_check（当时为 .py，2026-09-18 迁 Go）误报已修复；同参数个数不同类型的构造函数重载已报告 `E4031` 而不是静默错误。已新增 5 个 C++ 教学模板（`cpp_hello` / `cpp_class_basic` / `cpp_vector_int` / `cpp_unique_ptr` / `cpp_range_for`）与学生版 `C++子集规范.md`。内置容器已全面迁移为 `runtime_libc/vitro/*.cpp` 标准模板实现。详见 `docs/archive/ARCHIVE_M7_BETA_READINESS.md`。**当前目标：启动内部试用并收集反馈。**
 >
 > **对上述历史条目的三点现状更正（2026-09-11，不改动原文）**:
 > 1. **统计口径已过时**：61 个 C++ E2E / 83 个 Shadow 已被 Phase 34~42 的用例扩充取代，当前口径见上方"可核实指标"。
@@ -266,7 +266,7 @@ Stage 0（现在 ──→ Phase 1-3 ──→ Stage 1 ──→ Stage 2）
 
 | 阶段 | 容器实现语言 | 编译方式 | 用途 | 时机 |
 |------|-------------|----------|------|------|
-| **Stage 0** | C（手写极简） | `precompile_bytecode_libc.py` | 学生代码运行时调用 | **现在** |
+| **Stage 0** | C（手写极简） | `scripts/precompile_bytecode_libc` | 学生代码运行时调用 | **现在** |
 | **Stage 1** | Vitro C++ 子集 | Vitro C++ 编译器 | Dogfooding + 教学源码展示 | **C++ 编译器核心完成后** |
 | **Stage 2** | Vitro C++ 子集 | Vitro C++ 编译器 | **完全替换 Stage 0** | **Dogfooding 验证通过后** |
 
@@ -280,7 +280,7 @@ Stage 0（现在 ──→ Phase 1-3 ──→ Stage 1 ──→ Stage 2）
 
 - **Stage 0 参照 klib 算法**：数据结构设计和扩容策略与 klib 保持一致（已验证的工业级算法）
 - **Vitro-C 子集编写**：使用项目已支持的 C 语法（`runtime_libc/src/string.c` 和 `stdlib.c` 的风格）
-- **预编译友好**：每个容器类型是独立的 `.c` 文件，直接由 `scripts/precompile_bytecode_libc.py` 编译
+- **预编译友好**：每个容器类型是独立的 `.c` 文件，直接由 `scripts/precompile_bytecode_libc`（Go，2026-09-18 前为 .py）编译
 - **标准库后置**：容器算法实现（`.c` 文件）在编译器核心完成后补充，但类型布局信息前置硬编码
 - **为未来替换留接口**：C 容器的函数签名和内存布局与目标 C++ 容器一致，确保 Stage 1/2 平滑替换
 
@@ -371,10 +371,10 @@ native/runtime_libc/
 
 ### 4.5 预编译流程
 
-复用并扩展 `scripts/precompile_bytecode_libc.py`：脚本同时编译 `runtime_libc/src/*.c` 与 `runtime_libc/vitro/*.cpp`，统一生成 `bytecode_libc_data.json`。Stage 2b 中已增加对 `.cpp` 文件及模板显式实例化的支持。
+复用并扩展 `scripts/precompile_bytecode_libc`（当时为 .py，2026-09-18 迁 Go）：脚本同时编译 `runtime_libc/src/*.c` 与 `runtime_libc/vitro/*.cpp`，统一生成 `bytecode_libc_data.json`。Stage 2b 中已增加对 `.cpp` 文件及模板显式实例化的支持。
 
 ```python
-# scripts/precompile_bytecode_libc.py（无需修改逻辑，只需扩展路径）
+# scripts/precompile_bytecode_libc（当时为 .py，现役 Go 版）——无需修改逻辑，只需扩展路径
 # 现有：编译 runtime_libc/src/*.c
 # 新增：编译 runtime_libc/vitro/*.c
 # 统一生成 bytecode_libc_data.json
@@ -499,7 +499,7 @@ pub fn builtin_class_layout(name: &str) -> Option<ClassLayout> {
 
 容器库的 `.c` 文件在编译器核心稳定后补充。补充流程：
 1. 手写 `runtime_libc/vitro/vec_int.c`
-2. 运行 `python scripts/precompile_bytecode_libc.py`
+2. 运行 `go run ./scripts/precompile_bytecode_libc`
 3. 将预编译函数名从 `__vitro_vec_push_int_stub` 替换为真实的 `vitro_vec_push_int`
 
 **注意**：内置布局表中的方法签名必须与后置的 `.c` 实现严格一致。
@@ -1595,7 +1595,7 @@ native/runtime_libc/vitro/
 1. `extract_cpp_builtin_layout.py` 从 `.cpp` 提取类布局，输出 `native/src/compiler/cpp_frontend/builtin_layout_data.json`。
 2. 脚本已升级为 brace-aware，能正确区分 class 顶层字段与方法体内的局部变量。
 3. 脚本内置 `FILE_RULES`，将 `vitro_vec`/`vitro_list`/`vitro_string` 等模板基名映射到用户可见名（`vector<int>` / `list<int>` / `string`）。
-4. `precompile_bytecode_libc.py` 编译 `runtime_libc/vitro/*.cpp`，生成 `bytecode_libc_data.json` / `bytecode_libc_index.rs`。
+4. `scripts/precompile_bytecode_libc` 编译 `runtime_libc/vitro/*.cpp`，生成 `bytecode_libc_data.json` / `bytecode_libc_index.rs`。
 5. 由于 `vitro_cli export` 会链接已嵌入的 Bytecode Libc，迁移过程中需删除旧 `.c` 文件后重新预编译，确保产物干净。
 
 ### 15.5 验证结果

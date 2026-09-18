@@ -26,7 +26,7 @@ pub struct BytecodeLibcArtifact {
 
 /// 加载预编译的 Bytecode Libc 产物。
 ///
-/// 产物由 `scripts/precompile_bytecode_libc.py` 在构建期生成，
+/// 产物由 `scripts/precompile_bytecode_libc`（Go，2026-09-18 起；原 `.py` 同日退役）在构建期生成，
 /// 并提交到版本控制。日常构建直接嵌入，无需重新编译。
 /// Bytecode Libc 预编译产物的文件标识。
 ///
@@ -40,7 +40,7 @@ pub fn load_artifact() -> BytecodeLibcArtifact {
         Ok(artifact) => artifact,
         Err(e) => panic!(
             "Failed to parse bytecode_libc_data.json: {}. \
-             Run: python scripts/precompile_bytecode_libc.py",
+             Run: go run ./scripts/precompile_bytecode_libc",
             e
         ),
     };

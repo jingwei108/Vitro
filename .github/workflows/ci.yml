@@ -38,7 +38,10 @@ jobs:
         working-directory: native
 
       - name: Check Bytecode Libc precompiled artifacts are up-to-date
-        run: python scripts/precompile_bytecode_libc.py --check
+        # D5 后续批次第二站（2026-09-18）：precompile_bytecode_libc.py → Go。
+        # 双轨对账：--check 双侧同判定（digest 逐字节一致）；重生成产物 JSON
+        # 逐字节一致、.rs 仅头注指向 Go；J9 篡改源文件 → digest 失配 / exit 1。
+        run: go run ./scripts/precompile_bytecode_libc --check
         shell: bash
 
       - name: Run Rust tests
@@ -53,7 +56,12 @@ jobs:
       # cargo test 已覆盖全部单元/集成测试（含 Phase A/B/C/E/Dogfooding），
       # 无需再单独运行各防线测试套件。
       - name: Three Tier Consistency Check & Report
-        run: python scripts/ci_three_tier_check.py
+        # D5 后续批次第三站（2026-09-18）：ci_three_tier_check.py → Go。
+        # 双轨对账：9 套件判定/计数/hard-soft issue/退出码一致、报告逐行一致
+        # （除时间戳与 cargo 计时行）。J9 假 KNOWN 条目注入 → hard / exit 1
+        #（顺带抓出 title 提取缺捕获组的复刻 bug，绿路径对账不可见——埋雷
+        # 是判定面的必要补充）。
+        run: go run ./scripts/ci_three_tier_check
         shell: bash
 
       - name: Upload Three Tier Report
@@ -131,7 +139,11 @@ jobs:
       # 出口 3 防线：serve JSON-lines 协议契约（id 关联 / 错误帧同构 / session.reset
       # / 与 capi 共用的入口语义）。依赖上一步 Debug 构建的 vitro_cli。
       - name: vitro_cli serve smoke (Exit 3 protocol contract)
-        run: python scripts/serve_smoke.py
+        # D5 后续批次第一站（2026-09-18）：serve_smoke.py → Go。双轨对账
+        # （断言逐条同名同序、计数 57/57、判定一致、RSS 峰值同为 24MB）后
+        # 接管；J9 证红双通道：VITRO_RSS_BUDGET_MB=5 → FAIL/exit 1、
+        # 坏 exe → 51 FAIL/exit 1。依赖 Debug 构建的 vitro_cli。
+        run: go run ./scripts/serve_smoke
         shell: bash
 
       # R2（2026-09-14）：回放驱动纳入 CI——此前它不在任何验证循环里，
@@ -166,7 +178,10 @@ jobs:
       # G11（R4）：工程健康度看板（生产 unwrap 计数/超长文件/失败记录口径），
       # 报告上传 artifact；阈值门禁待阈值基线固化后启用
       - name: Engineering health report
-        run: python scripts/engineering_health.py
+        # D5 后续批次第四站（2026-09-18）：engineering_health.py → Go。
+        # 双轨对账：摘要数值 / Top 表逐项一致（tie 行序差异已在驱动头注
+        # 声明）。纯报告生成器，无红绿判定（无 J9 义务）。
+        run: go run ./scripts/engineering_health
         shell: bash
 
       - name: Upload engineering health report

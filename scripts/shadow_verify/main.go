@@ -1047,7 +1047,7 @@ func generateReport(diffs []diffInfo, outputPath string, cfg *runConfig) {
 	fmt.Printf("报告已生成: %s\n", outputPath)
 }
 
-// writeJSONData 输出 JSON 数据（结构与 Python 版同字段，供 engineering_health.py 等下游读取）。
+// writeJSONData 输出 JSON 数据（结构与 Python 版同字段，供 scripts/engineering_health（Go）等下游读取）。
 func buildJSONData(diffs []diffInfo, clangVersion string, cfg *runConfig) map[string]any {
 	return map[string]any{
 		"timestamp":     time.Now().Format("2006-01-02 15:04:05"),

@@ -4,7 +4,7 @@
 
 ## 项目概览
 
-> **定位转型（2026-09-11）**：Vitro 从"跨平台 C 语言 IDE"转型为**教学 C/C++ 子集参考执行引擎（白箱）**——本仓库只做后端（MIT 许可），前端切割给社区，原生移动端放弃。完整决策依据与路线见 [`A-定位与路线/后端定位与白箱计划.md`](A-定位与路线/后端定位与白箱计划.md)。
+> **定位转型（2026-09-11）**：Vitro 从"跨平台 C 语言 IDE"转型为**教学 C/C++ 子集参考执行引擎（白箱）**——本仓库只做后端（MIT 许可），前端切割给社区，原生移动端放弃。完整决策依据与路线见 [`docs/current/01-定位与路线/后端定位与白箱计划.md`](docs/current/01-定位与路线/后端定位与白箱计划.md)。
 >
 > **项目更名（2026-09-14）**：Cide → **Vitro**（*in vitro*，"在玻璃之中"——白箱观察 + Clang 基线诚实对照）。crate / C ABI（**2.1.0**）/ CLI / DLL 全量 `vitro_*`；`docs/archive/` 与历史标签内路径（`CideFlutter`）保留原名。见 [`项目更名记录.md`](docs/current/01-定位与路线/项目更名记录.md)。
 >
@@ -188,7 +188,7 @@ Vitro 采用**五条分层协作的测试防线**，核心哲学：*测试不是
 
 ### 防线 5：CI 集成与一致性监控
 
-`.github/workflows/ci.yml` 在每次 Push/PR 时自动运行以上全部防线，并执行 `scripts/ci_three_tier_check.py` 进行一致性检查（2026-09-06 起"带牙齿"）：
+`.github/workflows/ci.yml` 在每次 Push/PR 时自动运行以上全部防线，并执行 `scripts/ci_three_tier_check`（Go 驱动，2026-09-18 起；原 .py 同日退役）进行一致性检查（2026-09-06 起"带牙齿"）：
 
 - 若 `*_FAILURES.md` 中标记为 `KNOWN_FAILURE` 的测试现在全部通过 → **CI 失败（hard）**，提示更新文档标记为已修复
 - 若失败记录文件本身缺失 → **CI 失败（hard）**
@@ -258,7 +258,7 @@ go run ./scripts/facts --run --cargo-log native/cargo_test_ci.log check  # CI �
 
 既有 Python 脚本的处置：
 
-- **不强制迁移、不冻结修改**；但触碰某脚本时若改动量已接近重写，优先用 Go 重写。**D5 进度（2026-09-13，全部完成 ✅）**：① 试点 `shadow_verify_cpp.py` 完成——`scripts/shadow_verify_cpp.go` 双轨对账一致（94 用例）后接管 CI，Clang 并发 16 路 **24.75s → 5.2s**；② 第二站 `replay_s1_s5.py` 完成——`scripts/replay/replay_s1_s5.go` 双轨对账一致（61 条断言状态与编号逐行一致），并带 `--selftest` 注入自检（J9）；③ 第三站探针集 `random_diff.py` 完成——`scripts/core_asset_verdict/random_diff.go` 以 **MT19937 逐比特复刻**（同 seed 同用例集合）双轨对账一致（1000 例 verdict+expected 逐用例一致），首次建立可复现基线；④⑤ 交互切面探针、资源域长跑探针完成；⑥ **最后一站主驱动 `shadow_verify.py` 完成（2026-09-13）**——`scripts/shadow_verify.go` 与 Python 版双轨对账 **PASS**（663 用例集合/顺序/逐用例 diff_type/expected/summary/category_frequency/clang_version 全一致），CI 已切换，`shadow_verify.py` / `vitro_output.py` / `extract_shadow_cases.py` 退役删除。各站 Go 版均含启动自检 fail loud + 产物新鲜度门禁。**退役收尾（2026-09-13）**：双轨对账基准的使命随 D5 收官而终结，7 个被替代的 Python 版已退役删除（`shadow_verify_cpp.py` / `replay/replay_s1_s5.py` / `core_asset_verdict/{interaction_probe,random_diff,resource_longrun,seek_accumulation,winmem}.py`，git 历史可回取）；**仍在服役的 Python**：CI 活性四件（`ci_three_tier_check.py` / `serve_smoke.py` / `precompile_bytecode_libc.py` / `engineering_health.py`，迁移是后续批次）、一次性取证脚本（裁定 §13.7 明确不迁移）、`mutation_facet_test.py`（J3 测量工具，会再跑，迁移待办）、活性生成器（`extract_cpp_builtin_layout.py` / `sync_templates.py` / `unified_perf_baseline.py`）**⚠️ 实证发现**：DLL 并发调用 → 堆损坏（引擎非线程安全），Vitro 侧调用必须互斥；
+- **不强制迁移、不冻结修改**；但触碰某脚本时若改动量已接近重写，优先用 Go 重写。**D5 进度（2026-09-13，全部完成 ✅）**：① 试点 `shadow_verify_cpp.py` 完成——`scripts/shadow_verify_cpp.go` 双轨对账一致（94 用例）后接管 CI，Clang 并发 16 路 **24.75s → 5.2s**；② 第二站 `replay_s1_s5.py` 完成——`scripts/replay/replay_s1_s5.go` 双轨对账一致（61 条断言状态与编号逐行一致），并带 `--selftest` 注入自检（J9）；③ 第三站探针集 `random_diff.py` 完成——`scripts/core_asset_verdict/random_diff.go` 以 **MT19937 逐比特复刻**（同 seed 同用例集合）双轨对账一致（1000 例 verdict+expected 逐用例一致），首次建立可复现基线；④⑤ 交互切面探针、资源域长跑探针完成；⑥ **最后一站主驱动 `shadow_verify.py` 完成（2026-09-13）**——`scripts/shadow_verify.go` 与 Python 版双轨对账 **PASS**（663 用例集合/顺序/逐用例 diff_type/expected/summary/category_frequency/clang_version 全一致），CI 已切换，`shadow_verify.py` / `vitro_output.py` / `extract_shadow_cases.py` 退役删除。各站 Go 版均含启动自检 fail loud + 产物新鲜度门禁。**退役收尾（2026-09-13）**：双轨对账基准的使命随 D5 收官而终结，7 个被替代的 Python 版已退役删除（`shadow_verify_cpp.py` / `replay/replay_s1_s5.py` / `core_asset_verdict/{interaction_probe,random_diff,resource_longrun,seek_accumulation,winmem}.py`，git 历史可回取）；**仍在服役的 Python**：**CI 活性已清零（2026-09-18，D5 后续批次四站全迁）**——`serve_smoke.py` / `precompile_bytecode_libc.py` / `ci_three_tier_check.py` / `engineering_health.py` 全部迁 Go（`scripts/serve_smoke` / `scripts/precompile_bytecode_libc` / `scripts/ci_three_tier_check` / `scripts/engineering_health`）并退役删除，CI 已切换。各站对账口径：serve_smoke 双轨 57/57 判定一致 + J9 双通道（RSS 预算 5MB→FAIL / 桩 exe→51 FAIL）；precompile digest 逐字节一致 + 重生成产物 JSON 逐字节 / .rs 仅头注 + J9 篡改源文件→--check 红；three_tier 9 套件判定/issue 清单/退出码一致 + J9 假 KNOWN 条目→hard 红（顺带抓出 title 提取缺捕获组的复刻 bug——绿路径对账不可见，埋雷是判定面的必要补充）；engineering_health 报告数值逐项一致（tie 行序差异已声明）。其余仍在：一次性取证脚本（裁定 §13.7 明确不迁移）、`mutation_facet_test.py`（J3 测量工具，迁移待办）、活性生成器（`extract_cpp_builtin_layout.py` / `sync_templates.py` / `unified_perf_baseline.py`）、一次性取证脚本（裁定 §13.7 明确不迁移）、`mutation_facet_test.py`（J3 测量工具，会再跑，迁移待办）、活性生成器（`extract_cpp_builtin_layout.py` / `sync_templates.py` / `unified_perf_baseline.py`）**⚠️ 实证发现**：DLL 并发调用 → 堆损坏（引擎非线程安全），Vitro 侧调用必须互斥；
 - ~~迁移 `shadow_verify.py`（唯一硬门禁、105KB、承载 6 类隐性口径）必须新旧双轨同跑，`663 / match 644 / known_issue 3 / vitro_better 16 / 0 非预期差异` 五项一致才允许切换~~ — **已完成（2026-09-13）**：对账五项全一致后切换；迁移中新挖出三类隐性口径（`pathlib` 排序的平台差异、Go `ExitError` 与 Python 异常模型的结构性错位、同名 exe 映像竞态），均已锚定为 Go 版口径并记录于 `scripts/shadow_verify/main.go` 头注；
 - **D5 收尾重构（2026-09-13，PR 评审三项全部落地）**：① `ptrToGoString` 变长窗口扫描的 UB 假设已声明，编译错误改走新增的 `vitro_get_compile_errors_length`（ABI **1.2.0**，加函数 = minor）定长读取根治，剩余调用方（engine_version / runtime_error）均为短而有界串；② scripts 建根 `go.mod` + `internal/{capi,pyrandom,probeutil}` 共享包，六驱动迁入各自子目录，删除 DLL 绑定/字符串读取/pyRandom/psapi 采样等 **~600 行**跨文件重复（pyRandom 整份 ×2、capi helper ×3-4）；③ v0.1 字段白名单外置 `scripts/replay/v01_payload_fields.json`（Go/Py 共读、fail loud，语义快照随 git 版本化——**不从引擎运行时拉取**，保持 S5 断言的"验收快照"检测语义）。剩余已知重复：serve 会话封装 ×3（replay / interaction / seek 各自的 stderr/退出语义有差异），待单独一站统一；
 - 保留的 Python **判定型脚本**仍须满足 **J9**：有"注入必然违反 → 必须变红"的埋雷记录（这条是语言无关义务）。
@@ -267,7 +267,7 @@ go run ./scripts/facts --run --cargo-log native/cargo_test_ci.log check  # CI �
 
 ## C 教学子集支持概览
 
-本项目支持的 C 语言教学子集覆盖 **Phase 1 ~ Phase 5+** 能力（含逗号运算符、Designated Initializer、`offsetof`、VFS 文件 I/O 等），详细规范见 [`C-语言子集/C语言子集规范.md`](C-语言子集/C语言子集规范.md)。核心支持包括：
+本项目支持的 C 语言教学子集覆盖 **Phase 1 ~ Phase 5+** 能力（含逗号运算符、Designated Initializer、`offsetof`、VFS 文件 I/O 等），详细规范见 [`docs/current/03-语言子集/C语言子集规范.md`](docs/current/03-语言子集/C语言子集规范.md)。核心支持包括：
 
 **数据类型**：`int`、`char`、`float`、`double`、`unsigned`、`_Bool`/`bool`、`int*`、`char*`、`float*`、`double*`、`int[]`、`char[]`、`double[]`、`struct`（含按值返回）、`union`、`enum`、`typedef`
 
@@ -344,7 +344,7 @@ go run ./scripts/facts --run --cargo-log native/cargo_test_ci.log check  # CI �
   - **修复**：fast path 加 `!trace_recorder.is_recording()` 判断。副作用即"作用域收缩"：含内层循环的 trace 录制必然于内层回边 Abort，**JIT 只作用于最内层循环**。回归锚定：baseline `jit_nested_counting_loop.c` / `_longlong.c`（先红后绿）+ `jit_single_hot_loop.c` + `native/tests/jit_path_parity.rs`（八条三锚差分）。
   - **顺带撤销的结论**：`vm_bench.rs` 两处方法学缺陷（`clear()` 不禁用 / 双分支入口不同）曾得出"JIT 0.66x~0.86x 不赚反亏"——校正后实测 **9.16x（嵌套）/ 9.43~9.72x（单层）**，Phase 25 加速比声明更新为实测值。完整复核与 D6 存废裁定见 [`07-质量与裁定/核心资产重构裁定.md`](docs/current/07-质量与裁定/核心资产重构裁定.md) §14。
 
-> 历史特性详情和 Bug 修复记录见 [`CHANGELOG.md`](CHANGELOG.md) 和 [`C-语言子集/C语言子集规范.md`](C-语言子集/C语言子集规范.md)。
+> 历史特性详情和 Bug 修复记录见 [`CHANGELOG.md`](CHANGELOG.md) 和 [`docs/current/03-语言子集/C语言子集规范.md`](docs/current/03-语言子集/C语言子集规范.md)。
 
 ## 构建命令
 
@@ -368,7 +368,7 @@ go run ./scripts/shadow_verify
 go run ./scripts/shadow_verify_cpp
 
 # serve 协议冒烟
-cargo build --bin vitro_cli && python scripts/serve_smoke.py
+cargo build --bin vitro_cli && go run ./scripts/serve_smoke
 ```
 
 > **磁盘卫生（U0#4，2026-09-13 制度化）**：① 已死交叉 target 不得残留——android
@@ -377,10 +377,11 @@ cargo build --bin vitro_cli && python scripts/serve_smoke.py
 > 有 **target 体积预算门禁（10GB）**，超限 fail 并回显分布——本地 `target/debug`
 > 长期累积超 10GB 时建议 `cargo clean`（重建成本 ≈ 一次全量构建）；③
 > `wasm32-unknown-unknown` 是活性出口（出口 2）的构建产物，不属于清理对象。
-> **RSS 护栏（U0#2）**：`serve_smoke.py` 第三批在远距 seek 压力形状下监控 serve
-> 子进程提交峰值（ctypes psapi，与 `scripts/internal/probeutil` 同口径），默认
-> 预算 512MB（当前基线的宽松护栏，U2 完成后按 J5 收紧）；`VITRO_RSS_BUDGET_MB=5`
-> 可证红（先证会红义务已履行，2026-09-13 实测 peak=75MB > 5MB → exit 1）。
+> **RSS 护栏（U0#2）**：serve 冒烟第四批（现役 Go 版 `go run ./scripts/serve_smoke`）
+> 在远距 seek 压力形状下监控 serve 子进程提交峰值（psapi，`scripts/internal/probeutil`
+> 同口径），默认预算 64MB（J5 收紧后：U2#1 滚动截断落地，实测峰值 24MB）；
+> `VITRO_RSS_BUDGET_MB=5` 可证红（Python 版 2026-09-13 首证、Go 版 2026-09-18
+> 重放：peak≈24MB > 5MB → 1 FAIL / exit 1）。
 
 > 历史前端构建（Flutter / Android / iOS）已随前端迁出，脚本见标签 `before-frontend-split`。
 
@@ -452,5 +453,5 @@ vitro_cli unified long_sort.c --max-steps 500000
 vitro_cli export main.c libc_helper.c -o bundle.json --builtin-libc
 ```
 
-完整文档见 [`B-构建与上手/CLI使用手册.md`](B-构建与上手/CLI使用手册.md)。
+完整文档见 [`docs/current/02-构建与上手/CLI使用手册.md`](docs/current/02-构建与上手/CLI使用手册.md)。
 

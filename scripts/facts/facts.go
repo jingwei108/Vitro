@@ -350,37 +350,23 @@ func collectReplay(root string, facts map[string]Fact) {
 	}
 }
 
-func pythonExe() string {
-	if v := os.Getenv("VITRO_PYTHON"); v != "" {
-		return v
-	}
-	for _, c := range []string{"python", "python3", "py"} {
-		if _, err := exec.LookPath(c); err == nil {
-			return c
-		}
-	}
-	return ""
-}
-
 func collectServeSmoke(root string, facts map[string]Fact) {
-	how := "python scripts/serve_smoke.py（需先构建 vitro_cli）"
-	py := pythonExe()
-	if py == "" {
-		facts["serve_smoke_assertions"] = unavail("项", "scripts/serve_smoke.py", how, "找不到 python")
-		return
-	}
-	out, code, ok := runCmd(root, 5*time.Minute, py, "scripts/serve_smoke.py")
+	// D5 后续批次第一站（2026-09-18）：serve_smoke.py 退役，采集改跑 Go 版。
+	// `断言数:` 自报行格式是本采集器的锚，两版字节级一致。
+	rel := "scripts/serve_smoke（Go 驱动）"
+	how := "go run ./scripts/serve_smoke（需先构建 vitro_cli）"
+	out, code, ok := runCmd(root, 5*time.Minute, "go", "run", "./scripts/serve_smoke")
 	if !ok {
-		facts["serve_smoke_assertions"] = unavail("项", "scripts/serve_smoke.py", how, "超时或无法执行")
+		facts["serve_smoke_assertions"] = unavail("项", rel, how, "超时或 go 不可用")
 		return
 	}
 	if m := regexp.MustCompile(`断言数:\s*(\d+)`).FindStringSubmatch(out); m != nil {
 		n, _ := strconv.Atoi(m[1])
-		f := okFact(n, "项", "scripts/serve_smoke.py", "run", nowISO())
+		f := okFact(n, "项", rel, "run", nowISO())
 		f.Note = fmt.Sprintf("exit=%d", code)
 		facts["serve_smoke_assertions"] = f
 	} else {
-		facts["serve_smoke_assertions"] = unavail("项", "scripts/serve_smoke.py", how,
+		facts["serve_smoke_assertions"] = unavail("项", rel, how,
 			"脚本未自报断言总数")
 	}
 }
@@ -451,7 +437,7 @@ func collectAll(root string, run, runSlow bool, cargoLog string, prev *FactsDoc)
 	} else {
 		facts["replay_assertions"] = unavail("条", "scripts/replay/replay_s1_s5.go", "--run",
 			"需 --run 才执行")
-		facts["serve_smoke_assertions"] = unavail("项", "scripts/serve_smoke.py", "--run",
+		facts["serve_smoke_assertions"] = unavail("项", "scripts/serve_smoke", "--run",
 			"需 --run 才执行")
 	}
 	switch {

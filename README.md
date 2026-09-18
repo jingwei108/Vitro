@@ -10,7 +10,7 @@
 
 > **本仓库只做后端（MIT 许可）。** 2026-09-11 完成前端切割：`CideFlutter/`、FRB 桥接、web 部署 workflow 与全部 Flutter 构建脚本已迁出，前端交给社区；原生移动端放弃（"看"的场景由 wasm32 + 任意 Web 前端的移动浏览器天然覆盖）。切割前最后完整状态由标签 `before-frontend-split` 保留（`git checkout before-frontend-split -- CideFlutter` 可取回）。
 >
-> 定位转型的决策依据与路线见 [`A-定位与路线/后端定位与白箱计划.md`](A-定位与路线/后端定位与白箱计划.md)。
+> 定位转型的决策依据与路线见 [`docs/current/01-定位与路线/后端定位与白箱计划.md`](docs/current/01-定位与路线/后端定位与白箱计划.md)。
 
 ## 三出口一核心
 
@@ -117,10 +117,10 @@ cd native && cargo clippy --workspace --all-targets --all-features -- -D warning
 # 6. 测试防线（Shadow Verification：与 Clang / Clang++ 对照 stdout）
 go run ./scripts/shadow_verify
 go run ./scripts/shadow_verify_cpp
-python scripts/serve_smoke.py
+go run ./scripts/serve_smoke
 ```
 
-完整上手流程见 [`B-构建与上手/快速入门.md`](B-构建与上手/快速入门.md)，构建细节见 [`B-构建与上手/构建指南.md`](B-构建与上手/构建指南.md)，CLI 命令手册见 [`B-构建与上手/CLI使用手册.md`](B-构建与上手/CLI使用手册.md)。
+完整上手流程见 [`docs/current/02-构建与上手/快速入门.md`](docs/current/02-构建与上手/快速入门.md)，构建细节见 [`docs/current/02-构建与上手/构建指南.md`](docs/current/02-构建与上手/构建指南.md)，CLI 命令手册见 [`docs/current/02-构建与上手/CLI使用手册.md`](docs/current/02-构建与上手/CLI使用手册.md)。
 
 > 历史前端构建（Flutter / Android / iOS）已随前端迁出，脚本见标签 `before-frontend-split`。
 
