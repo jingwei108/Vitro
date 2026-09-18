@@ -76,7 +76,8 @@
 
 ### M-0 · 基线冻结（S0.5 收尾动作）
 
-release 重建（当前 HEAD 版本串已含，replay 61/61 + serve_smoke 57/57 复跑留痕）→ shadow 报告 + `cases_golden/` 快照 + facts.json 入版本控制或固定 tag，clang 版本串记录在报告内。
+- **✅ 已完成（2026-09-19，tag `s0.5-baseline-freeze`）**：release 重建（HEAD `c5ffc9c`）+ 全防线复跑留痕——shadow C 679（match 675 / known_issue 3 / gap_extension 1，clang 22.1.4 版本串在 shadow_data.json）/ replay 61/61 / serve_smoke 57/57 / facts 漂移 0 / cargo test 75 套件。`cases_golden/` 快照本就在版本控制（本批含 5 例新 golden）；facts.json 按二选一取**固定 tag**（how_to_get 可重跑，不入库防双真相）。
+- 原计划：release 重建（当前 HEAD 版本串已含，replay 61/61 + serve_smoke 57/57 复跑留痕）→ shadow 报告 + `cases_golden/` 快照 + facts.json 入版本控制或固定 tag，clang 版本串记录在报告内。
 
 ---
 

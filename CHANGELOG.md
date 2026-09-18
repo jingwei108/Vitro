@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Chore (M-0 基线冻结，tag `s0.5-baseline-freeze`，2026-09-19)
+
+S0.5 收官：release 重建（HEAD `c5ffc9c`）+ 全防线复跑留痕——shadow C
+679（match 675 / known_issue 3 / gap_extension 1；clang 22.1.4 版本串在
+shadow_data.json）/ replay 61/61 / serve_smoke 57/57 / facts 漂移 0 /
+cargo test 75 套件 / clippy 0。cases_golden 快照在版本控制（S0.5 批含
+8 例新 golden：j1 + P2×2 + P4×1 + P5×5 含 cpp×4）；facts.json 取固定
+tag（不入库防双真相）。**S0.5 白名单 P1–P7 + U1/U2 全部完成，S1 基础片
+（vitro/{source,diag,opcode,ast} 四包）开工。**
+
 ### Added (P7 AST/符号表 dump 出口 + Go canonicalizer，2026-09-19)
 
 - **serve `ast.dump` / `symbols.dump`**：E1 B 级锚的 Rust 侧出口——此前
