@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Docs (P6 列号口径冻结，2026-09-19)
+
+- **口径档案** `docs/current/07-质量与裁定/列号口径冻结.md`：现状缺陷**不修**
+  （S1 `vitro/source` 双坐标根治），冻结为契约输入与防漂移锚——① 词法路径
+  （E1001）：报错列 = 1-based Unicode 字符列 + 1（advance 后报错），四形状
+  实测自洽；② 解析路径（E2005）：报错列 = current token 的 column 字段，
+  ASCII token 全对、含非 ASCII 的 String token 偏 **−4**——根因亲证
+  `make_token` 的 `column = self.column（字符计数）− text.len()（字节数）`
+  量纲混算（vitro_lexer/src/lib.rs:448）；**两路径区分是关键发现**——纯
+  ASCII 探针对此缺陷零感，差分锚必须含非 ASCII 形状
+- **防漂移锚** `source_column_convention_test` ×10 形状（词法 4 + 解析 6，
+  精确断言 line/column/code 三元组）：冻结不是口头约定而是测试防线；
+  MoonBit 侧 E3 锚对拍时 −4/+1 两类形状列入已登记差异不判缺陷
+- **契约输入**（档案 §2）：`vitro/source` 主坐标 = byte_off+1；双坐标
+  `Pos{byte_off, col_scalar, col_utf16}` 预留；禁"扫描后计数−长度"回推
+  （make_token 根因模式）；词法 +1 不复刻
+
 ### Added (U1 认知链最小导出，2026-09-19)
 
 - **serve 新方法 `diagnostics_probe`**：knowledge_graph / misconception /
