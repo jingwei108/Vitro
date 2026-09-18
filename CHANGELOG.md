@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (P5 golden 完整性与 fail-loud，2026-09-18)
+
+- **缺 golden 必红**：`run_case_with_compiler` 此前无 golden 时静默跳过比对
+  （用例退化为"只查能跑"的烟雾测试，golden 缺失无人发现）。改为缺失即
+  Err（错误消息含生成指引）；J9 证红：临时移走一个 golden → 必红 → 恢复
+  → 绿。四目录存量缺口清零：补 `e2_include_guarded`（漏 golden 的正常
+  用例，clang 实跑 `7 3`）与 4 例 C++（`cpp_copy_ctor` / `cpp_default_args`
+  / `cpp_nested_class_instance` / `cpp_nttp_class`——live-clang 逐一确认
+  编译运行成功后实跑生成，Vitro 侧全对齐）
+- **KNOWN_* 常量全部成对**：`KNOWN_BASELINE_COMPILE_FAILURES` 提升为模块
+  级并新增 `test_vitro_e2e_baseline_compile_failures_known` 反向监控
+  （表内用例转绿即 panic）——五个 KNOWN_* 常量至此全部具备
+  "跳过 + 转绿即红"双向咬合
+- **gap 七条审计（对齐 C 侧 J2 先例）**：`file_fopen` / `file_fread` /
+  `file_fwrite` 三例**假 gap 转正**——均漏 `#include <stdio.h>`，clang 报
+  undeclared `FILE` 被 gap_extension 判定掩盖，实为漏头文件伪装；补头后
+  双侧 fopen 不存在文件同返 NULL，转 match。`keyword_compat`（真扩展）、
+  `function_pointer_sizeof` / `sizeof_array_param`（指针 4 字节架构差异）、
+  `bTree_default`（NULL 访问根因在案）四例分类确认正当。shadow 分布：
+  gap_extension 4→1、match 672→675
+- **手写 golden 显式登记**（CPP_FAILURES.md）：4 例 clang_compile_fail
+  用例（`cpp_vitro_vec_class` / `cpp_vitro_list_class` / U3 ×2）的 E2E
+  golden 为 Vitro 自证（无独立 oracle 仅回归锚）——选登记而非改写
+  `std::vector` 等价物（改写会偏离 `vitro_*` 容器代码路径覆盖，真对照
+  版本后续需要时另立新用例）
+
 ### Fixed (P4 字符串转义与字节通道收口，2026-09-18)
 
 - **string 侧 hex/八进制转义收口（与 char 侧 U1#7 同口径）**：

@@ -46,7 +46,7 @@ vitro 引擎核心（Rust workspace，禁止平台 API 耦合）
 
 ## 当前状态（2026-09-15 实测）
 
-- **C 教学子集**：C Shadow Verification **679 个用例**（完全匹配 672 + known_issue 3 + gap_extension 4，无非预期差异；vitro_better 已清零）
+- **C 教学子集**：C Shadow Verification **679 个用例**（完全匹配 675 + known_issue 3 + gap_extension 1，无非预期差异；vitro_better 已清零）
 - **C++ 教学子集**：C++ Shadow Verification **99 个用例**（95 一致 + 4 个已记录的 `clang_compile_fail`：`cpp_vitro_vec_class` / `cpp_vitro_list_class` / `cpp_u3_class_instantiate_in_template` / `cpp_u3_vec_class_twice`）；C++ E2E 回归 83 个用例
 - **真实程序回归**：K&R 81 题全绿；LeetCode 138 题全部通过；Baseline 用例全部通过
 - **全量测试**：`cargo test --workspace --all-features` → **845 passed / 0 failed**（60 个测试套件）；clippy 0 warning

@@ -183,16 +183,26 @@ fn run_case_with_compiler(
             }
             // E-P1-5：输出已是纯程序 stdout（引擎附注走 note 通道），无需清洗。
             let filtered = outputs;
-            if let Some(golden) = load_golden(name, golden_subdir) {
-                if filtered != golden {
-                    return Err(format!(
-                        "Output mismatch.\nExpected ({} lines): {:?}\nActual ({} lines): {:?}",
-                        golden.len(),
-                        golden,
-                        filtered.len(),
-                        filtered
-                    ));
-                }
+            // P5（2026-09-18）：缺 golden 必红——此前静默跳过，用例退化为
+            // "只查能跑"的烟雾测试，golden 缺失（如 2026-09-18 前的
+            // cpp_copy_ctor 等四例、e2_include_guarded）无人发现。豁免两类：
+            // golden_subdir 为空（模板用例，golden 由 sync_templates 另一套
+            // 机制生成）与编译失败登记表（在测试函数层 continue，到不了这里）。
+            let golden = load_golden(name, golden_subdir).ok_or_else(|| {
+                format!(
+                    "缺少 golden 文件：tests/cases_golden/{}/{}.out（用 clang 实跑生成，勿手写）",
+                    if golden_subdir.is_empty() { "" } else { golden_subdir },
+                    name
+                )
+            })?;
+            if !golden_subdir.is_empty() && filtered != golden {
+                return Err(format!(
+                    "Output mismatch.\nExpected ({} lines): {:?}\nActual ({} lines): {:?}",
+                    golden.len(),
+                    golden,
+                    filtered.len(),
+                    filtered
+                ));
             }
             Ok(())
         }
@@ -200,24 +210,26 @@ fn run_case_with_compiler(
     }
 }
 
+// E2：故意双侧编译失败的用例（Shadow 判 match：环检测 vs Clang 无限嵌套
+// 包含错误），e2e 的"必须可运行"契约不适用。
+// U1#11 新增三例（H-1/H-3）：include 找不到 / <> 引自定义头——Vitro 修复
+// 后报 E1021 编译失败，Clang 同样 fatal error（stdout 均空，Shadow 判 match）。
+// P1 新增 j1：声明符链式后缀（30000 层）——Vitro 报 E1006
+// （MAX_DECLARATOR_SUFFIX 止血，修复前 release 栈溢出零诊断崩溃），
+// Clang 同样编译失败（30000 层 signal）→ Shadow 判 match。
+// P5：提升为模块级常量并配 test_vitro_e2e_baseline_compile_failures_known
+// 反向监控（转绿即 panic）——五个 KNOWN_* 常量全部成对。
+const KNOWN_BASELINE_COMPILE_FAILURES: &[&str] = &[
+    "e2_include_cycle",
+    "e3_static_assert_fail",
+    "e2_include_not_found_quote",
+    "e2_include_not_found_angle",
+    "e2_angle_local_header",
+    "j1_declarator_depth",
+];
+
 #[test]
 fn test_vitro_e2e_baseline() {
-    // E2：故意双侧编译失败的用例（Shadow 判 match：环检测 vs Clang 无限嵌套
-    // 包含错误），e2e 的"必须可运行"契约不适用。
-    // U1#11 新增三例（H-1/H-3）：include 找不到 / <> 引自定义头——Vitro 修复
-    // 后报 E1021 编译失败，Clang 同样 fatal error（stdout 均空，Shadow 判 match）。
-    // P1 新增 j1：声明符链式后缀 1300 层——Vitro 报 E1006（MAX_DECLARATOR_SUFFIX
-    // 止血，修复前 release 栈溢出零诊断崩溃），Clang 同样编译失败
-    // （bracket nesting depth 限制）→ Shadow 判 match。
-    const KNOWN_BASELINE_COMPILE_FAILURES: &[&str] = &[
-        "e2_include_cycle",
-        "e3_static_assert_fail",
-        "e2_include_not_found_quote",
-        "e2_include_not_found_angle",
-        "e2_angle_local_header",
-        "j1_declarator_depth",
-    ];
-
     let cases = load_cases(Path::new("tests/cases/baseline"));
     let known_compile_fail: std::collections::HashSet<&str> =
         KNOWN_BASELINE_COMPILE_FAILURES.iter().copied().collect();
@@ -489,6 +501,43 @@ fn test_vitro_e2e_cpp() {
             failures.len(),
             cases.len() - known.len(),
             failures.join("\n")
+        );
+    }
+}
+
+/// P5（2026-09-18）：KNOWN_BASELINE_COMPILE_FAILURES 反向监控——表内用例
+/// 若编译并运行成功（转绿）即 panic，提示从表移除。与既有四个 known_
+/// failures 测试同形态，五个 KNOWN_* 常量至此全部成对（跳过 + 转绿即红）。
+#[test]
+fn test_vitro_e2e_baseline_compile_failures_known() {
+    let mut passed_unexpectedly = Vec::new();
+    for name in KNOWN_BASELINE_COMPILE_FAILURES {
+        let path = Path::new("tests/cases/baseline").join(format!("{}.c", name));
+        let source = std::fs::read_to_string(&path).unwrap_or_default();
+        let input_path = path.with_extension("in");
+        let input = if input_path.exists() {
+            Some(std::fs::read_to_string(&input_path).unwrap_or_default())
+        } else {
+            None
+        };
+        let mode = if source.contains("getchar()") {
+            InputMode::Batch
+        } else {
+            InputMode::Interactive
+        };
+        // 预期：编译失败（run_case 必 Err）。成功 = 缺陷已修或用例失配，
+        // 须同步 KNOWN_BASELINE_COMPILE_FAILURES 与 shadow 口径。
+        if run_case(name, &source, input.as_deref(), "baseline", mode).is_ok() {
+            passed_unexpectedly.push(name.to_string());
+        }
+    }
+    if !passed_unexpectedly.is_empty() {
+        panic!(
+            "Known baseline compile failures unexpectedly PASSED ({}). \
+             Please update KNOWN_BASELINE_COMPILE_FAILURES in vitro_e2e.rs \
+             (and E2E_FAILURES.md if applicable):\n{}",
+            passed_unexpectedly.len(),
+            passed_unexpectedly.join("\n")
         );
     }
 }

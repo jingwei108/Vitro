@@ -144,3 +144,31 @@ Issue B（lambda 调用三缺陷）修复过程中顺带实测出的两项能力
 > **剩余已知限制**（如实记录）：`infer_lambda_return_type` 只取**第一个** `return` 表达式，不做多条 return 的类型合并；
 > 不支持尾置返回类型 `-> T`；两者仍按 `int` 处理。回归测试：`native/tests/cpp_lambda_test.rs`（3 用例）。
 
+
+### 手写 golden 显式登记（P5，2026-09-18）
+
+Shadow 侧 4 个 `clang_compile_fail` 用例的 E2E golden 是 **Vitro 自证**（与 Vitro
+stdout 逐字节相同的手写值，无独立 oracle）——显式登记，防止被误当 clang 真对照：
+
+| 用例 | golden 属性 | 说明 |
+|---|---|---|
+| `cpp_vitro_vec_class` | 仅回归锚（无独立 oracle） | `vitro_vec<T>` 是 Vitro 内置容器，Clang++ 无法编译 |
+| `cpp_vitro_list_class` | 仅回归锚（无独立 oracle） | `vitro_list<T>` 同上 |
+| `cpp_u3_class_instantiate_in_template` | 仅回归锚（无独立 oracle） | U3 类类型模板实参为 Vitro 扩展语义 |
+| `cpp_u3_vec_class_twice` | 仅回归锚（无独立 oracle） | 同上 |
+
+处置依据（第一阶段计划 P5③ 的两个选项）：**显式登记**而非改写为 `std::vector`
+等价物——改写会偏离原用例的 `vitro_*` 容器代码路径覆盖；`std::vector` 真对照
+版本待后续需要独立 oracle 时另立新用例（原用例保留）。
+
+### gap 用例七条审计（P5⑤，2026-09-18）
+
+C 侧 Shadow 的 7 条非 match 判定逐例审计（对齐 J2 先例"逐例审计而非整批信任"）：
+
+| 用例 | 审计前 | 审计后 | 结论 |
+|---|---|---|---|
+| `file_fopen` / `file_fread` / `file_fwrite` | gap_extension | **match（转正）** | **假 gap**：三例均漏 `#include <stdio.h>`，clang 报 undeclared `FILE` 被判"VFS 扩展"——实为漏头文件伪装。补头后双侧 fopen 不存在文件同返 NULL，真对照一致 |
+| `keyword_compat` | gap_extension | gap_extension（确认） | 真扩展：`register` 取地址 + `auto int` 存储类的宽容语义（J2 从 baseline 移入，先例产物） |
+| `function_pointer_sizeof` | known_issue | known_issue（确认） | 指针 4 字节模型架构差异，已记载于 C语言子集规范 |
+| `sizeof_array_param` | known_issue | known_issue（确认） | 同上（数组参数退化为指针大小） |
+| `bTree_default` | known_issue | known_issue（确认） | E2E_FAILURES.md 有根因（未插入元素时访问 NULL 指针区域） |
