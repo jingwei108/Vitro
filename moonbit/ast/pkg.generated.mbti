@@ -1,0 +1,301 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "vitro/engine/ast"
+
+import {
+  "moonbitlang/core/debug",
+  "vitro/engine/source",
+}
+
+// Values
+pub fn ast_dump_json(ProgramNode) -> String
+
+pub fn double_to_json_text(Double) -> String
+
+pub fn expr_depth(Expr) -> Int
+
+pub fn stmt_depth(Stmt) -> Int
+
+pub fn stmt_type_depth(Stmt) -> Int
+
+pub fn template_arg_eq(TemplateArg, TemplateArg) -> Bool
+
+pub fn type_depth(Type) -> Int
+
+pub fn type_eq(Type, Type) -> Bool
+
+// Errors
+
+// Types and methods
+pub(all) enum AccessSpec {
+  Public
+  Private
+  Protected
+} derive(Compare, Eq, @debug.Debug)
+
+pub(all) enum AssignOp {
+  Assign
+  AddAssign
+  SubAssign
+  MulAssign
+  DivAssign
+  ModAssign
+  AndAssign
+  OrAssign
+  XorAssign
+  ShlAssign
+  ShrAssign
+} derive(Compare, Eq, @debug.Debug)
+
+pub(all) enum BinaryOp {
+  Add
+  Sub
+  Mul
+  Div
+  Mod
+  Eq
+  Ne
+  Lt
+  Le
+  Gt
+  Ge
+  And
+  Or
+  BitAnd
+  BitOr
+  BitXor
+  Shl
+  Shr
+  Comma
+} derive(Compare, Eq, @debug.Debug)
+
+pub(all) enum CaptureMode {
+  ByValue(String)
+  ByReference(String)
+  Implicit
+} derive(Compare, Eq, @debug.Debug)
+
+pub(all) struct CatchClause {
+  param_type : Type
+  param_name : String?
+  body : Stmt
+  loc : @source.SourceLoc
+} derive(@debug.Debug)
+
+pub(all) struct ClassDecl {
+  loc : @source.SourceLoc
+  name : String
+  base : String?
+  members : Array[ClassMember]
+  vtable : VTable?
+} derive(@debug.Debug)
+
+pub(all) enum ClassMember {
+  Field(String, Type, AccessSpec, Bool)
+  Method(String, Type, Array[Param], Stmt?, Bool, AccessSpec, Bool, Bool)
+  Constructor(Array[Param], Stmt?, Bool, AccessSpec, Bool)
+  Destructor(Stmt?, AccessSpec, Bool)
+  NestedStruct(StructDecl, AccessSpec)
+  NestedClass(ClassDecl, AccessSpec)
+} derive(@debug.Debug)
+
+pub(all) enum Designator {
+  Field(String)
+  Index(Expr)
+} derive(@debug.Debug)
+
+pub(all) enum Expr {
+  Binary(BinaryOp, Expr, Expr, @source.SourceLoc, Type)
+  Unary(UnaryOp, Expr, @source.SourceLoc, Type)
+  Literal(Int, @source.SourceLoc, Type)
+  FloatLiteral(Double, @source.SourceLoc, Type)
+  LongLiteral(Int64, @source.SourceLoc, Type)
+  StringLiteral(String, @source.SourceLoc, Type)
+  Identifier(String, @source.SourceLoc, Type)
+  Call(String, Array[Expr], @source.SourceLoc, Type)
+  CallPtr(Expr, Array[Expr], @source.SourceLoc, Type)
+  Index(Expr, Expr, @source.SourceLoc, Type)
+  Member(Expr, String, @source.SourceLoc, Type)
+  Assign(AssignOp, Expr, Expr, @source.SourceLoc, Type)
+  Ternary(Expr, Expr, Expr, @source.SourceLoc, Type)
+  Sizeof(Type?, Expr?, @source.SourceLoc, Type)
+  Alignof(Type?, Expr?, @source.SourceLoc, Type)
+  Cast(Expr, Type, @source.SourceLoc, Type)
+  InitList(Array[InitElement], @source.SourceLoc, Type)
+  Offsetof(Type, String, @source.SourceLoc, Type)
+  Generic(Expr, Array[(Type, Expr)], Expr?, @source.SourceLoc, Type)
+  CompoundLiteral(Type, Expr, @source.SourceLoc, Type)
+  This(@source.SourceLoc, Type)
+  MemberCall(Expr, String, Array[Expr], Bool, String?, @source.SourceLoc, Type)
+  New(Type, Expr?, Expr?, @source.SourceLoc, Type)
+  Delete(Expr, Bool, @source.SourceLoc, Type)
+  Lambda(Array[CaptureMode], Array[Param], Stmt, UInt, @source.SourceLoc, Type)
+  Move(Expr, @source.SourceLoc, Type)
+} derive(@debug.Debug)
+pub fn Expr::loc(Self) -> @source.SourceLoc
+pub fn Expr::ty(Self) -> Type
+
+pub(all) struct FuncDecl {
+  loc : @source.SourceLoc
+  return_type : Type
+  name : String
+  params : Array[Param]
+  body : Stmt?
+  is_static : Bool
+  is_extern : Bool
+  source_file : String
+  is_variadic : Bool
+} derive(@debug.Debug)
+
+pub(all) struct GlobalDecl {
+  loc : @source.SourceLoc
+  ty : Type
+  name : String
+  init : Expr?
+  is_static : Bool
+  is_extern : Bool
+  source_file : String
+} derive(@debug.Debug)
+
+pub(all) struct InitElement {
+  designators : Array[Designator]
+  value : Expr
+} derive(@debug.Debug)
+
+pub(all) struct Param {
+  ty : Type
+  name : String
+  loc : @source.SourceLoc
+  default : Expr?
+} derive(@debug.Debug)
+
+pub(all) struct ProgramNode {
+  structs : Array[StructDecl]
+  unions : Array[StructDecl]
+  globals : Array[GlobalDecl]
+  funcs : Array[FuncDecl]
+  classes : Array[ClassDecl]
+  templates : Array[TemplateDecl]
+  template_instantiations : Array[TemplateInstantiation]
+} derive(@debug.Debug)
+pub fn ProgramNode::empty() -> Self
+
+pub(all) enum Stmt {
+  Block(Array[Stmt], @source.SourceLoc)
+  VarDecl(Type, String, Expr?, Array[VarDeclExtra], Bool, @source.SourceLoc)
+  Expr(Expr, @source.SourceLoc)
+  If(Expr, Stmt, Stmt?, @source.SourceLoc)
+  While(Expr, Stmt, @source.SourceLoc)
+  DoWhile(Stmt, Expr, @source.SourceLoc)
+  For(Stmt?, Expr?, Array[Expr], Stmt, @source.SourceLoc)
+  Return(Expr?, @source.SourceLoc)
+  Break(@source.SourceLoc)
+  Continue(@source.SourceLoc)
+  Switch(Expr, Stmt, @source.SourceLoc)
+  Case(Expr?, Stmt, @source.SourceLoc)
+  Goto(String, @source.SourceLoc)
+  Label(String, Stmt, @source.SourceLoc)
+  RangeFor(String, Type, Expr, Stmt, @source.SourceLoc)
+  Try(Stmt, Array[CatchClause], @source.SourceLoc)
+} derive(@debug.Debug)
+
+pub(all) struct StructDecl {
+  loc : @source.SourceLoc
+  name : String
+  fields : Array[StructField]
+} derive(@debug.Debug)
+
+pub(all) struct StructField {
+  ty : Type
+  name : String
+} derive(@debug.Debug)
+
+pub(all) enum TemplateArg {
+  TArg(Type)
+  TExpr(Expr)
+  TInt(Int)
+} derive(@debug.Debug)
+pub fn TemplateArg::mangle_name_into(Self, StringBuilder) -> Unit
+
+pub(all) struct TemplateDecl {
+  loc : @source.SourceLoc
+  params : Array[TemplateParam]
+  decl : Templateable
+} derive(@debug.Debug)
+
+pub(all) struct TemplateInstantiation {
+  loc : @source.SourceLoc
+  base : String
+  args : Array[TemplateArg]
+} derive(@debug.Debug)
+
+pub(all) enum TemplateParam {
+  TypeParam(String, @source.SourceLoc)
+  NonType(String, Type, @source.SourceLoc)
+} derive(@debug.Debug)
+
+pub(all) enum Templateable {
+  TFunc(FuncDecl)
+  TClass(ClassDecl)
+} derive(@debug.Debug)
+
+pub(all) enum Type {
+  Void(Bool)
+  Int(Bool, Bool)
+  Char(Bool, Bool)
+  Float(Bool)
+  Double(Bool)
+  LongLong(Bool, Bool)
+  Pointer(Type, Bool)
+  Array(Type, Int, Array[Int], Bool, Bool, Array[Expr])
+  Function(Type, Array[Type], Bool, Bool)
+  Struct(String, Bool)
+  Union(String, Bool)
+  Class(String, Bool)
+  Reference(Type, Bool)
+  RValueRef(Type)
+  Auto
+  TemplateId(String, Array[TemplateArg], Bool)
+  Typeof(Expr, Bool, Bool)
+} derive(@debug.Debug)
+pub fn Type::array_of(Self, Array[Int]) -> Self
+pub fn Type::char() -> Self
+pub fn Type::double() -> Self
+pub fn Type::float() -> Self
+pub fn Type::function(Self, Array[Self]) -> Self
+pub fn Type::function_pointer(Self, Array[Self]) -> Self
+pub fn Type::int() -> Self
+pub fn Type::long_long() -> Self
+pub fn Type::mangle_name(Self) -> String
+pub fn Type::mangle_name_into(Self, StringBuilder) -> Unit
+pub fn Type::pointer_to(Self) -> Self
+pub fn Type::struct_type(String) -> Self
+pub fn Type::to_c_string(Self) -> String
+pub fn Type::union_type(String) -> Self
+pub fn Type::unsigned_int() -> Self
+pub fn Type::void_type() -> Self
+
+pub(all) enum UnaryOp {
+  Neg
+  Not
+  BitNot
+  Addr
+  Deref
+  PreInc
+  PreDec
+  PostInc
+  PostDec
+} derive(Compare, Eq, @debug.Debug)
+
+pub(all) struct VTable {
+  entries : Array[(String, Type)]
+} derive(@debug.Debug)
+
+pub(all) struct VarDeclExtra {
+  var_type : Type
+  name : String
+  init : Expr?
+} derive(@debug.Debug)
+
+// Type aliases
+
+// Traits

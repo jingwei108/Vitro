@@ -1,0 +1,8 @@
+# MoonBit 活跃区源与产物统一 LF（gen_diag 写 LF、-check 行尾归一双保险；
+# core.autocrlf=true 的 checkout 曾致产物 CRLF 假红——审阅 P2-1）
+moonbit/** text eol=lf
+*.mbt text eol=lf
+*.mbti text eol=lf
+*.mbtx text eol=lf
+moon.mod text eol=lf
+moon.pkg text eol=lf
