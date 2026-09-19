@@ -41,10 +41,13 @@ pub fn Severity::prefix(self : Severity) -> String {
 
 ///|
 /// 源语言域（is_cpp_mode 单源的类型载体——总计划 §5；46 处亲证分散）。
-/// C = C 共通域（C++ 模式下的 C 子集同属）；Cpp = 仅 C++ 形态。
+/// C = C 共通域（C++ 模式下的 C 子集同属）；Cpp = 仅 C++ 形态；
+/// CSharp = 5xxx 段预留（Stmt::Try reserved-for-csharp 同批）——现库
+/// 无 5xxx 码，变体先行落位防"落地即静默错"（审阅 P2-3）。
 pub(all) enum SourceLang {
   C
   Cpp
+  CSharp
 } derive(Debug, Eq, Compare)
 
 ///|
@@ -59,5 +62,6 @@ pub fn SourceLang::to_str(self : SourceLang) -> String {
   match self {
     C => "c"
     Cpp => "cpp"
+    CSharp => "csharp"
   }
 }

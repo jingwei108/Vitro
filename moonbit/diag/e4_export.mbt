@@ -42,12 +42,18 @@ pub fn export_catalog_json() -> String {
 }
 
 ///|
-/// lang 导出值（Rust lang_of_code 对齐：1000..=3999 "c" / 4000.. "c++"）。
+/// lang 导出值（Rust lang_of_code 四值对齐：1000..=3999 "c" /
+/// 4000..=4999 "c++" / 5000..=5999 "csharp" / 其它 "unknown"——审阅
+/// P2-3：此前二值化，5xxx 落地即静默错）。
 fn export_lang_of(code : Int) -> String {
-  if code >= 4000 {
-    "c++"
-  } else {
+  if code >= 1000 && code <= 3999 {
     "c"
+  } else if code >= 4000 && code <= 4999 {
+    "c++"
+  } else if code >= 5000 && code <= 5999 {
+    "csharp"
+  } else {
+    "unknown"
   }
 }
 
@@ -59,6 +65,7 @@ fn category_of(code : Int) -> String {
     2 => "语法"
     3 => "语义"
     4 => "C++"
+    5 => "C#"
     _ => "其它"
   }
 }

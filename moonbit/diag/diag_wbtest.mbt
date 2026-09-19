@@ -59,21 +59,28 @@ test "severity_display_first_char_agree" {
 }
 
 ///|
-/// lang 段位：4xxx 全 Cpp（38 条），其余 C（99 条）。
+/// lang 段位：4xxx 全 Cpp（38 条），其余 C（99 条），CSharp 0（5xxx 预留空置）。
 test "lang_segment_4xxx_cpp" {
   let mut cpp = 0
   let mut c_lang = 0
+  let mut csharp = 0
   for code in ErrorCode::all() {
     match code.lang() {
       Cpp => {
         cpp += 1
         assert_true(code.code() >= 4000)
       }
+      CSharp => {
+        csharp += 1
+        assert_true(code.code() >= 5000)
+      }
       C => c_lang += 1
     }
   }
   assert_eq(cpp, 38)
   assert_eq(c_lang, 99)
+  assert_eq(csharp, 0) // 5xxx 段空置（CSharp 变体先行落位——P2-3）
+  assert_eq(SourceLang::CSharp.to_str(), "csharp")
 }
 
 ///|

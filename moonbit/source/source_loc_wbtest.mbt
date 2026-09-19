@@ -43,9 +43,10 @@ test "sourceloc_hash_map_key" {
 }
 
 ///|
-/// Default：零值 = 1:1 主文件（file_id=0）——与 Rust oracle
-/// `#[derive(Default)]` 的 0:0:0 不同：0 行 0 列不是合法 1-based 坐标，
-/// 此处显式锚定差异（MoonBit 侧不复制 0 值语义）。
+/// Default：零值 0:0:0（file_id=0）——与 Rust `#[derive(Default)]` **同形**
+/// （审阅 P3 勘误：原注释自称"不同/不复制"系旧意图残留，断言值即 0/0/0）。
+/// 0 行 0 列不是合法 1-based 坐标——零值仅作结构初始化默认，消费方不得
+/// 将其当作有效位置使用。
 test "sourceloc_default_is_zero" {
   let d : SourceLoc = Default::default()
   inspect(d.line, content="0")

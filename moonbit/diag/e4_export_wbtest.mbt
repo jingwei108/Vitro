@@ -45,3 +45,22 @@ test "json_escape_set" {
   inspect(json_escape("a\"b\\c\nd\te"), content="a\\\"b\\\\c\\nd\\te")
   inspect(json_escape("无转义"), content="无转义")
 }
+
+///|
+/// lang/category 四值探针（P2-3：防 5xxx 落地静默错——白盒直测私有派生）。
+test "e4_lang_category_four_values" {
+  inspect(export_lang_of(1001), content="c")
+  inspect(export_lang_of(3999), content="c")
+  inspect(export_lang_of(4001), content="c++")
+  inspect(export_lang_of(4999), content="c++")
+  inspect(export_lang_of(5000), content="csharp")
+  inspect(export_lang_of(5999), content="csharp")
+  inspect(export_lang_of(0), content="unknown")
+  inspect(export_lang_of(9999), content="unknown")
+  inspect(category_of(1001), content="词法")
+  inspect(category_of(2001), content="语法")
+  inspect(category_of(3001), content="语义")
+  inspect(category_of(4001), content="C++")
+  inspect(category_of(5000), content="C#")
+  inspect(category_of(0), content="其它")
+}
