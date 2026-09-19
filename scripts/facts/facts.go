@@ -467,6 +467,8 @@ func collectMoonbitLexerDiff(root string, facts map[string]Fact) {
 		tmp,
 		filepath.Join("native", "tests", "cases", "baseline"),
 		filepath.Join("native", "tests", "cases", "knr"),
+		filepath.Join("native", "tests", "cases", "leetcode"),
+		filepath.Join("native", "tests", "cases", "gap"),
 	} {
 		out, code, ok := runCmd(root, 10*time.Minute, "go", "run", "./scripts/lexer_diff", corpus)
 		if !ok || code != 0 {
@@ -483,7 +485,7 @@ func collectMoonbitLexerDiff(root string, facts map[string]Fact) {
 		total += n
 	}
 	f := okFact(total, "个", "scripts/lexer_diff（Rust oracle ↔ MoonBit lexer）", "run", nowISO())
-	f.Note = "随机 2400 例（seed 20260919）+ baseline 363 + K&R 81，L1/L2 双层 TSV 逐字节一致"
+	f.Note = "随机 2400 例（seed 20260919）+ baseline 363 + K&R 81 + leetcode 138 + gap 15，L1/L2 双层 TSV 逐字节一致"
 	facts["moonbit_lexer_diff_tsv"] = f
 }
 
