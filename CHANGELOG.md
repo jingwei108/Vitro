@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (CI 红处置：28 个 golden 从未入库 + cargo 用例数平台差异，2026-09-19)
+
+- **28 个 baseline golden 补入库（P5"缺 golden 必红"的 CI 首秀战果）**：CI
+  E2E 报 28 例缺 golden——根因是这批 .out 被列在 `.git/info/exclude`
+  （**本地私有排除，不入库、CI 不感知**；历史遗留），本地文件系统存在
+  掩盖了缺口（P5 前静默跳过从未暴露）。清除 exclude 28 行并入库（本地
+  E2E 一直消费且全绿，内容为有效 clang golden，抽查 e1_string_concat /
+  jit_single_hot_loop 合理）
+- **cargo test 用例数归平台相关实测行**：CI 首次以 `--cargo-log` 新鲜
+  采集真值（1014）对账，暴露 README:52 陈旧值 845；实测本地 Windows
+  1028 / CI Linux 1014（套件含平台条件编译差异）——单一真值对账对平台
+  相关数字不成立，该行按实测行语义归人工维护（标注两环境实测值）
+- 附注：CI 日志中 replay/serve 断言数"61/57 共行互斥"漂移形态属
+  **旧代码判定**（该 CI 轮扫描 48 份文档，对应 P1 之前的 facts）——
+  就近绑定已在 e1e664a 修复，当前 HEAD 本地 facts 漂移 0
+
 ### Fixed (S0.5 审阅处置批，2026-09-19)
 
 - **P3 白名单护栏自指缺陷修复（审阅【中】项，埋雷复现实证）**：原"计数锚"

@@ -49,7 +49,7 @@ vitro 引擎核心（Rust workspace，禁止平台 API 耦合）
 - **C 教学子集**：C Shadow Verification **679 个用例**（完全匹配 675 + known_issue 3 + gap_extension 1，无非预期差异；vitro_better 已清零）
 - **C++ 教学子集**：C++ Shadow Verification **99 个用例**（95 一致 + 4 个已记录的 `clang_compile_fail`：`cpp_vitro_vec_class` / `cpp_vitro_list_class` / `cpp_u3_class_instantiate_in_template` / `cpp_u3_vec_class_twice`）；C++ E2E 回归 83 个用例
 - **真实程序回归**：K&R 81 题全绿；LeetCode 138 题全部通过；Baseline 用例全部通过
-- **全量测试**：`cargo test --workspace --all-features` → **845 passed / 0 failed**（60 个测试套件）；clippy 0 warning
+- **全量测试**：`cargo test --workspace --all-features` 全绿（**用例总数平台相关实测**：本地 Windows 1028 / CI Linux 1014，套件含平台条件编译差异——按实测行人工维护，不对账单一真值）；clippy 0 warning
 - **capi 第一批**：13 个新入口全部落地（`vitro_abi_version` 首批 `1.1.0`，现 `2.1.0`），StepPayload schema v0.1 发布
 - **wasm32 出口**：零修改构建 3.75MB `.wasm`，Node 下 C API 全链路（compile → run → output）+ E3070 教学诊断通过
 - **时间旅行**：VM 快照 / 检查点 / Seek / 异常回退全链路可用（`vitro_cli unified`、`serve` 的 `step.*`/`seek`）
