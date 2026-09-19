@@ -414,6 +414,35 @@ func collectCargoTestFromOutput(out string, code int, source, provenance string,
 	}
 }
 
+// collectMoonbit 采集 MoonBit 活跃区（moonbit/ workspace）的测试真值
+// （T6，2026-09-19）：键空间独立（moonbit_* 前缀），与 Rust oracle 侧
+// 键零冲突。需 --run 才执行（moon 工具链依赖）；解析失败记 unavailable
+// 不兜底（假输出/无 Total 行均埋雷验证——moonbit_fact_test.go）。
+func collectMoonbit(root string, facts map[string]Fact) {
+	how := "cd moonbit && moon test"
+	out, code, ok := runCmd(filepath.Join(root, "moonbit"), 5*time.Minute, "moon", "test")
+	if !ok {
+		facts["moonbit_test_passed"] = unavail("用例", "moonbit/（moon test）", how, "超时或 moon 不可用")
+		return
+	}
+	collectMoonbitFromOutput(out, code, facts)
+}
+
+func collectMoonbitFromOutput(out string, code int, facts map[string]Fact) {
+	m := regexp.MustCompile(`Total tests: (\d+), passed: (\d+), failed: (\d+)`).FindStringSubmatch(out)
+	if m == nil {
+		facts["moonbit_test_passed"] = unavail("用例", "moonbit/（moon test）",
+			"cd moonbit && moon test", "未解析到 Total tests 行")
+		return
+	}
+	total, _ := strconv.Atoi(m[1])
+	passed, _ := strconv.Atoi(m[2])
+	failed, _ := strconv.Atoi(m[3])
+	f := okFact(passed, "用例", "moonbit/（moon test）", "run", nowISO())
+	f.Note = fmt.Sprintf("total=%d failed=%d exit=%d（S1 四包：source/opcode/diag/ast）", total, failed, code)
+	facts["moonbit_test_passed"] = f
+}
+
 // ─── 主入口 ─────────────────────────────────────────────────────────────────
 
 // runKeys 是需要实际执行才能取得真值的事实；未执行时沿用上次采集值（标 cached），
@@ -421,6 +450,7 @@ func collectCargoTestFromOutput(out string, code int, source, provenance string,
 var runKeys = []string{
 	"replay_assertions", "serve_smoke_assertions",
 	"cargo_test_passed", "cargo_test_suites",
+	"moonbit_test_passed",
 }
 
 func collectAll(root string, run, runSlow bool, cargoLog string, prev *FactsDoc) FactsDoc {
@@ -434,10 +464,13 @@ func collectAll(root string, run, runSlow bool, cargoLog string, prev *FactsDoc)
 	if run {
 		collectReplay(root, facts)
 		collectServeSmoke(root, facts)
+		collectMoonbit(root, facts)
 	} else {
 		facts["replay_assertions"] = unavail("条", "scripts/replay/replay_s1_s5.go", "--run",
 			"需 --run 才执行")
 		facts["serve_smoke_assertions"] = unavail("项", "scripts/serve_smoke", "--run",
+			"需 --run 才执行")
+		facts["moonbit_test_passed"] = unavail("用例", "moonbit/（moon test）", "--run",
 			"需 --run 才执行")
 	}
 	switch {
