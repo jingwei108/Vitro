@@ -307,16 +307,25 @@ pub fn diagnostics_probe(session: &mut Session, params: &Value) -> Value {
     })();
 
     // completion：探测点（0-based line/column + prefix）
-    let completion: Vec<Value> = params
-        .get("completion")
-        .and_then(|c| {
-            let line = c.get("line")?.as_u64()? as usize;
-            let column = c.get("column")?.as_u64()? as usize;
+    // 审阅处置（2026-09-19）：completion 块存在但 line/column 缺失或非法
+    // 时 fail loud——此前静默跳过（unwrap_or_default 链），S8 对拍会掩盖
+    // 调用侧错误；records 历史记录保持宽松（ts 缺省 0 是合法语义）
+    let completion: Vec<Value> = match params.get("completion") {
+        None => Vec::new(),
+        Some(c) => {
+            let (line, column) = match (
+                c.get("line").and_then(|v| v.as_u64()),
+                c.get("column").and_then(|v| v.as_u64()),
+            ) {
+                (Some(l), Some(col)) => (l as usize, col as usize),
+                _ => {
+                    return error_json(
+                        "diagnostics_probe: params.completion 存在时 line/column 必须为非负整数",
+                    )
+                }
+            };
             let prefix = c.get("prefix").and_then(|v| v.as_str()).unwrap_or("");
-            Some((line, column, prefix.to_string()))
-        })
-        .map(|(line, column, prefix)| {
-            completion::get_completion_candidates(session, source, line, column, &prefix)
+            completion::get_completion_candidates(session, source, line, column, prefix)
                 .iter()
                 .map(|c| {
                     json!({
@@ -325,9 +334,9 @@ pub fn diagnostics_probe(session: &mut Session, params: &Value) -> Value {
                         "insert_text": c.insert_text,
                     })
                 })
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_default();
+                .collect()
+        }
+    };
 
     // auto_fix：对带结构化修复（fix_kind 1..=3）的诊断逐条应用
     let auto_fixes: Vec<Value> = diags

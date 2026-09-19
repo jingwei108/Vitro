@@ -65,9 +65,14 @@ func canonicalize(raw []byte) ([]byte, error) {
 	if err := dec.Decode(&v); err != nil {
 		return nil, fmt.Errorf("非法 JSON: %w", err)
 	}
-	// 尾随内容拒绝（两份 JSON 拼接是锚数据错误，不是可猜的输入）
+	// 尾随内容拒绝（两份 JSON 拼接是锚数据错误，不是可猜的输入）。
+	// 审阅处置（2026-09-19）：区分"多个 JSON 值"与"尾随非 JSON 垃圾"——
+	// 同为拒绝、判定无损，仅消息精确化。
 	if err := dec.Decode(new(json.RawMessage)); err != io.EOF {
-		return nil, fmt.Errorf("输入含多个 JSON 值（锚数据必须是单值）")
+		if err == nil {
+			return nil, fmt.Errorf("输入含多个 JSON 值（锚数据必须是单值）")
+		}
+		return nil, fmt.Errorf("首个 JSON 值后存在尾随内容（%v）；锚数据必须是单值", err)
 	}
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)

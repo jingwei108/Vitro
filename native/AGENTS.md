@@ -325,6 +325,8 @@ go run ./scripts/facts --run --cargo-log native/cargo_test_ci.log check  # CI �
 
 ### 已知 Vitro 与 Clang 的行为差异（诚实记录）
 
+- **无 main 翻译单元零诊断失败**（既有缺陷，远早于 S0.5 批；2026-09-19 审阅发现登记）：连 `int b = 5;`（无 main 函数）都"编译失败"且**诊断列表为空**——根因：codegen 的"缺少 main 函数入口"走 `Vec<String>` errors 通道（codegen `lib.rs:576` 附近）而非结构化诊断（Diagnostic）通道，CLI/serve 的诊断帧看不到它。修复需新增错误码（错误码表变更影响 S1 T2 的 137 臂契约），**随 S1 批次处理**；教学场景临时规避：确保翻译单元含 main。
+
 在 LeetCode 防线填充过程中发现以下 Vitro 与 Clang 行为不一致：
 
 - ~~**复合副作用数组索引**~~ — **已修复（2026-06-25）**。根因是 `gen_mem_inc_dec`（自增/自减内存操作）与 `gen_assign` 的 Index 赋值复用了同一个临时槽位（`temp_slot0`），导致右侧索引表达式的副作用覆盖了左侧地址临时变量，最终在赋值表达式返回值读取时触发 NULL 指针陷阱。修复方案为 `gen_mem_inc_dec` 改用 `temp_slot3` 保存新值；新增 `baseline/side_effect_index.c` 回归用例。

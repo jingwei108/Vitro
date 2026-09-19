@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (S0.5 审阅处置批，2026-09-19)
+
+- **P3 白名单护栏自指缺陷修复（审阅【中】项，埋雷复现实证）**：原"计数锚"
+  断言测试内手工清单自身长度，与枚举零联动——审阅者埋雷 `W4999_TestProbe`
+  三测全绿，"漏登记先红"声明不成立。修复：`WARN_CODES`/`HINT_CODES` 提为
+  模块级单点常量 + 新护栏 `test_whitelist_matches_source_variants` 从源文件
+  `include_str!` 提取全部 W/H 变体码与白名单**双向对账**（漏登记/腐化登记
+  均红，零依赖手扫不用 regex）。J9 埋雷复验：加 `W4999` → 红（消息含
+  "漏登记的新 W 码会静默显示 E 前缀"）→ 排雷 → 绿
+- **U1 probe 入参 fail-loud（审阅【低】）**：`completion` 块存在但
+  line/column 缺失或非法时报错——此前静默空段，S8 对拍会掩盖调用侧错误；
+  `records` 保持宽松（ts 缺省 0 是合法语义）
+- **canonicalize 尾随内容消息区分（审阅【低】）**：多 JSON 值 vs 尾随
+  非 JSON 垃圾分别报错（判定本就无损，仅消息精确化）
+- **P4 八进制错误恢复值统一（审阅【低】）**：string 侧超范围截断
+  `val&0xFF` → 与 char 侧统一为 0（错误已报、编译失败结局，值无语义）
+- **登记未修项**：① 无 main 翻译单元零诊断失败（既有缺陷，
+  native/AGENTS.md 已知限制——修复需新增错误码，随 S1 批次处理）；
+  ② P3 双源分叉缝隙（severity↔码段位一致性对账——某诊断点把 W 码填
+  severity=0 时帧内自洽但与 catalog 矛盾，无护栏；S1 T2 生成器落地时
+  从根上对账）
+- **勘误（P1 提交信息两处表述，历史不改写）**：① j1 不入 1200 层用例
+  的理由应為"clang 对 1200 层可编译 → shadow 判 compile_gap 假红"
+  （原文写"vitro_better 假信号"，方向对机制错——vitro_better 是 clang
+  败/Vitro 成）；② "J9 证红锚 near_bind_test.go ×6"实为 5 个测试函数
+  （其一含红+绿两段断言）
+
 ### Chore (M-0 基线冻结，tag `s0.5-baseline-freeze`，2026-09-19)
 
 S0.5 收官：release 重建（HEAD `c5ffc9c`）+ 全防线复跑留痕——shadow C

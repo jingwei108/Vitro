@@ -156,19 +156,24 @@ pub enum ErrorCode {
     E4106_CppReferenceToTemporary = 4106,
 }
 
+/// W 级码白名单（P3）。**单点维护**：与枚举的 W 变体集合必须双向一致
+/// ——由 `test_whitelist_matches_source_variants` 对账本源文件（新增 W 码
+/// 漏登记时源提取集 ≠ 白名单集，先红）。此前的"计数锚"断言测试内手工
+/// 清单自身长度（自指，与枚举零联动）——审阅埋雷实证（2026-09-19）
+/// `W4999` 变体三测全绿，护栏声明不成立，本修复以源文件对账替代。
+pub const WARN_CODES: &[i32] = &[1018, 1019, 3050, 3051, 3052, 3053, 3054, 3055, 3056, 3064, 3067];
+/// H 级码白名单（同上，与 H 变体集合双向一致）。
+pub const HINT_CODES: &[i32] = &[3057];
+
 /// P3（2026-09-18）：码值 → 静态显示前缀（E/W/H）。
 /// 前缀是变体名首字母的段位语义；W/H 数值区间与 E 交织（E3060 与
 /// W3064 相邻），无法按数值段判定——显式白名单。此前四处显示点
 /// 硬编码 `"E{}"`，W/H 级码被伪造为 E 前缀（`[警告] … (E3053)`、
 /// serve 帧 `code=E3053`+`severity=warning` 自相矛盾）。
-/// **新增 W/H 码必须同步白名单**，护栏见 `code_prefix_test`（全枚举
-/// 抽样断言 + 白名单与变体名前缀一致性）。
 pub fn code_prefix(code: i32) -> &'static str {
-    const WARN: &[i32] = &[1018, 1019, 3050, 3051, 3052, 3053, 3054, 3055, 3056, 3064, 3067];
-    const HINT: &[i32] = &[3057];
-    if WARN.contains(&code) {
+    if WARN_CODES.contains(&code) {
         "W"
-    } else if HINT.contains(&code) {
+    } else if HINT_CODES.contains(&code) {
         "H"
     } else {
         "E"
@@ -201,32 +206,62 @@ mod tests {
         assert_eq!(code_prefix(9999), "E");
     }
 
-    /// 白名单完备性锚：枚举中每个 W_/H_ 变体都必须命中对应前缀——
-    /// 新增 W/H 码漏登记白名单时此测试红（伪造前缀复发前先红）。
-    /// 变体清单手工维护，与枚举同步（漏列变体本身由下方计数锚兜底）。
+    /// **真护栏**（审阅埋雷后的修复，2026-09-19）：从本源文件提取全部
+    /// W/H 变体码，与 `WARN_CODES` / `HINT_CODES` 双向对账——新增 W/H 码
+    /// 漏登记白名单（源提取集多出成员）或白名单登记了不存在的码（集合
+    /// 腐化）均红。逐行手扫变体声明（`W3050_Name = 3050,` 形态），零依赖
+    /// 不用 regex；`include_str!` 编译期绑定本文件——改枚举不改白名单
+    /// 必然失配。J9 埋雷已验：加 `W4999_TestProbe` 不登记 → 本测试红
+    /// （"漏登记的新 W 码会静默显示 E 前缀"），恢复 → 绿。
     #[test]
-    fn test_code_prefix_whitelist_covers_all_w_h_variants() {
-        let warn_variants: &[ErrorCode] = &[
-            ErrorCode::W1018_MacroShadowing,
-            ErrorCode::W1019_MacroArgSideEffect,
-            ErrorCode::W3050_AssignInCondition,
-            ErrorCode::W3051_ArrayBoundOffByOne,
-            ErrorCode::W3052_ArrayToPointerDecay,
-            ErrorCode::W3053_ImplicitScalarConversion,
-            ErrorCode::W3054_IntToPointerCast,
-            ErrorCode::W3055_VoidPointerCast,
-            ErrorCode::W3056_UnsignedToInt,
-            ErrorCode::W3064_DoublePointerCast,
-            ErrorCode::W3067_PointerTypeMismatch,
-        ];
-        let hint_variants: &[ErrorCode] = &[ErrorCode::H3057_ImplicitConversionHint];
-        assert_eq!(warn_variants.len(), 11, "W 变体计数锚：枚举新增 W 码时同步此清单");
-        assert_eq!(hint_variants.len(), 1, "H 变体计数锚：枚举新增 H 码时同步此清单");
-        for v in warn_variants {
-            assert_eq!(code_prefix(*v as i32), "W", "码 {} 应为 W 前缀", *v as i32);
+    fn test_whitelist_matches_source_variants() {
+        let src = include_str!("error_codes.rs");
+        let mut source_w: Vec<i32> = Vec::new();
+        let mut source_h: Vec<i32> = Vec::new();
+        for line in src.lines() {
+            let t = line.trim_start();
+            for (prefix, out) in [("W", &mut source_w), ("H", &mut source_h)] {
+                if let Some(rest) = t.strip_prefix(prefix) {
+                    if let Some(eq) = rest.find(" = ") {
+                        let name = &rest[..eq];
+                        if !name.is_empty() && name.starts_with(|c: char| c.is_ascii_digit()) {
+                            let num: String = rest[eq + 3..]
+                                .chars()
+                                .take_while(|c| c.is_ascii_digit())
+                                .collect();
+                            if let Ok(v) = num.parse::<i32>() {
+                                out.push(v);
+                            }
+                        }
+                    }
+                }
+            }
         }
-        for v in hint_variants {
-            assert_eq!(code_prefix(*v as i32), "H", "码 {} 应为 H 前缀", *v as i32);
+        assert!(
+            !source_w.is_empty() && !source_h.is_empty(),
+            "源提取失败（变体声明形态变了？提取到 W={} H={})",
+            source_w.len(),
+            source_h.len()
+        );
+        let mut wl = WARN_CODES.to_vec();
+        let mut hl = HINT_CODES.to_vec();
+        source_w.sort_unstable();
+        source_h.sort_unstable();
+        wl.sort_unstable();
+        hl.sort_unstable();
+        assert_eq!(
+            source_w, wl,
+            "W 白名单与枚举源不一致——漏登记的新 W 码会静默显示 E 前缀（伪造复发）"
+        );
+        assert_eq!(
+            source_h, hl,
+            "H 白名单与枚举源不一致——漏登记的新 H 码会静默显示 E 前缀（伪造复发）"
+        );
+        for &c in WARN_CODES {
+            assert_eq!(code_prefix(c), "W", "码 {c} 应为 W 前缀");
+        }
+        for &c in HINT_CODES {
+            assert_eq!(code_prefix(c), "H", "码 {c} 应为 H 前缀");
         }
     }
 }
