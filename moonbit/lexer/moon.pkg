@@ -1,0 +1,12 @@
+import {
+  "vitro/engine/lexer/token",
+  "vitro/engine/lexer/internal/scanner",
+  "vitro/engine/lexer/internal/pp",
+  "vitro/engine/lexer/internal/host",
+  "moonbitlang/core/encoding/utf8",
+}
+
+import {
+  "vitro/engine/lexer/internal/host",
+  "vitro/engine/diag",
+} for "test"

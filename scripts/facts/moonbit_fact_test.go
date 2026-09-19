@@ -42,3 +42,19 @@ func TestMoonbitParseEmptyOutput(t *testing.T) {
 		t.Fatalf("空输出应 unavailable: %+v", f)
 	}
 }
+
+// S2（2026-09-19）：词法差分真值解析——绿路径 + J9 埋雷（FAIL 输出禁兜底）。
+
+func TestLexerDiffParseGreen(t *testing.T) {
+	n, ok := parseLexerDiffPass("lexer_diff: PASS——4800 个 TSV 逐字节一致（语料 x）")
+	if !ok || n != 4800 {
+		t.Fatalf("绿路径解析失败: n=%d ok=%v", n, ok)
+	}
+}
+
+func TestLexerDiffParseFailLoud(t *testing.T) {
+	// J9 埋雷：FAIL 输出（无 PASS 行）必须判 false，禁止把失败当 0 个采集
+	if n, ok := parseLexerDiffPass("lexer_diff: FAIL——3 处差异（语料 x）"); ok || n != 0 {
+		t.Fatalf("FAIL 输出必须不可采：n=%d ok=%v", n, ok)
+	}
+}

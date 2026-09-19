@@ -1,0 +1,5 @@
+import {
+  "vitro/engine/lexer/token",
+  "vitro/engine/diag",
+  "moonbitlang/core/encoding/utf8",
+}

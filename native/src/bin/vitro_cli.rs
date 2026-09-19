@@ -12,6 +12,7 @@ use std::io::{self, BufRead, Read, Write};
 
 use vitro_native::session::{CompileUnit, InputMode, Session};
 use vitro_native::session_api;
+use vitro_lexer::Lexer;
 
 fn print_usage() {
     eprintln!("Vitro CLI — C 语言教学 IDE 后端调试工具");
@@ -23,6 +24,7 @@ fn print_usage() {
     eprintln!("  vitro_cli unified <file.c> [-i <in>] [--max-steps <n>] 统一模式（时间旅行）执行并摘要");
     eprintln!("  vitro_cli export <file1.c> [file2.c ...] -o <out.json> [--builtin-libc]  预编译为字节码产物");
     eprintln!("  vitro_cli serve                      JSON-lines 会话模式（stdin 读请求 / stdout 写响应）");
+    eprintln!("  vitro_cli dump-tokens <file.c|dir> --out <dir> [--raw] [--pp]  L1/L2 token TSV 差分出口（S2 防线）");
     eprintln!();
     eprintln!("特殊文件名:");
     eprintln!("  -          从标准输入读取源代码（如 echo '...' | vitro_cli run -）");
@@ -929,10 +931,156 @@ fn main() {
             }
             cmd_export(&source_paths, &output_path, is_builtin_libc);
         }
+        "dump-tokens" => {
+            // S2 差分出口（防线维护）：对单文件或目录批量产出 L1（raw）/L2（pp）
+            // token TSV——与 MoonBit `lexer` 包 TSV emitter 逐字节同构，供 Go 差分
+            // 驱动逐文件比对。默认两者都产；--raw/--pp 单选。
+            let mut out_dir = String::new();
+            let mut want_raw = false;
+            let mut want_pp = false;
+            let mut i = 3;
+            while i < args.len() {
+                match args[i].as_str() {
+                    "--out" if i + 1 < args.len() => {
+                        out_dir = args[i + 1].clone();
+                        i += 2;
+                    }
+                    "--raw" => {
+                        want_raw = true;
+                        i += 1;
+                    }
+                    "--pp" => {
+                        want_pp = true;
+                        i += 1;
+                    }
+                    _ => {
+                        eprintln!("错误: dump-tokens 未知选项 {}", args[i]);
+                        std::process::exit(1);
+                    }
+                }
+            }
+            if out_dir.is_empty() || (!want_raw && !want_pp) {
+                eprintln!("错误: dump-tokens 需要 --out <目录> 且至少 --raw / --pp 之一");
+                std::process::exit(1);
+            }
+            cmd_dump_tokens(file_path, &out_dir, want_raw, want_pp);
+        }
         _ => {
             eprintln!("未知命令: {}", cmd);
             print_usage();
             std::process::exit(1);
         }
+    }
+}
+
+// ---------- dump-tokens（S2 差分出口，防线维护） ----------
+//
+// L1（--raw）：`Lexer::tokenize_raw` —— 字符级原始词法（`#` 产出 Hash/HashHash，
+//   无指令消费 / 条件跳过 / 宏展开），六字段：index/Ty/text转义/line/col/byte_off。
+// L2（--pp）：`Lexer::tokenize` —— 完整预处理管线，五字段（无 byte_off——
+//   展开产物钉调用点，无源字节坐标）。
+// 末行 `count=<n>\terrors=<n>\twarnings=<n>`（count 不含 Eof）。
+// Ty = `format!("{:?}", ty)`（变体名）；text 转义 \n \t \r \ ——与 MoonBit
+// `lexer/tsv.mbt` 逐字节同构（S2 对拍契约）。
+
+fn escape_tsv_text(text: &str) -> String {
+    let mut out = String::new();
+    for c in text.chars() {
+        match c {
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\t' => out.push_str("\\t"),
+            '\r' => out.push_str("\\r"),
+            _ => out.push(c),
+        }
+    }
+    out
+}
+
+fn dump_one(path: &std::path::Path, out_dir: &str, want_raw: bool, want_pp: bool) {
+    let src = fs::read_to_string(path).unwrap_or_else(|e| {
+        eprintln!("错误: 读取 {} 失败: {}", path.display(), e);
+        std::process::exit(1);
+    });
+    let stem = path.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+    if want_raw {
+        let mut lexer = Lexer::new(&src);
+        let (tokens, errors) = lexer.tokenize_raw();
+        let mut tsv = String::new();
+        for (i, (t, off)) in tokens.iter().enumerate() {
+            tsv.push_str(&format!(
+                "{}\t{}\t{}\t{}\t{}\t{}\n",
+                i,
+                format!("{:?}", t.ty),
+                escape_tsv_text(&t.text),
+                t.line,
+                t.column,
+                off
+            ));
+        }
+        tsv.push_str(&format!(
+            "count={}\terrors={}\twarnings=0\n",
+            tokens.len().saturating_sub(1),
+            errors.len()
+        ));
+        let out = format!("{}/{}.l1.tsv", out_dir, stem);
+        fs::write(&out, tsv).unwrap_or_else(|e| {
+            eprintln!("错误: 写入 {} 失败: {}", out, e);
+            std::process::exit(1);
+        });
+    }
+    if want_pp {
+        let mut lexer = Lexer::with_base_path(&src, path.parent().map(|p| p.to_path_buf()));
+        let (tokens, errors) = lexer.tokenize();
+        let warnings = lexer.into_warnings().len();
+        let mut tsv = String::new();
+        for (i, t) in tokens.iter().enumerate() {
+            tsv.push_str(&format!(
+                "{}\t{}\t{}\t{}\t{}\n",
+                i,
+                format!("{:?}", t.ty),
+                escape_tsv_text(&t.text),
+                t.line,
+                t.column
+            ));
+        }
+        tsv.push_str(&format!(
+            "count={}\terrors={}\twarnings={}\n",
+            tokens.len().saturating_sub(1),
+            errors.len(),
+            warnings
+        ));
+        let out = format!("{}/{}.l2.tsv", out_dir, stem);
+        fs::write(&out, tsv).unwrap_or_else(|e| {
+            eprintln!("错误: 写入 {} 失败: {}", out, e);
+            std::process::exit(1);
+        });
+    }
+}
+
+fn cmd_dump_tokens(target: &str, out_dir: &str, want_raw: bool, want_pp: bool) {
+    if let Err(e) = fs::create_dir_all(out_dir) {
+        eprintln!("错误: 创建输出目录 {} 失败: {}", out_dir, e);
+        std::process::exit(1);
+    }
+    let p = std::path::Path::new(target);
+    if p.is_dir() {
+        let mut files: Vec<std::path::PathBuf> = fs::read_dir(p)
+            .unwrap_or_else(|e| {
+                eprintln!("错误: 读取目录 {} 失败: {}", target, e);
+                std::process::exit(1);
+            })
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .filter(|p| p.extension().map(|x| x == "c").unwrap_or(false))
+            .collect();
+        files.sort(); // 确定性顺序（差分驱动两侧文件名对齐的前提）
+        for f in &files {
+            dump_one(f, out_dir, want_raw, want_pp);
+        }
+        println!("dump-tokens: {} 个 .c 文件 -> {}", files.len(), out_dir);
+    } else {
+        dump_one(p, out_dir, want_raw, want_pp);
+        println!("dump-tokens: {} -> {}", target, out_dir);
     }
 }

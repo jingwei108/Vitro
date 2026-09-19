@@ -1,0 +1,168 @@
+{
+  "_meta": {
+    "title": "S2 词法差分已知差异清单（单一来源）",
+    "updated": "2026-09-19",
+    "consumer": [
+      "scripts/lexer_diff/gen_corpus.mbtx —— 读取 forbidden_markers 做产物自检（fail loud）；标记仅含机械可靠串（位运算/三目/零参调用等形状由生成器逻辑约束，JSON class 注明）",
+      "docs/current/07-质量与裁定/20260919_S2词法器执行记录.md —— 差异表格以本文件为准",
+      "scripts/lexer_diff/main.go —— 差分驱动的白名单依据（人工核对）"
+    ],
+    "classes": {
+      "fixed-diff": "MoonBit 已按目标架构修复而 Rust oracle 保持缺陷——差分必红，语料必须避开",
+      "clang-gap": "两侧行为一致但与 Clang 标准不同——共同差异",
+      "legacy": "MoonBit 故意复刻 oracle 缺陷换 L1/L2 逐字节可比——TSV 一致，非差异项",
+      "l3-surface": "仅影响诊断消息/列号（L3 面）——L1/L2 差分不比，随 S3 对拍统一处置"
+    }
+  },
+  "forbidden_markers": [
+    "\\n",
+    "#elifdef",
+    "#elifndef",
+    "#warning",
+    "#error",
+    " ## #"
+  ],
+  "diffs": [
+    {
+      "id": "D1",
+      "class": "fixed-diff",
+      "shape": "`\\` 续行（任意位置——非仅多行宏；标识符/表达式内续行同样分叉，如 `in\\`+换行+`t` → Rust Identifier in / MoonBit Int int）",
+      "rust": "无行拼接阶段，`\\` 报 E1001（不能识别的字符）",
+      "moonbit": "phase 2 行拼接支持（勘察 ⑥-4 修复）",
+      "anchor": "tokenize multiline macro continuation / continuation splice keeps non-ascii prefix"
+    },
+    {
+      "id": "D2",
+      "class": "fixed-diff",
+      "shape": "`#if` 位运算 / 三目 / `~`",
+      "rust": "E1014 求值失败（只支持算术/比较/逻辑）",
+      "moonbit": "完整 C 常量表达式（勘察 ⑥-6 修复；三目双分支惰性——审阅 P1-4 修复）",
+      "anchor": "tokenize if bitwise and ternary full evaluator / ternary lazy both branches"
+    },
+    {
+      "id": "D4",
+      "class": "fixed-diff",
+      "shape": "`#elifdef` / `#elifndef`",
+      "rust": "静默当未知指令跳过 → 选错分支零诊断",
+      "moonbit": "正确实现（勘察 ⑥-11 修复）",
+      "anchor": "tokenize elifdef real"
+    },
+    {
+      "id": "D5",
+      "class": "fixed-diff",
+      "shape": "未知指令 / `#error` / `#warning`（errors 计数不同）",
+      "rust": "静默跳过（0 诊断）",
+      "moonbit": "显式 E1006（勘察 ⑥-11/12 修复；#warning 的 W 级 severity 待 diag 码表扩容）",
+      "anchor": "tokenize unknown directive diagnosed"
+    },
+    {
+      "id": "D6",
+      "class": "fixed-diff",
+      "shape": "零参函数式宏调用 `FOO()`",
+      "rust": "误当对象宏 → `42 ( )`（E3066 错位到 typeck）",
+      "moonbit": "函数式展开 `42`（勘察 ⑥-9 修复）",
+      "anchor": "tokenize zero-param function macro"
+    },
+    {
+      "id": "D7",
+      "class": "fixed-diff",
+      "shape": "宏 arity 不匹配（L2 token 流一致但 errors 计数不同：Rust 0 / MoonBit 1）",
+      "rust": "静默保留 → E3023 错位",
+      "moonbit": "预处理显式 E1005 诊断 + fail-soft 保留（勘察 ⑥-10 修复）",
+      "anchor": "tokenize macro arity mismatch diagnosed"
+    },
+    {
+      "id": "D8",
+      "class": "fixed-diff",
+      "shape": "UTF-8 BOM（L2 管线；L1 raw 不剥保持可比）",
+      "rust": "E1001 + Unknown token",
+      "moonbit": "剥离（勘察 ⑥-8 修复）",
+      "anchor": "—（语料不产 BOM）"
+    },
+    {
+      "id": "D9",
+      "class": "fixed-diff",
+      "shape": "行中 stray `#`（非行首）",
+      "rust": "当指令消费整行（token 丢失）",
+      "moonbit": "E1001 + Unknown token",
+      "anchor": "—（语料不产行中 #）"
+    },
+    {
+      "id": "D12",
+      "class": "fixed-diff",
+      "shape": "`##` 拼接产物含 `#`",
+      "rust": "`#` 被当指令消费（拼接判失败路径不同）",
+      "moonbit": "E1001 → E1016 fail-soft",
+      "anchor": "—（病态形状）"
+    },
+    {
+      "id": "D13",
+      "class": "fixed-diff",
+      "shape": "`#if` 求值边界：`i64::MIN / -1` / 移位计数 ≥64",
+      "rust": "panic / 未定义路径",
+      "moonbit": "回绕值不崩（mod 64 移位）",
+      "anchor": "cond.mbt 语义注释"
+    },
+    {
+      "id": "D14",
+      "class": "clang-gap",
+      "shape": "`#if` 超 i64 值域常量（如 ULLONG_MAX > 0）",
+      "rust": "E1014 求值失败（i64::from_str_radix 拒绝）",
+      "moonbit": "同 Rust 口径显式 E1014（审阅 P1-5 修复——此前 UInt64 位型重解释致 -1 静默错值）",
+      "clang": "按 uintmax_t 容纳 → TRUE",
+      "anchor": "cond int64 overflow rejected loudly"
+    },
+    {
+      "id": "D15",
+      "class": "l3-surface",
+      "shape": "trace 截断边界：截断点恰在多字节字符中间",
+      "rust": "String::truncate 在非字符边界 panic（实际难触发）",
+      "moonbit": "truncate_utf8 安全回退到合法前缀",
+      "anchor": "—（2KB 边界形状）"
+    },
+    {
+      "id": "D16",
+      "class": "l3-surface",
+      "shape": "预处理诊断 column：pp 层 6 处写死 0",
+      "rust": "真实列号（部分路径也是 0——勘察 ③-14）",
+      "moonbit": "恒 0（行级架构未携带列到指令层）",
+      "note": "L3 面差异，差分不比诊断 loc；随 S3 诊断对拍统一处置",
+      "anchor": "—"
+    },
+    {
+      "id": "D17",
+      "class": "l3-surface",
+      "shape": "环检测封顶（>512 节点）无诊断",
+      "rust": "返回无环（静默）",
+      "moonbit": "同 Rust 口径（对拍一致）——审阅 P3 登记为双侧共同现状",
+      "anchor": "—（随 S8 差异台账裁定）"
+    }
+  ],
+  "legacy_replicas": [
+    {
+      "id": "L1",
+      "shape": "列号反推 `column − text 的 UTF-8 字节数`（量纲混算缺陷 ⑥-1/⑥-2）",
+      "escape": "无缺陷坐标用 Token.byte_off"
+    },
+    {
+      "id": "L2",
+      "shape": "宏展开产物位置钉调用点（勘察 ③-8）",
+      "escape": "真实归属用 Token.real_line（审阅 P1-6 增设）"
+    },
+    {
+      "id": "L3",
+      "shape": "include 行号补偿（负行号，勘察 ③-3 无下界钳制）",
+      "escape": "真实归属用 Token.loc.file_id + real_line；LineMap 尽力映射（尾向 + 命中优先）"
+    }
+  ],
+  "resolved_in_0_3_0": [
+    "审阅 P1-1：非 ASCII 续行丢行前缀（drop_last_char 字节切片）",
+    "审阅 P1-4：三目真分支惰性",
+    "审阅 P1-5：超 i64 值域静默错值 → 显式 E1014（转 D14 clang-gap）",
+    "审阅 P1-6：Token.real_line 权威归属通道 + LineMap 主文件铺底/命中优先 lookup",
+    "审阅 P2：W1018 跨型判据复刻 Rust 无分型口径",
+    "审阅 P2：未闭合字符串双诊断（E1003+E1002）与 Rust 逐字节一致",
+    "审阅 P2：CRLF 源字符串值保留 \\r（行剥离改保留）",
+    "审阅 P2：D1 登记扩围（任意续行形状）"
+  ]
+}

@@ -1,0 +1,5 @@
+import {
+  "vitro/engine/source",
+  "vitro/engine/diag",
+  "moonbitlang/core/debug",
+}

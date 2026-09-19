@@ -439,8 +439,70 @@ func collectMoonbitFromOutput(out string, code int, facts map[string]Fact) {
 	passed, _ := strconv.Atoi(m[2])
 	failed, _ := strconv.Atoi(m[3])
 	f := okFact(passed, "用例", "moonbit/（moon test）", "run", nowISO())
-	f.Note = fmt.Sprintf("total=%d failed=%d exit=%d（S1 四包：source/opcode/diag/ast）", total, failed, code)
+	f.Note = fmt.Sprintf("total=%d failed=%d exit=%d（S1 四包 + S2 lexer：source/opcode/diag/ast/lexer）", total, failed, code)
 	facts["moonbit_test_passed"] = f
+}
+
+// collectMoonbitLexerDiff 采集 S2 词法差分真值（2026-09-19）：
+// 随机语料（gen_corpus.mbtx 确定性种子 2400 例）+ baseline + K&R 三路对拍，
+// 值 = 逐字节一致的 TSV 总数（L1+L2 双层）。任一路 FAIL 即 unavailable
+// （不兜底——fail loud 的差分驱动自身就是真值载体）。
+func collectMoonbitLexerDiff(root string, facts map[string]Fact) {
+	how := "scripts/lexer_diff/gen_corpus.mbtx 2400 例 + go run ./scripts/lexer_diff ×3"
+	tmp, err := os.MkdirTemp("", "facts_lexdiff_*")
+	if err != nil {
+		facts["moonbit_lexer_diff_tsv"] = unavail("个", "scripts/lexer_diff", how, err.Error())
+		return
+	}
+	defer os.RemoveAll(tmp)
+	// 语料生成（确定性种子；.mbtx 从仓库根运行）
+	if _, code, ok := runCmd(root, 5*time.Minute, "moon", "run",
+		"scripts/lexer_diff/gen_corpus.mbtx", "--", tmp, "2400"); !ok || code != 0 {
+		facts["moonbit_lexer_diff_tsv"] = unavail("个", "scripts/lexer_diff", how,
+			"语料生成失败（moon run gen_corpus.mbtx）")
+		return
+	}
+	total := 0
+	for _, corpus := range []string{
+		tmp,
+		filepath.Join("native", "tests", "cases", "baseline"),
+		filepath.Join("native", "tests", "cases", "knr"),
+	} {
+		out, code, ok := runCmd(root, 10*time.Minute, "go", "run", "./scripts/lexer_diff", corpus)
+		if !ok || code != 0 {
+			facts["moonbit_lexer_diff_tsv"] = unavail("个", "scripts/lexer_diff", how,
+				fmt.Sprintf("差分失败（%s，exit=%d）：%s", corpus, code, firstLine(out)))
+			return
+		}
+		n, ok2 := parseLexerDiffPass(out)
+		if !ok2 {
+			facts["moonbit_lexer_diff_tsv"] = unavail("个", "scripts/lexer_diff", how,
+				"未解析到 PASS 行（"+corpus+"）")
+			return
+		}
+		total += n
+	}
+	f := okFact(total, "个", "scripts/lexer_diff（Rust oracle ↔ MoonBit lexer）", "run", nowISO())
+	f.Note = "随机 2400 例（seed 20260919）+ baseline 363 + K&R 81，L1/L2 双层 TSV 逐字节一致"
+	facts["moonbit_lexer_diff_tsv"] = f
+}
+
+// parseLexerDiffPass 解析 lexer_diff 的 PASS 行（J9 埋雷覆盖假输出）。
+func parseLexerDiffPass(out string) (int, bool) {
+	m := regexp.MustCompile(`PASS——(\d+) 个 TSV`).FindStringSubmatch(out)
+	if m == nil {
+		return 0, false
+	}
+	n, _ := strconv.Atoi(m[1])
+	return n, true
+}
+
+// firstLine 取输出首行（诊断信息裁剪用）。
+func firstLine(s string) string {
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		return s[:i]
+	}
+	return s
 }
 
 // ─── 主入口 ─────────────────────────────────────────────────────────────────
@@ -450,7 +512,7 @@ func collectMoonbitFromOutput(out string, code int, facts map[string]Fact) {
 var runKeys = []string{
 	"replay_assertions", "serve_smoke_assertions",
 	"cargo_test_passed", "cargo_test_suites",
-	"moonbit_test_passed",
+	"moonbit_test_passed", "moonbit_lexer_diff_tsv",
 }
 
 func collectAll(root string, run, runSlow bool, cargoLog string, prev *FactsDoc) FactsDoc {
@@ -465,12 +527,15 @@ func collectAll(root string, run, runSlow bool, cargoLog string, prev *FactsDoc)
 		collectReplay(root, facts)
 		collectServeSmoke(root, facts)
 		collectMoonbit(root, facts)
+		collectMoonbitLexerDiff(root, facts)
 	} else {
 		facts["replay_assertions"] = unavail("条", "scripts/replay/replay_s1_s5.go", "--run",
 			"需 --run 才执行")
 		facts["serve_smoke_assertions"] = unavail("项", "scripts/serve_smoke", "--run",
 			"需 --run 才执行")
 		facts["moonbit_test_passed"] = unavail("用例", "moonbit/（moon test）", "--run",
+			"需 --run 才执行")
+		facts["moonbit_lexer_diff_tsv"] = unavail("个", "scripts/lexer_diff", "--run",
 			"需 --run 才执行")
 	}
 	switch {

@@ -1,0 +1,200 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "vitro/engine/lexer/token"
+
+import {
+  "moonbitlang/core/debug",
+  "vitro/engine/diag",
+  "vitro/engine/source",
+}
+
+// Values
+
+// Errors
+pub(all) suberror SourceError {
+  NotFound(path~ : String)
+  UnsupportedHost(path~ : String, reason~ : String)
+}
+
+// Types and methods
+pub(all) struct LexError {
+  message : String
+  loc : @source.SourceLoc
+  code : @diag.ErrorCode
+} derive(Eq, @debug.Debug)
+
+pub(all) struct LexResult {
+  tokens : Array[Token]
+  errors : Array[LexError]
+  warnings : Array[LexWarning]
+  trace : Array[TraceEntry]
+  line_map : LineMap
+} derive(Eq, @debug.Debug)
+
+pub(all) struct LexWarning {
+  message : String
+  loc : @source.SourceLoc
+  code : @diag.ErrorCode
+} derive(Eq, @debug.Debug)
+
+pub(all) struct LineMap {
+  spans : Array[LineSpan]
+} derive(Eq, @debug.Debug)
+pub fn LineMap::lookup(Self, Int) -> (Int, Int)
+
+pub(all) struct LineSpan {
+  main_first : Int
+  main_last : Int
+  file_id : Int
+  file_line : Int
+} derive(Eq, @debug.Debug)
+
+pub(all) enum MacroDef {
+  Object(body~ : Array[Token])
+  Function(params~ : Array[String], body~ : Array[Token])
+} derive(Eq, @debug.Debug)
+
+pub(all) struct RawResult {
+  tokens : Array[Token]
+  errors : Array[LexError]
+} derive(Eq, @debug.Debug)
+
+pub(all) struct Token {
+  ty : TokenType
+  text : String
+  loc : @source.SourceLoc
+  byte_off : Int
+  real_line : Int
+} derive(Eq, @debug.Debug)
+
+pub(all) enum TokenType {
+  Int
+  Void
+  Char
+  If
+  Else
+  While
+  Do
+  For
+  Return
+  Break
+  Continue
+  Struct
+  Union
+  Sizeof
+  Offsetof
+  Alignof
+  Generic
+  Switch
+  Case
+  Default
+  Typedef
+  Enum
+  Unsigned
+  Long
+  Short
+  Signed
+  Const
+  Extern
+  Float
+  Double
+  Volatile
+  Inline
+  Restrict
+  Register
+  Auto
+  Bool
+  Goto
+  Null
+  Class
+  Public
+  Private
+  Protected
+  This
+  Using
+  Namespace
+  Virtual
+  Override
+  Explicit
+  Friend
+  Template
+  Typename
+  StaticCast
+  ConstCast
+  ReinterpretCast
+  New
+  Delete
+  ColonColon
+  ArrowStar
+  DotStar
+  Identifier
+  Number
+  UnsignedLiteral
+  FloatLiteral
+  LongLiteral
+  CharLiteral
+  String
+  Plus
+  Minus
+  Star
+  Slash
+  Percent
+  Eq
+  Ne
+  Lt
+  Le
+  Gt
+  Ge
+  AndAnd
+  OrOr
+  Not
+  Assign
+  PlusAssign
+  MinusAssign
+  StarAssign
+  SlashAssign
+  PercentAssign
+  AndAssign
+  OrAssign
+  XorAssign
+  ShlAssign
+  ShrAssign
+  Ampersand
+  BitOr
+  BitXor
+  BitNot
+  Shl
+  Shr
+  Increment
+  Decrement
+  Semicolon
+  Comma
+  LParen
+  RParen
+  LBrace
+  RBrace
+  LBracket
+  RBracket
+  Dot
+  Ellipsis
+  Arrow
+  Colon
+  Question
+  Eof
+  Unknown
+  Hash
+  HashHash
+} derive(Eq, @debug.Debug)
+pub fn TokenType::to_name(Self) -> String
+
+pub(all) enum TraceEntry {
+  Expand(name~ : String, args~ : String?, result~ : String, depth~ : Int)
+  CondBranch(expr~ : String, value~ : Bool, reason~ : String)
+} derive(Eq, @debug.Debug)
+pub fn TraceEntry::render(Self) -> String
+
+// Type aliases
+
+// Traits
+pub(open) trait SourceProvider {
+  fn read(Self, String) -> String raise SourceError
+}

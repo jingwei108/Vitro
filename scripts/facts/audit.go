@@ -58,6 +58,9 @@ func rules() []Rule {
 		// T6/T5 审阅（2026-09-19）：moonbit README 测试数防漂移——发布面
 		// 审阅实证 0.1.0 的 README 计数过期（53 vs 实跑 58），纳入机判。
 		mk("moonbit_test_passed", "MoonBit 测试数", `moon\s*test|moonbit[^\n]*测试|测试[^\n]*moonbit`, ``, 40, 500, "用例"),
+		// S2（2026-09-19）：词法差分 TSV 总数防漂移——随机 2400 例 ×2 层 +
+		// baseline 363×2 + K&R 81×2 = 5688；语料增删会移动真值，文档数字须随动。
+		mk("moonbit_lexer_diff_tsv", "词法差分 TSV 数", `差分[^\n]*TSV|TSV[^\n]*差分|逐字节一致[^\n]*TSV|词法差分`, ``, 5000, 8000, "个"),
 	}
 }
 

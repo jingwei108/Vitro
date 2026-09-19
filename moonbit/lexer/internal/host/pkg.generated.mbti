@@ -1,0 +1,30 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "vitro/engine/lexer/internal/host"
+
+import {
+  "vitro/engine/lexer/token",
+}
+
+// Values
+pub fn stub_lookup(String) -> String?
+
+pub fn stubs_provider() -> StubsProvider
+
+pub fn vfs_provider(files~ : Map[String, String]) -> VfsProvider
+
+// Errors
+
+// Types and methods
+pub enum StubsProvider {
+  Stubs
+}
+pub impl @token.SourceProvider for StubsProvider
+
+pub(all) struct VfsProvider {
+  files : Map[String, String]
+}
+pub impl @token.SourceProvider for VfsProvider
+
+// Type aliases
+
+// Traits

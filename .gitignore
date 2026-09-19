@@ -139,5 +139,8 @@ cargo_test_ci.log
 
 # MoonBit 构建产物（moonbit/ 活跃区）
 moonbit/_build/
+moonbit/scripts/_build/
+moonbit/.mooncakes/
+scripts/lexer_diff/_build/
 moonbit/target/
 moonbit/.repos/

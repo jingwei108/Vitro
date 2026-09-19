@@ -1,0 +1,612 @@
+// gen_corpus.mbtx：S2 随机词法差分语料生成器（总计划 §10 S2 验收锚：
+// "随机词法差分 ≥2000（.mbtx 语料生成器）"）。
+//
+// 位置（2026-09-19 审阅 P1-2）：**module 外**（scripts/lexer_diff/）——
+// moon publish 打包整个 module 且不读 .gitignore，脚本在 module 内运行会
+// 产生 scripts/_build/ 构建产物并被打进发布包（0.2.0 曾混入 176KB）。
+//
+// 纪律：
+//   - 确定性：xorshift64* 显式种子（F6/R12——不依赖熵源；同种子同语料逐字节可复现）；
+//   - 生成空间 = **两侧语义一致空间**：只生成 Rust oracle 与 MoonBit 词法器
+//     行为一致的形状；已知差异形状（见 known_diffs.json——单一来源）一律
+//     不生成，产物经禁串自检 fail loud；
+//   - `#if` 表达式限共同子集：`|| && == != < <= > >= + - * / % ! 一元± defined()`
+//     十进制/0x 字面量；`||`/`&&` 操作数限比较/defined 形态（归一语义无关化）。
+//
+// 用法（仓库根）：moon run scripts/lexer_diff/gen_corpus.mbtx -- <out_dir> <count> [seed]
+import {
+  "moonbitlang/x/fs",
+  "moonbitlang/core/env",
+  "moonbitlang/core/string",
+}
+
+///|
+struct Rng {
+  mut s : UInt64
+}
+
+///|
+/// xorshift64*（确定性；s != 0 不变式由种子保证）
+fn Rng::next_u64(self : Rng) -> UInt64 {
+  let mut x = self.s
+  x = x ^ (x << 12)
+  x = x ^ (x >> 25)
+  x = x ^ (x << 27)
+  self.s = x
+  x * 2685821657736338717UL
+}
+
+///|
+fn Rng::below(self : Rng, n : Int) -> Int {
+  (self.next_u64() % n.to_uint64()).reinterpret_as_int64().to_int()
+}
+
+///|
+fn[T] Rng::pick(self : Rng, arr : Array[T]) -> T {
+  arr[self.below(arr.length())]
+}
+
+///|
+/// 已知差异清单的机械可靠禁串（known_diffs.json 单一来源；位运算/三目/
+/// 零参调用等形状由下方生成逻辑约束——JSON class 注明）——产物自检用
+let forbidden_markers : Array[String] = [
+  "#elifdef",
+  "#elifndef",
+  "#warning",
+  "#error",
+  " ## #",
+]
+
+///|
+/// 主入口：生成 <count> 个 .c 文件（约各半：纯词法池 / 预处理池）。
+fn main raise {
+  let args = @env.args()
+  if args.length() < 3 {
+    println("用法: gen_corpus.mbtx <out_dir> <count> [seed]")
+    fail("参数不足")
+  }
+  let out_dir = args[1]
+  let count = @string.parse_int(args[2]) catch {
+    _ => {
+      println("count 必须是整数")
+      fail("参数错误")
+    }
+  }
+  let seed : UInt64 = if args.length() > 3 {
+    (@string.parse_int(args[3]) catch {
+        _ => 20260919
+      }).to_uint64()
+  } else {
+    20260919UL
+  }
+  if !@fs.path_exists(out_dir) {
+    @fs.create_dir(out_dir)
+  }
+  let cont_marker = "\\\n" // 行尾反斜杠（续行形状）
+  let rng : Rng = { s: seed | 1UL }
+  let bodies : Array[String] = []
+  for i in 0..<count {
+    let pp_pool = i % 2 == 1
+    let body = if pp_pool {
+      gen_pp_case(rng)
+    } else {
+      gen_lex_case(rng)
+    }
+    bodies.push(body)
+    let name = "g\{pad6(i)}.c"
+    @fs.write_string_to_file("\{out_dir}/\{name}", body)
+  }
+  // 自检：禁串扫描（known_diffs 的 forbidden_markers）——出现即 fail loud，
+  // 防止清单与生成逻辑漂移（S2 审阅系统性发现的闭环）
+  for j in 0..<bodies.length() {
+    let b = bodies[j]
+    if b.contains(cont_marker) {
+      println("gen_corpus: FAIL——例 g\{pad6(j)} 含禁入形状（续行）")
+      fail("forbidden marker hit: continuation")
+    }
+    for m in forbidden_markers {
+      if b.contains(m) {
+        println("gen_corpus: FAIL——例 g\{pad6(j)} 含禁入标记 \{m}")
+        fail("forbidden marker hit")
+      }
+    }
+  }
+  println("gen_corpus: \{count} 例 -> \{out_dir}（seed=\{seed}，禁串自检通过）")
+}
+
+///|
+fn pad6(n : Int) -> String {
+  let s = "\{n}"
+  let mut out = ""
+  for _ in 0..<(6 - s.length()) {
+    out += "0"
+  }
+  out + s
+}
+
+// ---------- 词料 ----------
+
+///|
+let keywords : Array[String] = [
+  "int", "void", "char", "if", "else", "while", "do", "for", "return", "break",
+  "continue", "struct", "union", "sizeof", "switch", "case", "default", "typedef",
+  "enum", "unsigned", "long", "short", "signed", "const", "extern", "float",
+  "double", "volatile", "inline", "register", "auto", "goto", "alignof",
+  "_Alignof", "_Bool", "bool", "_Generic", "offsetof", "constexpr", "NULL",
+]
+
+///|
+/// 内置宏名池（撞名 = L2 展开形状，两侧同语义）
+let builtin_macro_names : Array[String] = [
+  "stdout", "stderr", "EOF", "stdin", "EXIT_SUCCESS", "RAND_MAX", "INT_MAX",
+  "INT_MIN", "LLONG_MAX", "ULLONG_MAX", "true", "false", "__STDC_VERSION__",
+  "__VITRO_SUBSET__",
+]
+
+///|
+let plain_idents : Array[String] = [
+  "x", "y", "z", "count", "total", "buf", "ptr", "len", "idx", "value", "arr",
+  "node", "tmp", "res", "n_", "_m", "A1", "b2c", "long_name_42",
+]
+
+///|
+let operators : Array[String] = [
+  "+", "-", "*", "/", "%", "=", "==", "!=", "<", "<=", ">", ">=", "&&", "||",
+  "!", "&", "|", "^", "~", "<<", ">>", "++", "--", "+=", "-=", "*=", "/=",
+  "%=", "&=", "|=", "^=", "<<=", ">>=", "->", ".", "...", "?", ":",
+]
+
+///|
+let punctuation : Array[String] = [";", ",", "(", ")", "{", "}", "[", "]"]
+
+///|
+let stub_headers : Array[String] = [
+  "stdio.h", "stdlib.h", "ctype.h", "math.h", "string.h", "stdarg.h",
+  "limits.h", "stdbool.h", "stddef.h", "stdint.h", "time.h", "assert.h",
+  "errno.h", "float.h",
+]
+
+// ---------- 纯词法池（L1/L2 双拍） ----------
+
+///|
+fn gen_lex_case(rng : Rng) -> String {
+  let buf = StringBuilder()
+  let lines = 1 + rng.below(20)
+  for _ in 0..<lines {
+    buf.write_string(gen_lex_line(rng))
+  }
+  buf.to_string()
+}
+
+///|
+fn gen_lex_line(rng : Rng) -> String {
+  let kind = rng.below(10)
+  match kind {
+    0 => gen_decl_line(rng)
+    1 => gen_expr_line(rng)
+    2 => gen_number_shower(rng)
+    3 => gen_string_shower(rng)
+    4 => gen_comment_line(rng)
+    5 => gen_op_soup(rng)
+    6 => gen_ident_line(rng)
+    7 => gen_cpp_ish(rng)
+    8 => gen_error_octal_line(rng)
+    _ => gen_mixed_line(rng)
+  }
+}
+
+///|
+fn gen_decl_line(rng : Rng) -> String {
+  let kw = rng.pick(keywords)
+  let name = rng.pick(plain_idents)
+  match rng.below(4) {
+    0 => "\{kw} \{name};\n"
+    1 => "\{kw} \{name} = \{gen_number(rng)};\n"
+    2 => "\{kw} \{name}, \{rng.pick(plain_idents)}, \{rng.pick(plain_idents)};\n"
+    _ => "\{kw}* \{name} = &\{rng.pick(plain_idents)};\n"
+  }
+}
+
+///|
+fn gen_expr_line(rng : Rng) -> String {
+  let a = rng.pick(plain_idents)
+  let op = rng.pick(operators)
+  "\{a} \{op} \{gen_primary(rng)};\n"
+}
+
+///|
+fn gen_number_shower(rng : Rng) -> String {
+  let n = 2 + rng.below(5)
+  let parts : Array[String] = []
+  for _ in 0..<n {
+    parts.push(gen_number(rng))
+  }
+  "/* nums */ \{parts.join(", ")}\n"
+}
+
+///|
+fn gen_number(rng : Rng) -> String {
+  match rng.below(7) {
+    0 => "\{rng.below(100000)}"
+    1 => gen_big_decimal(rng)
+    2 => "0x\{hex_digits(rng, 1 + rng.below(16))}"
+    3 => "0x\{sep_hex(rng)}"
+    4 => gen_bin_oct(rng)
+    5 => gen_float_lit(rng)
+    _ => dec_with_sep(rng, 3 + rng.below(9))
+  }
+}
+
+///|
+/// 十进制大值（LL 域 / 无后缀升级链）
+fn gen_big_decimal(rng : Rng) -> String {
+  let v = [
+    "2147483647", "2147483648", "9223372036854775807", "9223372036854775808",
+    "4294967295", "18446744073709551615",
+  ][rng.below(6)]
+  match rng.below(4) {
+    0 => v
+    1 => "\{v}U"
+    2 => "\{v}L"
+    _ => "\{v}ULL"
+  }
+}
+
+///|
+fn gen_bin_oct(rng : Rng) -> String {
+  if rng.below(2) == 0 {
+    "0b\{bin_digits(rng, 1 + rng.below(32))}"
+  } else {
+    "0\{oct_digits(rng, 1 + rng.below(10))}"
+  }
+}
+
+///|
+fn gen_float_lit(rng : Rng) -> String {
+  match rng.below(4) {
+    0 => "\{rng.below(100)}.\{rng.below(1000)}"
+    1 => ".\{rng.below(100)}f"
+    2 => "\{rng.below(100)}e\{rng.below(50)}"
+    _ => "\{rng.below(100)}.\{rng.below(100)}e-\{rng.below(20)}"
+  }
+}
+
+///|
+fn hex_digits(rng : Rng, n : Int) -> String {
+  let chars = "0123456789abcdefABCDEF"
+  let out = StringBuilder()
+  for _ in 0..<n {
+    let k = rng.below(chars.length())
+    out.write_string(chars.substring(start=k, end=k + 1))
+  }
+  out.to_string()
+}
+
+///|
+fn sep_hex(rng : Rng) -> String {
+  // 形如 1'f3'9a（分隔符后必有 digit）
+  let groups = 2 + rng.below(3)
+  let parts : Array[String] = []
+  for _ in 0..<groups {
+    parts.push(hex_digits(rng, 1 + rng.below(4)))
+  }
+  parts.join("'")
+}
+
+///|
+fn bin_digits(rng : Rng, n : Int) -> String {
+  let out = StringBuilder()
+  for _ in 0..<n {
+    out.write_string(
+      if rng.below(2) == 0 {
+        "0"
+      } else {
+        "1"
+      },
+    )
+  }
+  out.to_string()
+}
+
+///|
+fn oct_digits(rng : Rng, n : Int) -> String {
+  let chars = "01234567"
+  let out = StringBuilder()
+  for _ in 0..<n {
+    let k = rng.below(8)
+    out.write_string(chars.substring(start=k, end=k + 1))
+  }
+  out.to_string()
+}
+
+///|
+fn dec_with_sep(rng : Rng, n : Int) -> String {
+  let parts : Array[String] = []
+  let mut left = n
+  while left > 0 {
+    let take = if left >= 3 && rng.below(2) == 0 {
+      3
+    } else {
+      1
+    }
+    let g = if take == 3 {
+      "\{100 + rng.below(900)}"
+    } else {
+      "\{rng.below(10)}"
+    }
+    parts.push(g)
+    left -= take
+  }
+  parts.join("'")
+}
+
+///|
+fn gen_string_shower(rng : Rng) -> String {
+  let n = 1 + rng.below(4)
+  let parts : Array[String] = []
+  for _ in 0..<n {
+    parts.push(gen_string_literal(rng))
+  }
+  "printf(\{parts.join(", ")});\n"
+}
+
+///|
+fn gen_string_literal(rng : Rng) -> String {
+  match rng.below(8) {
+    0 => "\"plain\""
+    1 => "\"tab\\there\""
+    2 => "\"nl\\nend\""
+    3 => "\"hex\\x41\\x7f\""
+    4 => "\"oct\\012\\7\""
+    5 => "\"中文内容\""
+    6 => "u8\"prefixed\""
+    _ => gen_char_literal(rng)
+  }
+}
+
+///|
+fn gen_char_literal(rng : Rng) -> String {
+  match rng.below(6) {
+    0 => "'a'"
+    1 => "'\\n'"
+    2 => "'\\0'"
+    3 => "'\\x41'"
+    4 => "'\\101'"
+    _ => "'Z'"
+  }
+}
+
+///|
+fn gen_comment_line(rng : Rng) -> String {
+  match rng.below(3) {
+    0 => "// line comment \{rng.pick(plain_idents)} \{gen_number(rng)}\n"
+    1 => "/* block \{rng.below(100)} */ int after;\n"
+    _ => "/* multi\n   line \{rng.pick(plain_idents)}\n   end */ int tail;\n"
+  }
+}
+
+///|
+fn gen_op_soup(rng : Rng) -> String {
+  // 运算符全表随机拼（无需合法语法——token 流层比对）
+  let n = 3 + rng.below(10)
+  let parts : Array[String] = []
+  for _ in 0..<n {
+    parts.push(
+      if rng.below(2) == 0 {
+        rng.pick(operators)
+      } else {
+        rng.pick(punctuation)
+      },
+    )
+  }
+  "\{parts.join(" ")}\n"
+}
+
+///|
+fn gen_ident_line(rng : Rng) -> String {
+  let parts : Array[String] = []
+  let n = 2 + rng.below(6)
+  for _ in 0..<n {
+    parts.push(
+      if rng.below(3) == 0 {
+        rng.pick(builtin_macro_names)
+      } else if rng.below(2) == 0 {
+        rng.pick(keywords)
+      } else {
+        rng.pick(plain_idents)
+      },
+    )
+  }
+  "\{parts.join(" ")};\n"
+}
+
+///|
+fn gen_cpp_ish(rng : Rng) -> String {
+  // C++ 关键字/标点（cpp_mode=false 下都按 Identifier 处理——两侧同构）
+  match rng.below(4) {
+    0 => "class Foo { public: virtual ~Foo(); };\n"
+    1 => "a->*b :: c.*d;\n"
+    2 => "template<typename T> T f(T x);\n"
+    _ => "new int[10]; delete[] p;\n"
+  }
+}
+
+///|
+fn gen_error_octal_line(rng : Rng) -> String {
+  // 同构错误形状：08/9 残段——两侧各报 1 条 E1006、token = Number 0
+  "int bad_oct = 0\{rng.below(9)}8\{rng.below(9)};\n"
+}
+
+///|
+fn gen_mixed_line(rng : Rng) -> String {
+  let a = gen_decl_line(rng)
+  let b = gen_expr_line(rng)
+  a.substring(start=0, end=a.length() - 1) + " " + b
+}
+
+///|
+fn gen_primary(rng : Rng) -> String {
+  match rng.below(5) {
+    0 | 1 => gen_number(rng)
+    2 => rng.pick(plain_idents)
+    3 => gen_string_literal(rng)
+    _ => gen_char_literal(rng)
+  }
+}
+
+// ---------- 预处理池（L2 拍） ----------
+
+///|
+fn gen_pp_case(rng : Rng) -> String {
+  let buf = StringBuilder()
+  // 头部：随机 include（存根）
+  if rng.below(2) == 0 {
+    buf <+ "#include <\{rng.pick(stub_headers)}>\n"
+  }
+  // 宏定义区
+  let defs : Array[(String, String)] = [] // (name, kind) 供调用区使用
+  let ndefs = 1 + rng.below(6)
+  for i in 0..<ndefs {
+    let name = "M\{i}_\{rng.pick(plain_idents)}"
+    match rng.below(5) {
+      0 => {
+        buf <+ "#define \{name} \{gen_macro_body(rng)}\n"
+        defs.push((name, "obj"))
+      }
+      1 => {
+        buf <+ "#define \{name}(a) \{gen_macro_body(rng)}\n"
+        defs.push((name, "fn1"))
+      }
+      2 => {
+        buf <+ "#define \{name}(a, b) \{gen_macro_body(rng)}\n"
+        defs.push((name, "fn2"))
+      }
+      3 => {
+        // 字符串化 / 拼接（合法形状：参数用 a/b）
+        if rng.below(2) == 0 {
+          buf <+ "#define STR\{i}(a) #a\n"
+          defs.push(("STR\{i}", "fn1"))
+        } else {
+          buf <+ "#define CAT\{i}(a, b) a##b\n"
+          defs.push(("CAT\{i}", "fn2"))
+        }
+      }
+      _ => {
+        // 引用前序宏（嵌套链）
+        if defs.length() > 0 {
+          let picked = defs[rng.below(defs.length())]
+          let (prev_name, _) = picked
+          buf <+ "#define \{name} \{prev_name}\n"
+          defs.push((name, "obj"))
+        } else {
+          buf <+ "#define \{name} \{gen_number(rng)}\n"
+          defs.push((name, "obj"))
+        }
+      }
+    }
+  }
+  // undef 少量
+  if rng.below(4) == 0 && defs.length() > 0 {
+    let picked = defs[rng.below(defs.length())]
+    let (victim_name, _) = picked
+    buf <+ "#undef \{victim_name}\n"
+  }
+  // 条件编译区（表达式限共同子集）
+  buf.write_string(gen_cond_block(rng, defs))
+  // 调用区
+  let ncalls = 1 + rng.below(8)
+  for _ in 0..<ncalls {
+    if defs.length() == 0 {
+      break
+    }
+    let picked = defs[rng.below(defs.length())]
+    let (name, kind) = picked
+    match kind {
+      "obj" => buf <+ "int v_ = \{name};\n"
+      "fn1" => buf <+ "int w_ = \{name}(\{gen_primary(rng)});\n"
+      _ => buf <+ "int u_ = \{name}(\{gen_primary(rng)}, \{gen_primary(rng)});\n"
+    }
+  }
+  // 内置宏引用
+  if rng.below(2) == 0 {
+    buf <+ "int builtin_ = \{rng.pick(builtin_macro_names)};\n"
+  }
+  buf.to_string()
+}
+
+///|
+fn gen_macro_body(rng : Rng) -> String {
+  match rng.below(5) {
+    0 => gen_number(rng)
+    1 => "(\{rng.pick(plain_idents)} + \{gen_number(rng)})"
+    2 => "{ \{rng.pick(plain_idents)} = \{gen_number(rng)}; }"
+    3 => "a"
+    _ => "(a) * (a)"
+  }
+}
+
+///|
+fn gen_cond_block(rng : Rng, defs : Array[(String, String)]) -> String {
+  let buf = StringBuilder()
+  let defined_names : Array[String] = ["COND_A", "COND_B"]
+  match rng.below(4) {
+    0 => {
+      buf <+ "#ifdef \{rng.pick(defined_names)}\nint c1;\n#else\nint c2;\n#endif\n"
+    }
+    1 => {
+      buf <+ "#ifndef \{rng.pick(defined_names)}\nint d1;\n#endif\n"
+    }
+    2 => {
+      buf <+ "#if \{gen_cond_expr(rng, 0)}\nint e1;\n#elif \{gen_cond_expr(rng, 0)}\nint e2;\n#else\nint e3;\n#endif\n"
+    }
+    _ => {
+      // 嵌套两层
+      buf <+ "#ifdef \{rng.pick(defined_names)}\n"
+      buf <+ "#if \{gen_cond_expr(rng, 0)}\nint f1;\n#else\nint f2;\n#endif\n"
+      buf <+ "#else\nint f3;\n#endif\n"
+    }
+  }
+  ignore(defs)
+  buf.to_string()
+}
+
+///|
+/// 共同子集条件表达式：`|| && == != < <= > >= + - * 算术 defined()` 十进制/0x。
+/// `||`/`&&` 操作数限比较/defined 形态（短路归一语义无关化——避开
+/// Rust `(2 || 0) == 1` 不归一的已知差异形状）。
+fn gen_cond_expr(rng : Rng, depth : Int) -> String {
+  if depth >= 2 {
+    return gen_cond_atom(rng)
+  }
+  match rng.below(6) {
+    0 | 1 => gen_cond_cmp(rng)
+    2 => "(\{gen_cond_expr(rng, depth + 1)}) && (\{gen_cond_cmp(rng)})"
+    3 => "(\{gen_cond_cmp(rng)}) || (\{gen_cond_cmp(rng)})"
+    4 => "defined(\{rng.pick(["COND_A", "COND_B", "COND_C"])})"
+    _ => "(\{gen_cond_arith(rng)}) \{rng.pick(["==", "!=", "<", "<=", ">", ">="])} (\{gen_cond_arith(rng)})"
+  }
+}
+
+///|
+fn gen_cond_cmp(rng : Rng) -> String {
+  "\{gen_cond_arith(rng)} \{rng.pick(["==", "!=", "<", "<=", ">", ">="])} \{gen_cond_arith(rng)}"
+}
+
+///|
+fn gen_cond_arith(rng : Rng) -> String {
+  match rng.below(4) {
+    0 => "\{rng.below(1000)}"
+    1 => "0x\{hex_digits(rng, 1 + rng.below(8))}"
+    2 => "(\{rng.below(100)} + \{rng.below(100)} * \{1 + rng.below(9)})"
+    _ => "\{rng.below(1000)}L"
+  }
+}
+
+///|
+fn gen_cond_atom(rng : Rng) -> String {
+  match rng.below(3) {
+    0 => "\{rng.below(1000)}"
+    1 => "defined(COND_A)"
+    _ => gen_cond_cmp(rng)
+  }
+}

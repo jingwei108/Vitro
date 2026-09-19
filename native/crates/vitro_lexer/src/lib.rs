@@ -39,6 +39,10 @@ pub struct Lexer {
     pub(crate) include_cond_boundary: Vec<usize>,
     /// E2 白箱教学层：展开链与 #if 分支选择原因（容量封顶）。
     pub(crate) preprocessor_trace: Vec<String>,
+    /// 差分记账（S2 防线维护）：已消费字节数与当前 token 起始字节偏移——
+    /// 生产路径零语义变化，仅 `tokenize_raw`（L1 差分出口）消费。
+    pub(crate) byte_pos: usize,
+    pub(crate) last_start_byte: usize,
 }
 
 impl Lexer {
@@ -69,6 +73,8 @@ impl Lexer {
             include_resolver: preprocessor::IncludeResolver::new(base_path.clone()),
             include_cond_boundary: Vec::new(),
             preprocessor_trace: Vec::new(),
+            byte_pos: 0,
+            last_start_byte: 0,
         }
     }
 
@@ -92,6 +98,33 @@ impl Lexer {
         }
         let expanded = self.expand_macros(tokens);
         (expanded, std::mem::take(&mut self.errors))
+    }
+
+    /// L1 差分出口（S2 防线维护）：字符级原始词法——`#` 产出 Hash/HashHash、
+    /// 不消费指令、不做条件跳过、不展开宏（与 MoonBit `tokenize_raw` 同构；
+    /// 返回 (token, byte_off) 平行序列，生产 `Token` 结构不变）。
+    pub fn tokenize_raw(&mut self) -> (Vec<(Token, usize)>, Vec<LexerError>) {
+        let saved_body_mode = self.macro_body_mode;
+        self.macro_body_mode = true;
+        let mut tokens: Vec<(Token, usize)> = Vec::new();
+        loop {
+            let t = self.next_token();
+            // Eof 分支在 next_token 的记账点之前返回（last_start_byte 是上一个
+            // token 的 stale 值）——Eof 用全消费字节（与 MoonBit 源全长口径一致）
+            let off = if t.ty == TokenType::Eof {
+                self.byte_pos
+            } else {
+                self.last_start_byte
+            };
+            let is_eof = t.ty == TokenType::Eof;
+            tokens.push((t, off));
+            if is_eof {
+                break;
+            }
+        }
+        // S2 审阅 P3：公开 API 不留副作用——恢复调用前的模式位
+        self.macro_body_mode = saved_body_mode;
+        (tokens, std::mem::take(&mut self.errors))
     }
 
     /// E2：取预处理警告（宏遮蔽/宏参数副作用等，非致命）。
@@ -129,6 +162,7 @@ impl Lexer {
             }
 
             let c = self.peek(0);
+            self.last_start_byte = self.byte_pos;
 
             if c.is_ascii_alphabetic() || c == '_' {
                 return self.identifier_or_keyword();
@@ -422,6 +456,7 @@ impl Lexer {
         }
         let c = self.chars.get(self.pos).copied().unwrap_or('\0');
         self.pos += 1;
+        self.byte_pos += c.len_utf8();
         if c == '\n' {
             self.line += 1;
             self.column = 1;

@@ -1,0 +1,9 @@
+import {
+  "vitro/engine/lexer",
+  "moonbitlang/x/fs",
+  "moonbitlang/core/env",
+}
+
+supported_targets = "native"
+
+pkgtype(kind: "executable")

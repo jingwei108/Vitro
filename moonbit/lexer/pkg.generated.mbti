@@ -1,0 +1,46 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "vitro/engine/lexer"
+
+import {
+  "vitro/engine/lexer/token",
+}
+
+// Values
+pub fn dump_lex_tsv(@token.LexResult) -> String
+
+pub fn dump_raw_tsv(@token.RawResult) -> String
+
+pub fn tokenize(String, cpp_mode? : Bool) -> @token.LexResult
+
+pub fn tokenize_raw(String, cpp_mode? : Bool) -> @token.RawResult
+
+pub fn[P : @token.SourceProvider] tokenize_with(String, provider~ : P, cpp_mode? : Bool, base_dir? : String) -> @token.LexResult
+
+pub fn tokenize_with_vfs(String, files~ : Map[String, String], cpp_mode? : Bool, base_dir? : String) -> @token.LexResult
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+pub using @token {type LexError}
+
+pub using @token {type LexResult}
+
+pub using @token {type LexWarning}
+
+pub using @token {type LineMap}
+
+pub using @token {type LineSpan}
+
+pub using @token {type MacroDef}
+
+pub using @token {type RawResult}
+
+pub using @token {type Token}
+
+pub using @token {type TokenType}
+
+pub using @token {type TraceEntry}
+
+// Traits

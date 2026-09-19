@@ -1,0 +1,19 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "vitro/engine/lexer/internal/scanner"
+
+import {
+  "vitro/engine/lexer/token",
+}
+
+// Values
+pub fn scan_fragment(String, base_byte_off~ : Int, base_line~ : Int, base_real_line? : Int, base_column~ : Int, file_id~ : Int, cpp_mode? : Bool, body_mode? : Bool, errors? : Array[@token.LexError], trailing_newline? : Bool) -> Array[@token.Token]
+
+pub fn scan_raw(Bytes, cpp_mode? : Bool, file_id? : Int) -> @token.RawResult
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
