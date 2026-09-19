@@ -3,7 +3,7 @@
     "title": "S2 词法差分已知差异清单（单一来源）",
     "updated": "2026-09-19",
     "consumer": [
-      "scripts/lexer_diff/gen_corpus.mbtx —— 读取 forbidden_markers 做产物自检（fail loud）；标记仅含机械可靠串（位运算/三目/零参调用等形状由生成器逻辑约束，JSON class 注明）",
+      "scripts/lexer_diff/gen_corpus.mbtx —— 运行时读取本 JSON 的 forbidden_markers 做产物自检（fail loud；单源）",
       "docs/current/07-质量与裁定/20260919_S2词法器执行记录.md —— 差异表格以本文件为准",
       "scripts/lexer_diff/main.go —— 差分驱动的白名单依据（人工核对）"
     ],
@@ -15,12 +15,12 @@
     }
   },
   "forbidden_markers": [
-    "\\n",
     "#elifdef",
     "#elifndef",
     "#warning",
     "#error",
-    " ## #"
+    " ## #",
+    "#\n"
   ],
   "diffs": [
     {
@@ -136,6 +136,15 @@
       "rust": "返回无环（静默）",
       "moonbit": "同 Rust 口径（对拍一致）——审阅 P3 登记为双侧共同现状",
       "anchor": "—（随 S8 差异台账裁定）"
+    },
+    {
+      "id": "D18",
+      "class": "fixed-diff",
+      "shape": "指令解析跨行吞代码（两个子形状：`#define X(` 未闭合参数表——skip_whitespace 跨行把下一行吞进参数扫描，E1005 错位到下一行且 token 全丢；`#` 空指令——下一行首词被当指令名静默吞掉、零诊断）",
+      "rust": "skip_whitespace 集合含 \n，指令解析跨逻辑行（字符流架构缺陷；C 标准指令止于行尾）",
+      "moonbit": "行级架构天然隔离——诊断定位本行、后续代码保留",
+      "anchor": "directive line isolation",
+      "found": "2026-09-19 覆盖缺口补课（directives.rs 逐行对照 + 25 形状边界差分）"
     }
   ],
   "legacy_replicas": [

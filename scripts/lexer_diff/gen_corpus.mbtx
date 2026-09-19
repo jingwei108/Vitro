@@ -18,6 +18,7 @@ import {
   "moonbitlang/x/fs",
   "moonbitlang/core/env",
   "moonbitlang/core/string",
+  "moonbitlang/core/json",
 }
 
 ///|
@@ -47,15 +48,43 @@ fn[T] Rng::pick(self : Rng, arr : Array[T]) -> T {
 }
 
 ///|
-/// 已知差异清单的机械可靠禁串（known_diffs.json 单一来源；位运算/三目/
-/// 零参调用等形状由下方生成逻辑约束——JSON class 注明）——产物自检用
-let forbidden_markers : Array[String] = [
-  "#elifdef",
-  "#elifndef",
-  "#warning",
-  "#error",
-  " ## #",
-]
+/// 已知差异清单的机械可靠禁串——**运行时读取 known_diffs.json**（单一来源，
+/// 与文档共用；位运算/三目/零参调用等形状由下方生成逻辑约束——JSON class
+/// 注明）。JSON 缺失/解析失败即 fail loud（不静默降级为硬编码表）
+///|
+fn load_forbidden_markers() -> Array[String] raise {
+  let text = @fs.read_file_to_string(
+    "scripts/lexer_diff/known_diffs.json",
+  ) catch {
+    _ => {
+      println("gen_corpus: FAIL——读不到 scripts/lexer_diff/known_diffs.json（须在仓库根运行）")
+      fail("known_diffs.json unreadable")
+    }
+  }
+  let json = @json.parse(text) catch {
+    _ => {
+      println("gen_corpus: FAIL——known_diffs.json 解析失败")
+      fail("known_diffs.json unparsable")
+    }
+  }
+  guard json is { "forbidden_markers": raw_markers, .. } else {
+    println("gen_corpus: FAIL——known_diffs.json 缺 forbidden_markers 数组")
+    fail("known_diffs.json missing forbidden_markers")
+  }
+  guard raw_markers is Array(items) else {
+    println("gen_corpus: FAIL——forbidden_markers 不是数组")
+    fail("forbidden_markers not an array")
+  }
+  let markers : Array[String] = []
+  for item in items {
+    guard item is String(sv) else {
+      println("gen_corpus: FAIL——forbidden_markers 含非字符串项")
+      fail("forbidden_markers non-string entry")
+    }
+    markers.push(sv)
+  }
+  markers
+}
 
 ///|
 /// 主入口：生成 <count> 个 .c 文件（约各半：纯词法池 / 预处理池）。
@@ -82,6 +111,7 @@ fn main raise {
   if !@fs.path_exists(out_dir) {
     @fs.create_dir(out_dir)
   }
+  let forbidden_markers = load_forbidden_markers()
   let cont_marker = "\\\n" // 行尾反斜杠（续行形状）
   let rng : Rng = { s: seed | 1UL }
   let bodies : Array[String] = []

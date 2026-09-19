@@ -321,3 +321,20 @@ test "crlf string value keeps carriage return" {
   let s_tok = r.tokens.filter(t => t.ty is String)[0]
   inspect(s_tok.text, content="abc\r")
 }
+
+///|
+test "directive line isolation" {
+  // S2 覆盖缺口补课（审阅遗留 directives.rs 逐行对照发现）红锚：
+  // 指令解析不得跨行——Rust 字符流的 skip_whitespace 含 \n，会把后续行
+  // 吞进指令：`#define X(` 未闭合参数表会吞下一行（E1005 错位到 2:5 +
+  // token 全丢）；`#` 空指令把下一行首词当指令名静默吞掉（零诊断）。
+  // MoonBit 行级架构天然隔离：诊断定位本行、后续代码保留（C 语义）
+  let r = @lexer.tokenize("#define X(\nint x;\n")
+  assert_eq(r.errors.length(), 1)
+  inspect(@diag.ErrorCode::code(r.errors[0].code), content="1005")
+  inspect(r.errors[0].loc.line, content="1")
+  inspect(r.tokens.map(t => t.text).join(" "), content="int x ; ")
+  let r2 = @lexer.tokenize("#\nint x;\n")
+  assert_eq(r2.errors.length(), 0)
+  inspect(r2.tokens.map(t => t.text).join(" "), content="int x ; ")
+}
