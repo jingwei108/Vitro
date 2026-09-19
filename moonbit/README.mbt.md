@@ -28,7 +28,7 @@ go run ./scripts/gen_diag -check   # 幂等校验（源变产物变 / 产物被�
 ## 验证
 
 ```bash
-moon check && moon test    # 53 测试（source 14 / opcode 10 / diag 17 / ast 12）
+moon check && moon test    # 58 测试（source 14 / opcode 10 / diag 21 / ast 13）——审阅 0.1.0 勘误：发布后 doc 测试增量未同步
 moon info                  # .mbti 接口面（API 变更信号）
 ```
 

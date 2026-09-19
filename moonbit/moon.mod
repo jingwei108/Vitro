@@ -1,13 +1,7 @@
 name = "vitro/engine"
-
-version = "0.1.0"
-
-readme = "README.mbt.md"
-
-repository = ""
-
-license = "Apache-2.0"
-
+version = "0.1.1"
+readme = "README.md"
+repository = "https://github.com/jingwei108/vitro"
+license = "MIT"
 keywords = [ "c-compiler", "teaching", "diagnostics" ]
-
 description = "Vitro C teaching engine (MoonBit)"

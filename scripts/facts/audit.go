@@ -55,6 +55,9 @@ func rules() []Rule {
 		mk("cargo_test_passed", "cargo test 用例数", `cargo test|passed|全绿|rust 单测`,
 			``, 500, 2500, "用例"),
 		mk("cargo_test_suites", "cargo test 套件数", `套件`, `断言|项断言`, 20, 200, "个"),
+		// T6/T5 审阅（2026-09-19）：moonbit README 测试数防漂移——发布面
+		// 审阅实证 0.1.0 的 README 计数过期（53 vs 实跑 58），纳入机判。
+		mk("moonbit_test_passed", "MoonBit 测试数", `moon\s*test|moonbit[^\n]*测试|测试[^\n]*moonbit`, ``, 40, 500, "用例"),
 	}
 }
 
@@ -102,7 +105,7 @@ func scanFiles(root string) []string {
 		}
 		return nil
 	})
-	for _, n := range []string{"AGENTS.md", "README.md"} {
+	for _, n := range []string{"AGENTS.md", "README.md", "moonbit/README.md", "moonbit/README.mbt.md"} {
 		if _, err := os.Stat(filepath.Join(root, n)); err == nil {
 			out = append(out, n)
 		}
