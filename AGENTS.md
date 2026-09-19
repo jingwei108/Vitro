@@ -13,6 +13,8 @@
 
 **路由规则**：只在 MoonBit 区 / 文档 / 讨论中工作 → **不要读** `native/AGENTS.md`；触碰 `native/`、`scripts/`、CI，或需要跑防线（cargo / `go run ./scripts/*` / shadow）→ **先读** `native/AGENTS.md`。
 
+**MoonBit 包命名规则（2026-09-19 拍板）**：module 名 = `vitro/engine`（mooncakes owner `vitro`），包全名一律 `vitro/engine/<pkg>`（如 `vitro/engine/diag`）；`moon.pkg` 的 import 块、`gen_diag` 等生成脚本注释、`.mbti` 接口面均用全名；计划文档语境可简称 `vitro/<pkg>`，但代码与配置**禁用**简称。
+
 ## 全域纪律（两区共守，语言无关）
 
 1. **必须中文输出思考与回答**

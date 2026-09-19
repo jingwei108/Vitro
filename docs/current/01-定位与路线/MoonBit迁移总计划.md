@@ -15,7 +15,6 @@
 | F-3 | **JIT 倾向不搬**（S9 复核）：宿主 V8 自带 JIT 边际缩水；JIT 与解释器溢出语义分歧现存未修；统一模式下 JIT 录制纯浪费。`jit_path_parity` 八形状外置 JSON 作"复活必全绿"遗产 | 门 1 实测：放弃 JIT 代价收敛为热循环 ~2.8× 且仍快于现役解释器 |
 | F-4 | **驱动层 v1 保留 Go**（10,767 行清白资产）；Node 宿主为新增薄层（engine-host 接口：spawn/stdin 字节/stdout 逐行/stderr/超时 kill/退出码/RSS 采样）；golden 生成器由 Node 宿主驱动承担 | D5 刚收官；绞杀者策略新语言只承担引擎本体 |
 | F-5 | **wasm-gc 单出口、多宿主**：浏览器（主交付）/ Node 22+（CI 主力）/ Wasmtime（需 `-W gc`，部署文档写明）；宿主接口 4 函数（invoke/reset/protocol_version/engine_version）+ 21 方法表；`memory.regions` 字段当场定型；砍 capi 45 导出 | 门 2 实测 2.34s 真实运行；45 导出中 28 无消费者（亲证） |
-| F-6 | **不赶比赛按自有节奏**：以国家级/国际级赛事与 mooncakes 分片发布为可见性节点；每片 = 重写进度 + 发布 + 押注检查点 | 项目所有者拍板 |
 
 ## 2. 四道证伪门终局（全部实测，0 红）
 
@@ -33,7 +32,7 @@
 | # | 事实 | 后果 |
 |---|---|---|
 | F1 | `Int` 四则**静默回绕**（`2147483647+1→-2147483648`），全 core **无 checked API**；`1<<1000=256`（位移 mod 32）；`x/0`→RuntimeError | 教学溢出 trap 必须应用层显式检测（`to_int64` 中转 + 范围判定，与 Rust `arithmetic.rs` 同构）；检测成本占每算术指令比已入门 1 数据 |
-| F2 | `String` 内部 UTF-16（`"中文".length()=2`，`@utf8.encode().length()=6`）；`to_bytes()` 已弃用 | C 字节流一律 `Bytes`/`FixedArray[Byte]`；坐标单位契约进 `vitro/source` 包 |
+| F2 | `String` 内部 UTF-16（`"中文".length()=2`，`@utf8.encode().length()=6`）；`to_bytes()` 已弃用 | C 字节流一律 `Bytes`/`FixedArray[Byte]`；坐标单位契约进 `vitro/engine/source` 包 |
 | F3 | `Bytes` 不可变且是 `FixedArray[Byte]` 的 `%identity` 视图（core 源码取证）；`FixedArray[Byte]` 可写、**packed**（100M 元素 106.9MB vs Int 406.9MB = 1:3.8，实测） | 1MB 内存载体定案；门 1a 通过 |
 | F4 | 21 帧瀑布递归栈深：wasm-gc 854 / js 538 / native 1005（崩溃 0xC00000FD 不可捕获，与 Rust 同形态） | 深度上限必须显式做；`MAX_PARSE_DEPTH` 语义可沿用但阈值重标定 |
 | F5 | wasm-gc 产物 imports 仅 `spectest.print_char`（宿主收 Unicode 码点，须自做 UTF-8 编码）；`@env` 无宿主实现、无熵源 | 驱动协议 = 宿主提供的 import 组；引擎 rand 默认种子不得依赖系统熵 |
@@ -45,21 +44,21 @@
 ## 4. 包切分总图（L0–L9，`.mbti` 取代 ABI 版本化成为对外义务载体）
 
 ```
-L0 零依赖   vitro/source(SourceLoc+坐标契约)   vitro/opcode(132+Instruction+operand 校验)
-L1 诊断契约  vitro/diag(ErrorCode 137+Severity+SourceLang+Diagnostic+catalog JSON+覆盖率断言)
-L2 抽象语法  vitro/ast(Type 17/Expr 26/Stmt 16+depth+判等渲染单源；不含 compute_type_size)
-L3 名字单源  vitro/names(InstKey→InstId→mangled Name 唯一产出口；parser/typeck 共依赖)
-L4 前端     vitro/lexer(facade tokenize→LexResult；internal/{source,pp,host})  vitro/parser
-            〔预留〕vitro/parser/cpp
-L5 语义     vitro/typeck ─ vitro/containers(JSON 数据驱动) ─ vitro/libc(单表签名)
-            〔预留〕vitro/typeck/cpp
-L6 发射     vitro/codegen(internal/{Layout Planner, frame LIFO 池, c, cpp})  vitro/bytecode(产物 schema+libc 固定索引)
-L7 执行     vitro/memory(载体+MemoryMap+checked_access 单入口+bump/隔离堆+freed_logs 有序结构)
-            vitro/host(110 路由表单源+vfs 入快照)  vitro/vm(executor 穷尽 match+snapshot 不可变派生)
-            〔S9 裁定〕vitro/jit(必须可整体移除)
-L8 会话/协议  vitro/session(SessionConfig 值对象)  vitro/protocol(帧+schema 版本+StepPayload/词汇/契约)
-            vitro/gateway(wasm-gc 4 函数导出+NDJSON)
-L9 教学智能  vitro/time_travel  vitro/teaching/steps  vitro/analysis(cfg/algorithms)  vitro/diagnostics
+L0 零依赖   vitro/engine/source(SourceLoc+坐标契约)   vitro/engine/opcode(132+Instruction+operand 校验)
+L1 诊断契约  vitro/engine/diag(ErrorCode 137+Severity+SourceLang+Diagnostic+catalog JSON+覆盖率断言)
+L2 抽象语法  vitro/engine/ast(Type 17/Expr 26/Stmt 16+depth+判等渲染单源；不含 compute_type_size)
+L3 名字单源  vitro/engine/names(InstKey→InstId→mangled Name 唯一产出口；parser/typeck 共依赖)
+L4 前端     vitro/engine/lexer(facade tokenize→LexResult；internal/{source,pp,host})  vitro/engine/parser
+            〔预留〕vitro/engine/parser/cpp
+L5 语义     vitro/engine/typeck ─ vitro/engine/containers(JSON 数据驱动) ─ vitro/engine/libc(单表签名)
+            〔预留〕vitro/engine/typeck/cpp
+L6 发射     vitro/engine/codegen(internal/{Layout Planner, frame LIFO 池, c, cpp})  vitro/engine/bytecode(产物 schema+libc 固定索引)
+L7 执行     vitro/engine/memory(载体+MemoryMap+checked_access 单入口+bump/隔离堆+freed_logs 有序结构)
+            vitro/engine/host(110 路由表单源+vfs 入快照)  vitro/engine/vm(executor 穷尽 match+snapshot 不可变派生)
+            〔S9 裁定〕vitro/engine/jit(必须可整体移除)
+L8 会话/协议  vitro/engine/session(SessionConfig 值对象)  vitro/engine/protocol(帧+schema 版本+StepPayload/词汇/契约)
+            vitro/engine/gateway(wasm-gc 4 函数导出+NDJSON)
+L9 教学智能  vitro/engine/time_travel  vitro/engine/teaching/steps  vitro/engine/analysis(cfg/algorithms)  vitro/engine/diagnostics
             —— 经 VmObserver/SourceProvider/AlgorithmContext 三接口依赖反转，不依赖 session
 仓库外      Go 驱动层(保留) + Node engine-host(新增薄层) + spike 目录
 ```
@@ -98,14 +97,14 @@ A2 实测关闭（有条件）；A3 实测关闭（方向有利）；A7 实测�
 | 片 | 内容 | 验收（锚点级） | 发布 |
 |---|---|---|---|
 | S0.5 | Rust 止血批 P1–P7 + U1/U2 | 每条红→绿留痕；M-0 基线冻结 | — |
-| S1 | `vitro/{source,diag,opcode,ast}` | E1 AST dump（B）+ error_catalog JSON（B）+ 码表生成幂等 | `vitro/diag` 首发 |
-| S2 | `vitro/lexer`（独立 pass+LineMap+宿主 IO） | L1/L2 token TSV + 随机词法差分 ≥2000（.mbtx 语料生成器） | `vitro/lexer` |
-| S3 | `vitro/parser`（深度统一入口；J1 语义不复刻） | E1–E4 + 病态输入"同等拒绝"12 样本 + 活性内部断言 | — |
-| S4 | `vitro/{names,typeck,containers,libc}` | E1–E4 + mangled 名集合相等 | `vitro/names` |
-| S5 | `vitro/{codegen,bytecode}` | A 级产物 code 段 + libc 自举 + LIFO 八条事故回归 + r1 7 道 + `--dump-compile-output` 工具 + codegen 自建单测 | — |
-| S6 | `vitro/{memory,host,vm}` | D 级 30 例三联 diff + 门 3 集成版 + 条件 A 性能锚 | `vitro/vm` |
-| S7 | `vitro/{session,protocol,gateway}` + Node 宿主 | 协议帧双宿主对拍 + replay/serve_smoke 重建 | `vitro/protocol` + wasm-gc 产物 |
-| S8 | `vitro/{time_travel,teaching,analysis,diagnostics}` + 差异台账 | seek 往返五类相等 + 标注 golden 311 三方 diff + 台账 CI | 认知链切片 |
+| S1 | `vitro/engine/{source,diag,opcode,ast}` | E1 AST dump（B）+ error_catalog JSON（B）+ 码表生成幂等 | `vitro/engine/diag` 首发 |
+| S2 | `vitro/engine/lexer`（独立 pass+LineMap+宿主 IO） | L1/L2 token TSV + 随机词法差分 ≥2000（.mbtx 语料生成器） | `vitro/engine/lexer` |
+| S3 | `vitro/engine/parser`（深度统一入口；J1 语义不复刻） | E1–E4 + 病态输入"同等拒绝"12 样本 + 活性内部断言 | — |
+| S4 | `vitro/engine/{names,typeck,containers,libc}` | E1–E4 + mangled 名集合相等 | `vitro/engine/names` |
+| S5 | `vitro/engine/{codegen,bytecode}` | A 级产物 code 段 + libc 自举 + LIFO 八条事故回归 + r1 7 道 + `--dump-compile-output` 工具 + codegen 自建单测 | — |
+| S6 | `vitro/engine/{memory,host,vm}` | D 级 30 例三联 diff + 门 3 集成版 + 条件 A 性能锚 | `vitro/engine/vm` |
+| S7 | `vitro/engine/{session,protocol,gateway}` + Node 宿主 | 协议帧双宿主对拍 + replay/serve_smoke 重建 | `vitro/engine/protocol` + wasm-gc 产物 |
+| S8 | `vitro/engine/{time_travel,teaching,analysis,diagnostics}` + 差异台账 | seek 往返五类相等 + 标注 golden 311 三方 diff + 台账 CI | 认知链切片 |
 | S9 | 裁定批：JIT 复核 / C++ 搬或砍（与 CS2 合并）/ libc 机制形态 / Wasmtime 形态 | 各自判定书 | — |
 | 全量切换 | 758 用例 + golden 733 全绿 + facts 双轨收口 | shadow 逐项一致（match/known_issue/gap 三口径） | 1.0 |
 
