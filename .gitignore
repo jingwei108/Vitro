@@ -74,6 +74,10 @@ artifacts/
 *.nupkg
 packages/
 .tmp-monaco/
+
+# 根目录探针/对照产物工作区（会话探针与根目录 clang 对照 exe；
+# shadow 驱动自管目录在 native/tests/shadow_verification/ 下，另有规则）
+.shadow_tmp/
 node_modules/
 
 # Blazor / static web assets generated from NuGet packages
