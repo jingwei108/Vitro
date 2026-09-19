@@ -4,8 +4,10 @@
 
 ## Dual-zone repository (since 2026-09-18 — MoonBit migration, strangler pattern)
 
-- **MoonBit active zone** — `moonbit/` (created at milestone S1). All new development happens here. Rules: `docs/current/01-定位与路线/MoonBit迁移总计划.md` (master plan) and `MoonBit迁移第一阶段计划.md` (phase-1 plan).
+- **MoonBit active zone** — `moonbit/` (created at milestone S1; published on mooncakes as `vitro/engine`). All new development happens here. Handbook: [`moonbit/AGENTS.md`](moonbit/AGENTS.md) (**read on demand**: build commands / language & toolchain pitfalls / coding disciplines / publish flow); plans: `docs/current/01-定位与路线/MoonBit迁移总计划.md` (master plan) and `MoonBit迁移第一阶段计划.md` (phase-1 plan).
 - **Rust frozen oracle zone** — `native/`, `scripts/`, `.github/`; frozen at tag `rust-oracle-freeze`. Only the phase-1 whitelist (plan §2: P1–P7 / U1 / U2), security fixes, and defense-line maintenance. Full operating manual (build / test defenses / coding conventions / subset overview / known Clang divergences / debugging / CLI): [`native/AGENTS.md`](native/AGENTS.md) — **read on demand only**, to avoid context pollution and cross-zone hallucination.
+
+**Routing**: touching `moonbit/` → read `moonbit/AGENTS.md` first; touching `native/`, `scripts/`, CI, or running defense lines → read `native/AGENTS.md` first; docs/discussion only → read neither handbook.
 
 **MoonBit package naming (decided 2026-09-19)**: module name = `vitro/engine` (mooncakes owner `vitro`); every package is `vitro/engine/<pkg>` (e.g. `vitro/engine/diag`) in `moon.pkg` imports, generator-script comments, and `.mbti` interfaces. Plan documents may abbreviate to `vitro/<pkg>`; code and config must not.
 

@@ -2,16 +2,16 @@
 
 > [English Version](AGENTS_EN.md)
 >
-> 本文件只保留**双区路由与全域纪律**。Rust 冻结区的完整操作手册（技术栈 / 构建命令 / 测试防线 / 编码约定 / C 子集概览 / 已知 Clang 差异 / 调试技巧 / CLI）在 [`native/AGENTS.md`](native/AGENTS.md)——**仅在触碰 Rust 区时才读取**，避免上下文挤占与跨区幻觉。
+> 本文件只保留**双区路由与全域纪律**。两个分区的操作手册——[`moonbit/AGENTS.md`](moonbit/AGENTS.md)（MoonBit 活跃区：构建命令 / 语言与工具链陷阱 / 编码纪律 / 发布流程）与 [`native/AGENTS.md`](native/AGENTS.md)（Rust 冻结区：技术栈 / 测试防线 / C 子集 / 调试）——**仅在触碰对应分区时才读取**，避免上下文挤占与跨区幻觉。
 
 ## 仓库双区制（2026-09-18 起，MoonBit 迁移期 · 绞杀者模式）
 
 | 区 | 范围 | 状态 | 规则来源 |
 |---|---|---|---|
-| **MoonBit 活跃区** | `moonbit/`（S1 起创建，MoonBit workspace） | 全部新开发在此 | [`MoonBit迁移总计划`](docs/current/01-定位与路线/MoonBit迁移总计划.md) + [`MoonBit迁移第一阶段计划`](docs/current/01-定位与路线/MoonBit迁移第一阶段计划.md)（含包切分 / 锚点体系 / 工程约定 / 工具陷阱） |
+| **MoonBit 活跃区** | `moonbit/`（S1 起创建，MoonBit workspace，已发布 mooncakes `vitro/engine`） | 全部新开发在此 | [`moonbit/AGENTS.md`](moonbit/AGENTS.md)（**按需读取**：命令 / 语言与工具链陷阱 / 编码纪律 / 发布流程）+ [`MoonBit迁移总计划`](docs/current/01-定位与路线/MoonBit迁移总计划.md) + [`MoonBit迁移第一阶段计划`](docs/current/01-定位与路线/MoonBit迁移第一阶段计划.md)（含包切分 / 锚点体系 / 工程约定 / 工具陷阱） |
 | **Rust 冻结对照区** | `native/`、`scripts/`、`.github/` | **diff oracle，已冻结**（tag `rust-oracle-freeze`） | [`native/AGENTS.md`](native/AGENTS.md)（**按需读取**）；只允许：第一阶段计划 §2 白名单（P1–P7/U1/U2）+ 安全修复 + 防线维护 |
 
-**路由规则**：只在 MoonBit 区 / 文档 / 讨论中工作 → **不要读** `native/AGENTS.md`；触碰 `native/`、`scripts/`、CI，或需要跑防线（cargo / `go run ./scripts/*` / shadow）→ **先读** `native/AGENTS.md`。
+**路由规则**：触碰 `moonbit/` → **先读** [`moonbit/AGENTS.md`](moonbit/AGENTS.md)；触碰 `native/`、`scripts/`、CI，或需要跑防线（cargo / `go run ./scripts/*` / shadow）→ **先读** [`native/AGENTS.md`](native/AGENTS.md)；只在文档 / 讨论中工作 → 两份分区手册都**不要读**（避免上下文挤占）。
 
 **MoonBit 包命名规则（2026-09-19 拍板）**：module 名 = `vitro/engine`（mooncakes owner `vitro`），包全名一律 `vitro/engine/<pkg>`（如 `vitro/engine/diag`）；`moon.pkg` 的 import 块、`gen_diag` 等生成脚本注释、`.mbti` 接口面均用全名；计划文档语境可简称 `vitro/<pkg>`，但代码与配置**禁用**简称。
 
