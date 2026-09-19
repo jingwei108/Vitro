@@ -1,0 +1,162 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "vitro/engine/opcode"
+
+import {
+  "moonbitlang/core/debug",
+  "vitro/engine/source",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub(all) struct Instruction {
+  op : OpCode
+  operand : Int
+  loc : @source.SourceLoc
+} derive(Eq, @debug.Debug)
+pub fn Instruction::new(OpCode, Int, @source.SourceLoc) -> Self
+
+pub(all) enum OpCode {
+  Nop
+  PushConst
+  LoadLocal
+  StoreLocal
+  LoadGlobal
+  StoreGlobal
+  GetFrameBase
+  Pop
+  Dup
+  Swap
+  LoadMem
+  StoreMem
+  LoadMemByte
+  StoreMemByte
+  Add
+  Sub
+  Mul
+  Div
+  Mod
+  Neg
+  Eq
+  Ne
+  Lt
+  Le
+  Gt
+  Ge
+  And
+  Or
+  Not
+  Jump
+  JumpIfZero
+  JumpIfNotZero
+  Call
+  CallHost
+  Ret
+  RetVoid
+  StepEvent
+  TrapBounds
+  BitAnd
+  BitOr
+  BitXor
+  BitNot
+  Shl
+  Shr
+  PushConstF
+  AddF
+  SubF
+  MulF
+  DivF
+  NegF
+  CastI2F
+  CastF2I
+  EqF
+  NeF
+  LtF
+  LeF
+  GtF
+  GeF
+  PushConstD
+  AddD
+  SubD
+  MulD
+  DivD
+  NegD
+  CastI2D
+  CastF2D
+  CastD2I
+  CastD2F
+  EqD
+  NeD
+  LtD
+  LeD
+  GtD
+  GeD
+  LoadLocalD
+  StoreLocalD
+  LoadGlobalD
+  StoreGlobalD
+  LoadMemD
+  StoreMemD
+  SplitD
+  PushConstQ
+  AddQ
+  SubQ
+  MulQ
+  DivQ
+  ModQ
+  NegQ
+  CastI2Q
+  CastQ2I
+  CastQ2D
+  CastD2Q
+  EqQ
+  NeQ
+  LtQ
+  LeQ
+  GtQ
+  GeQ
+  LoadLocalQ
+  StoreLocalQ
+  LoadGlobalQ
+  StoreGlobalQ
+  LoadMemQ
+  StoreMemQ
+  SplitQ
+  CallPtr
+  ULt
+  ULe
+  UGt
+  UGe
+  UDiv
+  UMod
+  LShr
+  StackAlloc
+  USub
+  UNeg
+  UAdd
+  UMul
+  Memcpy
+  Memset
+  Strlen
+  PushArgc
+  PushArgv
+  TrapBoundsVla
+  BitAndQ
+  BitOrQ
+  BitXorQ
+  CallVar
+  BitNotQ
+  ShlQ
+  ShrQ
+  LShrQ
+} derive(Compare, Eq, Hash, @debug.Debug)
+pub fn OpCode::code(Self) -> Int
+pub fn OpCode::from_name(String) -> Self?
+pub fn OpCode::from_u8(Int) -> Self?
+pub fn OpCode::name(Self) -> String
+
+// Type aliases
+
+// Traits

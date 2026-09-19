@@ -10,7 +10,7 @@
 
 1. Rust oracle 侧的已知**静默错值/崩溃/协议瑕疵**清零（P1–P7），使差分锚点不"两侧一致地错"；
 2. 差分基础设施就位（AST dump 出口、golden fail-loud、列号口径、M-0 基线冻结）；
-3. MoonBit 侧 `vitro/{source,diag,opcode,ast}` 四包建成并通过 B 级锚点，`vitro/diag` 首发 mooncakes。
+3. MoonBit 侧 `vitro/engine/{source,diag,opcode,ast}` 四包建成并通过 B 级锚点，`vitro/engine/diag` 首发 mooncakes。
 
 **总验收门**：P1–P7 全部红→绿留痕 ＋ E1（AST dump）/E3（诊断帧）/E4（error_catalog）三条 B 级锚可跑 ＋ `moon check` 干净 ＋ 码表生成脚本幂等。
 
@@ -53,9 +53,9 @@
 
 ### P6 · 列号口径冻结（双坐标契约输入）
 
-- **✅ 已完成（2026-09-19）**：口径档案 [列号口径冻结](../07-质量与裁定/列号口径冻结.md)（词法 +1 / 解析非 ASCII −4 / make_token 字符计数减字节数根因亲证）+ 10 形状防漂移锚 `source_column_convention_test`。MoonBit `vitro/source` 契约输入（byte_off+1 主坐标 / 双坐标预留 / 禁量纲混算 / 不复刻 +1）已入档案 §2。
+- **✅ 已完成（2026-09-19）**：口径档案 [列号口径冻结](../07-质量与裁定/列号口径冻结.md)（词法 +1 / 解析非 ASCII −4 / make_token 字符计数减字节数根因亲证）+ 10 形状防漂移锚 `source_column_convention_test`。MoonBit `vitro/engine/source` 契约输入（byte_off+1 主坐标 / 双坐标预留 / 禁量纲混算 / 不复刻 +1）已入档案 §2。
 - **现象（亲证）**：`int main(){ int "中文"; }` 报 `1:13`，字符串 token 实际起始列 17（逐字符核算）；词法路径自洽、解析路径偏差 −4（两路径区分本身是关键发现）。
-- **修法**：Rust 侧先冻结现状口径入文档（不急修算法）；`int main(){ int "中文"; }` 固化为位置锚用例；MoonBit `vitro/source` 包的坐标单位契约以此为输入（建议字节偏移+1，双坐标 `Pos{byte_off, col_scalar, col_utf16}`）。
+- **修法**：Rust 侧先冻结现状口径入文档（不急修算法）；`int main(){ int "中文"; }` 固化为位置锚用例；MoonBit `vitro/engine/source` 包的坐标单位契约以此为输入（建议字节偏移+1，双坐标 `Pos{byte_off, col_scalar, col_utf16}`）。
 
 ### P7 · AST/符号表 dump 出口新建（B 级锚点硬前提）
 
@@ -81,7 +81,7 @@
 
 ---
 
-## 3. S1 基础片（`vitro/{source,diag,opcode,ast}` 四包 + 首发）
+## 3. S1 基础片（`vitro/engine/{source,diag,opcode,ast}` 四包 + 首发）
 
 ### 3.1 工程约定（门 0 三大差异 + 本会话教训，写进包文档）
 
@@ -94,16 +94,22 @@
 
 | 任务 | 内容 | 验收 |
 |---|---|---|
-| T1 `vitro/source` | SourceLoc 三字段（line/column/file_id）+ **列单位契约**（字节偏移+1 声明，双坐标预留）+ 显式 Eq/Ord/Hash | 白盒单测；一条 import 路径（现 Rust 侧 5 条 re-export 收敛为 1） |
-| T2 `vitro/diag` | ErrorCode 137 臂（**Go 脚本从 error_codes.rs 生成 .mbt，禁手抄**）+ `code_of/name_of/severity_of/lang_of/catalog_of` 穷尽 match 无 `_` 兜底 + Severity/SourceLang + catalog 77 条 JSON + 覆盖率断言（基线 77，含"码无卡片"可断言清单） | `moon check` 干净；生成幂等（重复运行字节一致 + 源变则产物变检测）；E4 锚点（error_catalog JSON 逐条 diff，码升序） |
-| T3 `vitro/opcode` | 132 条 opcode + 编号↔名字双向映射 + operand 语义校验 + `from_u8` 空号/越界返 None（0..255 全空间断言） | 白盒单测；编号手工显式（照搬不重排） |
-| T4 `vitro/ast` | Type 17 / Expr 26 / Stmt 16 / decl 全族 + depth（显式栈迭代）+ 类型判等显式函数（Typeof 自反 + vla_dims 策略裁定）+ 渲染单源 `to_c_string`（删双轨）+ `compute_type_size` 移出（三副本之一是死文件亲证）；`Stmt::Try` 保留标 reserved-for-csharp | E1 AST dump（与 Rust 侧 P7 出口对拍，canonicalizer 归一）；E5 mangle 黄金串（`"prefix_p_a2_3_int"`）白盒同断言 |
-| T5 首发 | `vitro/diag` 上 mooncakes；`.mbti` 入版本控制作 API 变更信号；137 码位作 versioned 常量只增不改 | mooncakes 页面可安装；README 附三上下文示例 |
+| T1 `vitro/engine/source` | ✅ 已完成（2026-09-19）：SourceLoc 三字段（column = 行内 UTF-8 字节偏移+1 契约注释冻结）+ Pos{byte_off, col_scalar, col_utf16} 双坐标预留（from_byte_off 派生）+ derive(Eq, Compare, Hash)；白盒单测 10 例（emoji 三量纲分歧锚 / Ord 全序 / Hash Map 键） | ✅ 白盒单测；一条 import 路径（Rust 侧 5 条 re-export 收敛为 vitro/engine/source 单路径，契约注释登记） |
+| T2 `vitro/engine/diag` | ✅ 主体完成（2026-09-19）：ErrorCode **137 臂**（Go 脚本 `moonbit/scripts/gen_diag` 生成 .mbt，禁手抄——137 与计划一致，编号实测唯一）+ code/severity/lang/name/display_code 穷尽 match 无兜底臂 + Severity/SourceLang + catalog 77 条（catalog_of 穷尽 137 臂）+ 覆盖率断言（137/77/60 互补）+ **E4 全量对拍通过**（Rust serve `error_catalog` ↔ MoonBit `export_catalog_json`，经 canonicalize 归一后 77 条逐字节 diff 为空） | ✅ moon check 干净；生成幂等（双次运行字节一致 + LF/CRLF 双行尾态同 sha）；四雷证红（A1 加臂数量基线 / A2 E→W 白名单对账 / B 源变一字节 / C 产物篡改一字节，全部 fail loud）；遗留：E4 管道化（两侧 dump→diff 进 CI）随 T4 收官统一建 |
+| T3 `vitro/engine/opcode` | ✅ 已完成（2026-09-19）：132 条编号照搬不重排（空号 44–49 实测入档）+ from_u8 空号/越界 None + name/from_name 双向映射 + Instruction{op, operand, loc}；白盒单测 10 例 | ✅ 0..255 全空间断言（命中恰 132 且与 code() 互逆）+ 关键编号定点锚（Nop=0…LShrQ=137）；operand 语义校验**诚实延后**至 S5（Rust 侧无先验语义表，不脑测发明——包注释登记） |
+| T4 `vitro/engine/ast` | Type 17 / Expr 26 / Stmt 16 / decl 全族 + depth（显式栈迭代）+ 类型判等显式函数（Typeof 自反 + vla_dims 策略裁定）+ 渲染单源 `to_c_string`（删双轨）+ `compute_type_size` 移出（三副本之一是死文件亲证）；`Stmt::Try` 保留标 reserved-for-csharp | E1 AST dump（与 Rust 侧 P7 出口对拍，canonicalizer 归一）；E5 mangle 黄金串（`"prefix_p_a2_3_int"`）白盒同断言 |
+| T5 首发 | `vitro/engine/diag` 上 mooncakes；`.mbti` 入版本控制作 API 变更信号；137 码位作 versioned 常量只增不改 | mooncakes 页面可安装；README 附三上下文示例 |
 | T6 facts 接线 | 新引擎侧真值键空间独立（`moonbit_*` 前缀）；指标自报行格式沿用 | `facts check` 对新键可采 |
+
+**T2 执行期发现与修复（登记）**：
+1. **gen/fmt 互踩缺陷**：gen 原始输出与 moon fmt 规范形态不一致（fmt 对超 80 列 match 臂折行、Some(of(...)) 全参数爆开、Int 数组贪心装行、宽度按 UTF-8 字节计）——根治为 gen 流程内置 `moon fmt`，产物最终形态以 fmt 为准；
+2. **行尾 sha 漂移缺陷**：产物落款 sha256 随工作区 LF/CRLF 形态漂移（git checkout 即翻行尾）——修复为规范化行尾后取 sha，双行尾态实测同产物；
+3. **Rust 续行转义双跳缺陷**：scanRustString 的续行 case 在 for-post i++ 与循环体 i++ 双重自增，吞掉续行后首字节（"向"丢 E5 → 产物 FFFD×2）——E4 对拍 77 条唯一差异暴露，修复后 diff 清零。此类缺陷纯靠单测难现（byte 级），**B 级锚全量对拍的价值实证**；
+4. **E4 对拍管道验证可行**：Rust 侧出口 = serve `error_catalog` 方法（键被 serve 层字母序重排，canonicalize 归一后对齐）；MoonBit 侧 emitter 显式手写（lang 值域 "c"/"c++" 与 SourceLang::to_str 的 "cpp" 是两个语义层，emitter 内显式映射）。
 
 ### 3.3 S1 完成判据（可机判）
 
-`moon check` 零错 ｜ E1/E3/E4 三锚在双实现上跑通且 diff 为空 ｜ 码表生成幂等 ｜ P1–P7 红锚全绿 ｜ M-0 基线入库 ｜ `vitro/diag` 发布。
+`moon check` 零错 ｜ E1/E3/E4 三锚在双实现上跑通且 diff 为空 ｜ 码表生成幂等 ｜ P1–P7 红锚全绿 ｜ M-0 基线入库 ｜ `vitro/engine/diag` 发布。
 
 ---
 

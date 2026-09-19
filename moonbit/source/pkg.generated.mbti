@@ -1,0 +1,32 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "vitro/engine/source"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub(all) struct Pos {
+  byte_off : Int
+  col_scalar : Int
+  col_utf16 : Int
+} derive(Eq, @debug.Debug)
+pub fn Pos::from_byte_off(Bytes, Int, Int) -> Self
+
+pub(all) struct SourceLoc {
+  line : Int
+  column : Int
+  file_id : Int
+} derive(Compare, Default, Eq, Hash, @debug.Debug)
+pub fn SourceLoc::display(Self) -> String
+pub fn SourceLoc::is_user_file(Self) -> Bool
+pub fn SourceLoc::new(Int, Int) -> Self
+pub fn SourceLoc::with_file(Int, Int, Int) -> Self
+
+// Type aliases
+
+// Traits

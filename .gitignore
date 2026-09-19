@@ -136,3 +136,8 @@ tmp_threaded*.exe
 scripts/core_asset_verdict/.randomdiff/
 scripts/core_asset_verdict/.findings/
 cargo_test_ci.log
+
+# MoonBit 构建产物（moonbit/ 活跃区）
+moonbit/_build/
+moonbit/target/
+moonbit/.repos/

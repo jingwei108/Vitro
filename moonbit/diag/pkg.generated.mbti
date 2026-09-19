@@ -1,0 +1,191 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "vitro/engine/diag"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn catalog_codes() -> Array[Int]
+
+pub fn codes_without_catalog() -> Array[Int]
+
+pub fn export_catalog_json() -> String
+
+// Errors
+
+// Types and methods
+pub(all) struct CatalogEntry {
+  code : Int
+  emoji : String
+  title : String
+  explanation : String
+  common_causes : Array[String]
+} derive(Eq, @debug.Debug)
+pub fn CatalogEntry::of(Int, String, String, String, Array[String]) -> Self
+
+pub(all) enum ErrorCode {
+  Unknown
+  E1001_UnknownChar
+  E1002_UnterminatedString
+  E1003_StringCrossLine
+  E1004_UnsupportedOp
+  E1005_InvalidDefine
+  E1006_UnsupportedFeature
+  E1007_ComplexDeclarator
+  E1010_UnterminatedComment
+  E1011_UnmatchedConditional
+  E1012_DuplicateElse
+  E1013_UnclosedConditional
+  E1014_CondExprError
+  E1015_IncludeCycle
+  E1016_TokenPasteInvalid
+  E1017_ExpandDepthExceeded
+  W1018_MacroShadowing
+  W1019_MacroArgSideEffect
+  E1020_StaticAssertFailed
+  E1021_IncludeNotFound
+  E1022_TemplateInstantiationLimit
+  E2001_ExpectedType
+  E2002_ExpectedArraySize
+  E2003_ExpectedExpr
+  E2004_ExpectedCaseOrDefault
+  E2005_ExpectedSemicolon
+  E2006_ExpectedClosingBrace
+  E2007_ExpectedClosingParen
+  E2008_ExpectedClosingBracket
+  E3001_VarRedeclared
+  E3002_StructRedeclared
+  E3003_FuncRedeclared
+  E3004_TypeMismatch
+  E3005_ArrayInitTooMany
+  E3006_ArrayInitTypeMismatch
+  E3007_StringInitNonCharArray
+  E3008_StringTooLong
+  E3009_InvalidArrayInit
+  E3010_BreakOutsideLoop
+  E3011_ContinueOutsideLoop
+  E3012_VoidFuncReturnValue
+  E3013_MissingReturnValue
+  E3014_ReturnTypeMismatch
+  E3015_InvalidCondition
+  E3016_ArithmeticTypeError
+  E3017_ComparisonTypeError
+  E3018_RelationTypeError
+  E3019_LogicTypeError
+  E3020_UnaryTypeError
+  E3021_DerefNonPointer
+  E3022_IncDecTypeError
+  E3023_UndeclaredVar
+  E3024_MallocArgCount
+  E3025_MallocArgType
+  E3026_FreeArgCount
+  E3027_FreeArgType
+  E3028_BuiltInArgCount
+  E3029_BuiltInArgType
+  E3030_PrintfArgCount
+  E3031_PrintfFirstArg
+  E3032_PrintfArgType
+  E3033_ScanfArgCount
+  E3034_ScanfFirstArg
+  E3035_ScanfArgType
+  E3036_UndefinedFunc
+  E3037_FuncArgCount
+  E3038_FuncArgType
+  E3039_ArrayIndexType
+  E3040_IndexNonArray
+  E3041_MemberNonStruct
+  E3042_UnknownMember
+  E3043_AssignToRValue
+  E3044_AssignTypeMismatch
+  E3045_CompoundAssignType
+  E3046_SwitchCondType
+  E3047_CaseNotConstant
+  E3048_BitOpTypeError
+  E3049_AssignToConst
+  W3050_AssignInCondition
+  W3051_ArrayBoundOffByOne
+  W3052_ArrayToPointerDecay
+  W3053_ImplicitScalarConversion
+  W3054_IntToPointerCast
+  W3055_VoidPointerCast
+  W3056_UnsignedToInt
+  H3057_ImplicitConversionHint
+  E3058_StaticFuncAccess
+  E3059_StaticGlobalAccess
+  E3060_UseAfterFree
+  E3061_DoubleFree
+  E3062_PrintfFormatMismatch
+  E3063_ScanfFormatMismatch
+  W3064_DoublePointerCast
+  E3065_ConstViolation
+  E3066_CallNonFunction
+  W3067_PointerTypeMismatch
+  E3070_BufferOverflow
+  E3071_UndefinedLabel
+  E3072_StructSelfContain
+  E4001_ExceptionNotSupported
+  E4002_OperatorOverloadNotSupported
+  E4003_TemplateSpecializationNotSupported
+  E4004_ThreadNotSupported
+  E4005_MultipleInheritanceNotSupported
+  E4006_NamespaceNotSupported
+  E4007_VirtualInheritanceNotSupported
+  E4008_ExplicitNotSupported
+  E4009_MutableNotSupported
+  E4010_FriendNotSupported
+  E4011_UsingDirectiveNotSupported
+  E4012_TypenameContextError
+  E4013_NewDeleteNotSupported
+  E4014_RefQualifierNotSupported
+  E4015_NoexceptNotSupported
+  E4016_StaticAssertNotSupported
+  E4017_ConstexprNotSupported
+  E4018_DeletingDestructorNotSupported
+  E4019_EnumClassNotSupported
+  E4020_RangeForNotSupported
+  E4021_BaseClassNotFound
+  E4022_TemplateRecursionDepthExceeded
+  E4023_ThisOutsideClass
+  E4024_PrivateMemberAccess
+  E4025_AutoRequiresInitializer
+  E4026_AmbiguousMethodCall
+  E4027_InvalidNewType
+  E4028_InvalidDeleteType
+  E4029_ReferenceBindLvalueRequired
+  E4030_ConstructorNotFound
+  E4031_ConstructorOverloadAmbiguous
+  E4100_CppMemoryLeak
+  E4101_CppDanglingReference
+  E4102_CppObjectSlicing
+  E4103_CppUniquePtrDoubleFree
+  E4104_CppUseAfterMove
+  E4105_CppShallowCopyDoubleFree
+  E4106_CppReferenceToTemporary
+} derive(Compare, Eq, Hash, @debug.Debug)
+pub fn ErrorCode::all() -> Array[Self]
+pub fn ErrorCode::catalog(Self) -> CatalogEntry?
+pub fn ErrorCode::code(Self) -> Int
+pub fn ErrorCode::display_code(Self) -> String
+pub fn ErrorCode::from_code(Int) -> Self?
+pub fn ErrorCode::lang(Self) -> SourceLang
+pub fn ErrorCode::name(Self) -> String
+pub fn ErrorCode::severity(Self) -> Severity
+
+pub(all) enum Severity {
+  Error
+  Warning
+  Hint
+} derive(Compare, Eq, @debug.Debug)
+pub fn Severity::prefix(Self) -> String
+pub fn Severity::to_str(Self) -> String
+
+pub(all) enum SourceLang {
+  C
+  Cpp
+} derive(Compare, Eq, @debug.Debug)
+pub fn SourceLang::to_str(Self) -> String
+
+// Type aliases
+
+// Traits
