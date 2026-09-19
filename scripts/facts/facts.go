@@ -439,7 +439,7 @@ func collectMoonbitFromOutput(out string, code int, facts map[string]Fact) {
 	passed, _ := strconv.Atoi(m[2])
 	failed, _ := strconv.Atoi(m[3])
 	f := okFact(passed, "用例", "moonbit/（moon test）", "run", nowISO())
-	f.Note = fmt.Sprintf("total=%d failed=%d exit=%d（S1 四包 + S2 lexer：source/opcode/diag/ast/lexer）", total, failed, code)
+	f.Note = fmt.Sprintf("total=%d failed=%d exit=%d（S1 四包 + S2 lexer + S3 parser：source/opcode/diag/ast/lexer/parser）", total, failed, code)
 	facts["moonbit_test_passed"] = f
 }
 
@@ -499,6 +499,62 @@ func parseLexerDiffPass(out string) (int, bool) {
 	return n, true
 }
 
+// collectMoonbitParserDiff 采集 S3 解析差分真值（2026-09-19）：四目录
+// 真实语料 E1（AST dump 归一逐字节）+ E2（诊断序列）+ 活性断言 + E3
+// （病态 12 样本同等拒绝）+ E4（合法深嵌套反向锚）。任一路 FAIL 即
+// unavailable（fail loud）。
+func collectMoonbitParserDiff(root string, facts map[string]Fact) {
+	how := "go run ./scripts/parser_diff <corpus> ×4 + --pathological + --legal-deep"
+	total := 0
+	for _, corpus := range []string{
+		filepath.Join("native", "tests", "cases", "baseline"),
+		filepath.Join("native", "tests", "cases", "knr"),
+		filepath.Join("native", "tests", "cases", "leetcode"),
+		filepath.Join("native", "tests", "cases", "gap"),
+	} {
+		out, code, ok := runCmd(root, 10*time.Minute, "go", "run", "./scripts/parser_diff", corpus)
+		if !ok || code != 0 {
+			facts["moonbit_parser_diff_samples"] = unavail("个", "scripts/parser_diff", how,
+				fmt.Sprintf("E1/E2 差分失败（%s，exit=%d）：%s", corpus, code, firstLine(out)))
+			return
+		}
+		n, ok2 := parseParserDiffPass(out)
+		if !ok2 {
+			facts["moonbit_parser_diff_samples"] = unavail("个", "scripts/parser_diff", how,
+				"未解析到 PASS 行（"+corpus+"）")
+			return
+		}
+		total += n
+	}
+	// E3：病态 12 样本同等拒绝
+	out, code, ok := runCmd(root, 5*time.Minute, "go", "run", "./scripts/parser_diff", "--pathological")
+	if !ok || code != 0 {
+		facts["moonbit_parser_diff_samples"] = unavail("个", "scripts/parser_diff", how,
+			fmt.Sprintf("E3 病态锚失败（exit=%d）：%s", code, firstLine(out)))
+		return
+	}
+	// E4：合法深嵌套反向锚
+	out, code, ok = runCmd(root, 5*time.Minute, "go", "run", "./scripts/parser_diff", "--legal-deep")
+	if !ok || code != 0 {
+		facts["moonbit_parser_diff_samples"] = unavail("个", "scripts/parser_diff", how,
+			fmt.Sprintf("E4 反向锚失败（exit=%d）：%s", code, firstLine(out)))
+		return
+	}
+	f := okFact(total, "个", "scripts/parser_diff（Rust oracle ↔ MoonBit parser）", "run", nowISO())
+	f.Note = "baseline 363 + K&R 81 + leetcode 138 + gap 15 的 AST dump + 诊断序列归一逐字节一致（含活性 stall=0）；E3 病态 12 样本同等拒绝；E4 合法深嵌套两侧成功且 AST 一致"
+	facts["moonbit_parser_diff_samples"] = f
+}
+
+// parseParserDiffPass 解析 parser_diff 的 PASS 行（J9 埋雷覆盖假输出）。
+func parseParserDiffPass(out string) (int, bool) {
+	m := regexp.MustCompile(`PASS——(\d+) 个样本`).FindStringSubmatch(out)
+	if m == nil {
+		return 0, false
+	}
+	n, _ := strconv.Atoi(m[1])
+	return n, true
+}
+
 // firstLine 取输出首行（诊断信息裁剪用）。
 func firstLine(s string) string {
 	if i := strings.IndexByte(s, '\n'); i >= 0 {
@@ -530,6 +586,7 @@ func collectAll(root string, run, runSlow bool, cargoLog string, prev *FactsDoc)
 		collectServeSmoke(root, facts)
 		collectMoonbit(root, facts)
 		collectMoonbitLexerDiff(root, facts)
+		collectMoonbitParserDiff(root, facts)
 	} else {
 		facts["replay_assertions"] = unavail("条", "scripts/replay/replay_s1_s5.go", "--run",
 			"需 --run 才执行")
@@ -538,6 +595,8 @@ func collectAll(root string, run, runSlow bool, cargoLog string, prev *FactsDoc)
 		facts["moonbit_test_passed"] = unavail("用例", "moonbit/（moon test）", "--run",
 			"需 --run 才执行")
 		facts["moonbit_lexer_diff_tsv"] = unavail("个", "scripts/lexer_diff", "--run",
+			"需 --run 才执行")
+		facts["moonbit_parser_diff_samples"] = unavail("个", "scripts/parser_diff", "--run",
 			"需 --run 才执行")
 	}
 	switch {

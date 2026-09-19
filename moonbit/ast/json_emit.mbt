@@ -70,7 +70,20 @@ fn emit_json_str(s : String, buf : StringBuilder) -> Unit {
       '\n' => buf.write_string("\\n")
       '\r' => buf.write_string("\\r")
       '\t' => buf.write_string("\\t")
-      _ => buf.write_string("\{c}")
+      _ => {
+        // serde_json 口径：控制字符（< 0x20）必须转义（转义序列 \x4
+        // 解析出的真字节 0x04 原样写出即非法 JSON——baseline 的
+        // string_escape_octal_hex.c 抓出）；其余原样
+        let code = c.to_int()
+        if code < 32 {
+          buf.write_string("\\u00")
+          let hex = "0123456789abcdef"
+          buf.write_string(hex.substring(start=code / 16, end=code / 16 + 1))
+          buf.write_string(hex.substring(start=code % 16, end=code % 16 + 1))
+        } else {
+          buf.write_char(c)
+        }
+      }
     }
   }
   buf.write_string("\"")

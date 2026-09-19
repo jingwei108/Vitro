@@ -1,0 +1,11 @@
+import {
+  "vitro/engine/ast",
+  "vitro/engine/lexer",
+  "vitro/engine/parser",
+  "moonbitlang/x/fs",
+  "moonbitlang/core/env",
+}
+
+supported_targets = "native"
+
+pkgtype(kind: "executable")

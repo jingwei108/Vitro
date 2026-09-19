@@ -9,6 +9,8 @@ import {
 // Values
 pub fn ast_dump_json(ProgramNode) -> String
 
+pub fn compute_type_size(Type, Map[String, Array[StructField]], Map[String, Array[StructField]], Map[String, Int]) -> Int
+
 pub fn double_to_json_text(Double) -> String
 
 pub fn expr_depth(Expr) -> Int
@@ -258,18 +260,28 @@ pub(all) enum Type {
   Typeof(Expr, Bool, Bool)
 } derive(@debug.Debug)
 pub fn Type::array_of(Self, Array[Int]) -> Self
+pub fn Type::array_size(Self) -> Int
+pub fn Type::base_element_type(Self) -> Self
 pub fn Type::char() -> Self
+pub fn Type::dims(Self) -> Array[Int]
 pub fn Type::double() -> Self
 pub fn Type::float() -> Self
 pub fn Type::function(Self, Array[Self]) -> Self
 pub fn Type::function_pointer(Self, Array[Self]) -> Self
 pub fn Type::int() -> Self
+pub fn Type::is_array(Self) -> Bool
+pub fn Type::is_const(Self) -> Bool
+pub fn Type::is_vla(Self) -> Bool
 pub fn Type::long_long() -> Self
 pub fn Type::mangle_name(Self) -> String
 pub fn Type::mangle_name_into(Self, StringBuilder) -> Unit
+pub fn Type::name(Self) -> String
 pub fn Type::pointer_to(Self) -> Self
+pub fn Type::set_const(Self, Bool) -> Self
 pub fn Type::struct_type(String) -> Self
+pub fn Type::subscript_type(Self) -> Self
 pub fn Type::to_c_string(Self) -> String
+pub fn Type::total_elements(Self) -> Int
 pub fn Type::union_type(String) -> Self
 pub fn Type::unsigned_int() -> Self
 pub fn Type::void_type() -> Self

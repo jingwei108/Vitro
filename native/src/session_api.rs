@@ -99,18 +99,46 @@ pub fn ast_dump(session: &mut Session, params: &Value) -> Value {
     let mut lexer = vitro_lexer::Lexer::new(source);
     let (tokens, lex_errors) = lexer.tokenize();
     if !lex_errors.is_empty() {
-        // 诊断进 session（复用管线），AST 无从谈起
+        // 诊断进 session（复用管线），AST 无从谈起。
+        // S3（2026-09-19）防线维护：E1/E2 对拍出口同构——词法错误路径与
+        // MoonBit 侧 dump_ast 输出同键（ok/lex_error_count/ast/parse_errors）
         let units = vec![crate::session::CompileUnit {
             filename: params.get("filename").and_then(|v| v.as_str()).unwrap_or("main.c").to_string(),
             source: source.to_string(),
         }];
         let _ = run_multi_file_pipeline(session, units, false);
-        return error_json("词法错误，无法产出 AST");
+        return json!({
+            "ok": false,
+            "lex_error_count": lex_errors.len(),
+            "ast": null,
+            "parse_errors": [],
+            "stall_count": 0,
+        });
     }
     let (program, parse_errors) = vitro_parser::Parser::new(tokens).parse();
+    // S3（2026-09-19）：parse_errors 明细（E2 面：code/line/column 保序，
+    // message 单列）——成功与失败路径都带（Rust 语义：错误非空时 parse
+    // 仍可返回带占位的 AST，上层见 errors 丢弃）
+    let pe_json: Vec<Value> = parse_errors
+        .iter()
+        .map(|e| {
+            json!({
+                "code": e.code,
+                "line": e.line,
+                "column": e.column,
+                "message": e.message,
+            })
+        })
+        .collect();
     match program {
         Some(p) => match serde_json::to_value(&p) {
-            Ok(v) => json!({ "ok": true, "parse_error_count": parse_errors.len(), "ast": v }),
+            Ok(v) => json!({
+                "ok": true,
+                "parse_error_count": parse_errors.len(),
+                "ast": v,
+                "parse_errors": pe_json,
+                "stall_count": 0,
+            }),
             Err(e) => error_json(format!("AST 序列化失败: {e}")),
         },
         None => {
@@ -119,7 +147,13 @@ pub fn ast_dump(session: &mut Session, params: &Value) -> Value {
                 source: source.to_string(),
             }];
             let _ = run_multi_file_pipeline(session, units, false);
-            error_json(format!("语法错误（{} 条），无法产出 AST", parse_errors.len()))
+            json!({
+                "ok": false,
+                "parse_error_count": parse_errors.len(),
+                "ast": null,
+                "parse_errors": pe_json,
+                "stall_count": 0,
+            })
         }
     }
 }

@@ -1,0 +1,13 @@
+import {
+  "vitro/engine/ast",
+  "vitro/engine/diag",
+  "vitro/engine/lexer/token",
+  "vitro/engine/source",
+  "moonbitlang/core/debug",
+  "moonbitlang/core/encoding/utf8",
+  "moonbitlang/core/string",
+}
+
+import {
+  "vitro/engine/lexer",
+} for "test"

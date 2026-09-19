@@ -99,7 +99,7 @@ A2 实测关闭（有条件）；A3 实测关闭（方向有利）；A7 实测�
 | S0.5 | Rust 止血批 P1–P7 + U1/U2 | 每条红→绿留痕；M-0 基线冻结 | — |
 | S1 | `vitro/engine/{source,diag,opcode,ast}` | E1 AST dump（B）+ error_catalog JSON（B）+ 码表生成幂等 | `vitro/engine/diag` 首发 |
 | S2 | ✅ `vitro/engine/lexer`（独立 pass+LineMap+宿主 IO；2026-09-19 收官——[执行记录](../07-质量与裁定/20260919_S2词法器执行记录.md)） | ✅ L1/L2 token TSV + 随机差分 2400 例（4800 TSV）+ 真实语料 444 例逐字节一致 | ✅ `vitro/engine/lexer`（0.2.0 首发 + 0.3.0 审阅修复批——real_line 归属通道 + 打包卫生） |
-| S3 | `vitro/engine/parser`（深度统一入口；J1 语义不复刻） | E1–E4 + 病态输入"同等拒绝"12 样本 + 活性内部断言 | — |
+| S3 | ✅ `vitro/engine/parser`（深度统一入口；J1 语义不复刻；2026-09-19 收官——[执行记录](../07-质量与裁定/20260919_S3解析器执行记录.md)） | ✅ E1–E4 全绿：597 真实语料 AST+诊断序列归一逐字节一致 + 病态 12 样本同等拒绝 + 活性 stall=0 + E4 反向锚（1200 层声明符两侧存活且一致） | —（随 0.4.0 发布） |
 | S4 | `vitro/engine/{names,typeck,containers,libc}` | E1–E4 + mangled 名集合相等 | `vitro/engine/names` |
 | S5 | `vitro/engine/{codegen,bytecode}` | A 级产物 code 段 + libc 自举 + LIFO 八条事故回归 + r1 7 道 + `--dump-compile-output` 工具 + codegen 自建单测 | — |
 | S6 | `vitro/engine/{memory,host,vm}` | D 级 30 例三联 diff + 门 3 集成版 + 条件 A 性能锚 | `vitro/engine/vm` |

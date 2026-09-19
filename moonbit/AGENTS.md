@@ -4,14 +4,16 @@
 > **全域纪律**（中文输出 / 禁擅自 git 提交 / 实测大于脑测 / 诚实记录 / 红→绿 / J9 / archive 规则 / 提交署名规则）以根 AGENTS.md 为准，同样约束本区。
 > **上位文档**：[MoonBit迁移总计划](../docs/current/01-定位与路线/MoonBit迁移总计划.md)（包切分 L0–L9 / 锚点体系 / F1–F9 语言事实）+ [第一阶段计划](../docs/current/01-定位与路线/MoonBit迁移第一阶段计划.md)。本手册只沉淀**工程操作层**（命令 / 陷阱 / 纪律 / 发布），不重复上位文档内容。
 
-## 包清单与状态（S1 后）
+## 包清单与状态（S3 后）
 
 | 包 | 层 | 职责 | 状态 |
 |---|---|---|---|
 | `vitro/engine/source` | L0 | SourceLoc + 列单位契约（column = 行内 UTF-8 字节偏移+1）+ Pos 双坐标 | ✅ 已发布 0.1.1 |
 | `vitro/engine/opcode` | L0 | 132 条 opcode（空号 44–49）+ Instruction | ✅ 已发布 |
 | `vitro/engine/diag` | L1 | ErrorCode 137 臂（gen_diag 生成）+ catalog 77 + E4 出口 | ✅ 已发布 |
-| `vitro/engine/ast` | L2 | Type 17 / Expr 26 / Stmt 16 全族 + depth + E1 emitter | ✅ 已发布 |
+| `vitro/engine/ast` | L2 | Type 17 / Expr 26 / Stmt 16 全族 + depth + E1 emitter + 谓词/compute_type_size（S3 消费驱动补齐） | ✅ 已发布 |
+| `vitro/engine/lexer` | L2 | 独立预处理 pass + LineMap + 宿主 IO（token 契约面子包 `lexer/token`） | ✅ 已发布 0.3.0 |
+| `vitro/engine/parser` | L3 | token → AST：表达式瀑布/声明符螺旋/语句族/声明族/C++ 分支；**depth 参数化防护**（8 壳挂点照搬、计数口径与 Rust 同构）；声明符 Array 链迭代解释（1250 层存活）；Rollback 七字段全量快照；stall_count 活性观测 | ✅ S3 完成（未发布——随下一 minor 一起） |
 
 命名规则：module = `vitro/engine`（mooncakes owner `vitro`），包全名 `vitro/engine/<pkg>` 一律全名，代码与配置禁用简称。
 
@@ -21,12 +23,15 @@
 cd moonbit
 moon check                # 快速类型检查（日常常跑）
 moon check --target all   # 全后端检查（发布前）
-moon test                 # 58 测试（白盒 _wbtest.mbt + 黑盒 _test.mbt + doc 测试）
+moon test                 # 136 测试（白盒 _wbtest.mbt + 黑盒 _test.mbt + doc 测试）
 moon test --update        # 快照更新（inspect content= 变更时；核对 diff 再提交）
 moon fmt                  # 格式化（生成物也参与——见 gen_diag 内置 fmt）
 moon info                 # 生成 .mbti 接口面（API 变更信号；pkg.generated.mbti 入版本控制）
 go run ./scripts/gen_diag          # diag 码表再生成（内置 moon fmt）
 go run ./scripts/gen_diag -check   # 幂等校验（源变产物变 / 篡改即红）
+go run ./scripts/parser_diff <corpus>        # S3 解析差分（E1/E2/活性；仓库根跑）
+go run ./scripts/parser_diff --pathological  # E3 病态 12 样本同等拒绝
+go run ./scripts/parser_diff --legal-deep    # E4 合法深嵌套反向锚
 ```
 
 测试计数已入 facts 机判（`moonbit_test_passed` 键）：moonbit/README*.md 的测试数漂移会被 `go run ./scripts/facts check` 抓红——改测试数必须同步 README。
@@ -54,6 +59,15 @@ go run ./scripts/gen_diag -check   # 幂等校验（源变产物变 / 篡改即�
 17. **`moon.mod` / `moon.pkg` 是新格式**（非 .json）；`moon.pkg` 的 import 块声明依赖，代码内一律 `@alias.fn` 调用。
 18. **mooncakes 发布规则**：module 名首段**必须等于发布者用户名**（`vitro/engine` ↔ 账号 `vitro`；403 User mismatch 即此因）；发布后 checksum 入 registry **不可覆盖**——修复只能递增版本；readme 字段须指向**根 `README.md`**（`README.mbt.md` 不会被模块页渲染）；索引同步有数分钟延迟（`moon add` 暂时 404 是正常节奏，轮询即可）。
 19. **本仓库 bash 工具层的 heredoc 会吃一层反斜杠转义**（`\\n` 变真换行、`\r\n` 字面量损毁）——跨 heredoc 写 Go/代码文件时用 `chr()` 拼接或 python 中转写盘；此坑曾致 gen_diag 归一逻辑静默变空操作（P2-1 复盘）。
+20. **core `Map`/`Set` 是可变哈希结构**（`Map::set(k,v)` / `Set::add(k)` 原地、返回 Unit；S3 实测）——勘察 M3 设想的"不可变结构共享快照"不成立，回滚快照 = `.copy()` 整表拷贝（教学符号表小，可接受）。
+21. **`loop { ... }` 是函数式循环（deprecated 语法且 `break` 不适用）**——命令式循环写 `while true { ... break }`（S3 瀑布实测）。
+22. **顶层常量用 `const`**（`let MAX_X = ...` 大写绑非法：Expected lower case identifier）。
+23. **match guard 必须与模式同行**（`_ if cond =>` 跨行非法）；**或模式分支的构造器各自全参展开**（`Reference(..)` 不合法——`..` 剩余通配不存在，逐参数 `_`）。
+24. **`String` 索引/`s[i]` 返回 UInt16 码元**（非 Char）——`write_char(s[i])` 类型错；切片 `substring(start=a, end=b)` 命名参数形态（位置参数形态非法）。
+25. **数值位模式重解释**：`UInt64::to_int64` = `%u64.to_i64_reinterpret`（bitcast，正是 Rust `as i64`）；`Int64::to_int` 语义未文档化——i64→i32 截断自己写（低 32 位符号解释，见 parser/decl.mbt `i64_to_i32_bits`）；`Int::to_int64` 是符号扩展（= Rust `as i64`）。
+26. **wbtest 不携带 `for "test"` import**（黑盒专用配置）——白盒测试要跨包输入就手工构造（如 token 数组），或把用例放黑盒。
+27. **JSON 字符串输出必须转义 < 0x20 控制字符**（`\u00XX`，serde_json 口径）——C 转义序列（`\x4`）解析出的真字节原样写出即非法 JSON（S3 由 baseline 的 string_escape_octal_hex.c 差分抓出）。
+28. **wasm 测试运行时的栈预算比 moonrun 更紧**（S3 实测：声明符链递归解释 900 层过 / 1200 层溢出）——深结构处理一律迭代化（显式栈/下钻折叠），不能依赖"Rust 侧能过的深递归这里也能过"。
 
 ## 编码与架构纪律（S1 已定型）
 

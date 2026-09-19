@@ -1,0 +1,50 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "vitro/engine/parser"
+
+import {
+  "moonbitlang/core/debug",
+  "vitro/engine/ast",
+  "vitro/engine/lexer/token",
+}
+
+// Values
+pub fn parse(Array[@token.Token], cpp_mode? : Bool) -> ParseResult
+
+// Errors
+
+// Types and methods
+type DeclPrefix
+
+type DeclaratorGuard
+
+pub(all) enum DeclaratorNode {
+  Base
+  Pointer(DeclaratorNode)
+  Reference(DeclaratorNode, Bool)
+  RValueRef(DeclaratorNode)
+  Array(DeclaratorNode, @ast.Expr?)
+  Function(DeclaratorNode, Array[@ast.Param], Bool)
+} derive(@debug.Debug)
+
+type DeclaratorSuffix
+
+pub(all) struct ParseError {
+  message : String
+  line : Int
+  column : Int
+  code : Int
+} derive(Eq, @debug.Debug)
+
+pub(all) struct ParseResult {
+  program : @ast.ProgramNode?
+  errors : Array[ParseError]
+  stall_count : Int
+}
+
+type Parser
+
+type Rollback
+
+// Type aliases
+
+// Traits
